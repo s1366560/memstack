@@ -22,31 +22,31 @@ def debug_timer(func: Callable) -> Callable:
     @wraps(func)
     async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
         start_time = time.time()
-        logger.debug(f'开始执行: {func.__name__}')
+        logger.debug(f"开始执行: {func.__name__}")
 
         try:
             result = await func(*args, **kwargs)
             elapsed = time.time() - start_time
-            logger.debug(f'完成执行: {func.__name__} (耗时: {elapsed:.3f}秒)')
+            logger.debug(f"完成执行: {func.__name__} (耗时: {elapsed:.3f}秒)")
             return result
         except Exception as e:
             elapsed = time.time() - start_time
-            logger.error(f'执行失败: {func.__name__} (耗时: {elapsed:.3f}秒) - {e}')
+            logger.error(f"执行失败: {func.__name__} (耗时: {elapsed:.3f}秒) - {e}")
             raise
 
     @wraps(func)
     def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
         start_time = time.time()
-        logger.debug(f'开始执行: {func.__name__}')
+        logger.debug(f"开始执行: {func.__name__}")
 
         try:
             result = func(*args, **kwargs)
             elapsed = time.time() - start_time
-            logger.debug(f'完成执行: {func.__name__} (耗时: {elapsed:.3f}秒)')
+            logger.debug(f"完成执行: {func.__name__} (耗时: {elapsed:.3f}秒)")
             return result
         except Exception as e:
             elapsed = time.time() - start_time
-            logger.error(f'执行失败: {func.__name__} (耗时: {elapsed:.3f}秒) - {e}')
+            logger.error(f"执行失败: {func.__name__} (耗时: {elapsed:.3f}秒) - {e}")
             raise
 
     # 根据函数类型返回对应的包装器
@@ -68,12 +68,12 @@ def debug_log_args(func: Callable) -> Callable:
 
     @wraps(func)
     async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
-        logger.debug(f'{func.__name__} 调用参数: args={args}, kwargs={kwargs}')
+        logger.debug(f"{func.__name__} 调用参数: args={args}, kwargs={kwargs}")
         return await func(*args, **kwargs)
 
     @wraps(func)
     def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
-        logger.debug(f'{func.__name__} 调用参数: args={args}, kwargs={kwargs}')
+        logger.debug(f"{func.__name__} 调用参数: args={args}, kwargs={kwargs}")
         return func(*args, **kwargs)
 
     import asyncio
@@ -95,7 +95,7 @@ def pretty_print_json(data: Any, indent: int = 2) -> None:
             data = json.loads(data)
         print(json.dumps(data, indent=indent, ensure_ascii=False))
     except Exception as e:
-        logger.error(f'JSON 打印失败: {e}')
+        logger.error(f"JSON 打印失败: {e}")
         print(data)
 
 
@@ -114,15 +114,15 @@ class DebugContext:
 
     def __enter__(self):
         self.start_time = time.time()
-        logger.debug(f'>>> 开始: {self.name}')
+        logger.debug(f">>> 开始: {self.name}")
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         elapsed = time.time() - self.start_time
         if exc_type:
-            logger.error(f'<<< 失败: {self.name} (耗时: {elapsed:.3f}秒) - {exc_val}')
+            logger.error(f"<<< 失败: {self.name} (耗时: {elapsed:.3f}秒) - {exc_val}")
         else:
-            logger.debug(f'<<< 完成: {self.name} (耗时: {elapsed:.3f}秒)')
+            logger.debug(f"<<< 完成: {self.name} (耗时: {elapsed:.3f}秒)")
         return False
 
 
@@ -140,7 +140,7 @@ def log_exception(func: Callable) -> Callable:
         try:
             return await func(*args, **kwargs)
         except Exception as e:
-            logger.exception(f'{func.__name__} 发生异常: {e}')
+            logger.exception(f"{func.__name__} 发生异常: {e}")
             raise
 
     @wraps(func)
@@ -148,7 +148,7 @@ def log_exception(func: Callable) -> Callable:
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            logger.exception(f'{func.__name__} 发生异常: {e}')
+            logger.exception(f"{func.__name__} 发生异常: {e}")
             raise
 
     import asyncio

@@ -12,7 +12,7 @@ import os
 import typing
 from http import HTTPStatus
 
-import dashscope
+import dashscope  # type: ignore[import-untyped]
 from dashscope import Generation
 from graphiti_core.llm_client.client import LLMClient
 from graphiti_core.llm_client.config import DEFAULT_MAX_TOKENS, LLMConfig, ModelSize
@@ -202,10 +202,7 @@ class QwenClient(LLMClient):
                 request_params["result_format"] = "message"
 
             # 调用 DashScope Generation API（使用 asyncio.to_thread 包装同步调用）
-            response = await asyncio.to_thread(
-                Generation.call,
-                **request_params
-            )
+            response = await asyncio.to_thread(Generation.call, **request_params)
 
             # 检查响应状态
             if response.status_code != HTTPStatus.OK:

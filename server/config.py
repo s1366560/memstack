@@ -1,7 +1,7 @@
 """Configuration management for VIP Memory."""
 
 from functools import lru_cache
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     api_host: str = Field(default="0.0.0.0", alias="API_HOST")
     api_port: int = Field(default=8000, alias="API_PORT")
     api_workers: int = Field(default=4, alias="API_WORKERS")
+    api_allowed_origins: List[str] = Field(default=["*"], alias="API_ALLOWED_ORIGINS")
 
     # Database Settings
     neo4j_uri: str = Field(default="bolt://localhost:7687", alias="NEO4J_URI")
@@ -52,16 +53,20 @@ class Settings(BaseSettings):
     )
 
     # OpenAI (for embeddings)
-    openai_api_key: str = Field(..., alias="OPENAI_API_KEY")
+    openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")
     openai_base_url: Optional[str] = Field(default=None, alias="OPENAI_BASE_URL")
     openai_embedding_model: str = Field(
         default="text-embedding-3-small", alias="OPENAI_EMBEDDING_MODEL"
     )
 
     # Security
-    secret_key: str = Field(..., alias="SECRET_KEY")
+    secret_key: str = Field(default="dev-secret-key-change-in-production", alias="SECRET_KEY")
     algorithm: str = Field(default="HS256", alias="ALGORITHM")
     access_token_expire_minutes: int = Field(default=30, alias="ACCESS_TOKEN_EXPIRE_MINUTES")
+
+    # API Key Settings
+    require_api_key: bool = Field(default=True, alias="REQUIRE_API_KEY")
+    api_key_header_name: str = Field(default="Authorization", alias="API_KEY_HEADER_NAME")
 
     # Logging
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")

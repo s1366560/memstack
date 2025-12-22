@@ -20,6 +20,7 @@ class SourceType(str, Enum):
 class EpisodeCreate(BaseModel):
     """Request model for creating an episode."""
 
+    name: Optional[str] = Field(default=None, description="Optional episode name")
     content: str = Field(..., description="Episode content")
     source_type: SourceType = Field(default=SourceType.TEXT, description="Source type")
     metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata")
@@ -27,6 +28,8 @@ class EpisodeCreate(BaseModel):
         default=None, description="Event occurrence time (defaults to current time)"
     )
     tenant_id: Optional[str] = Field(default=None, description="Tenant identifier")
+    project_id: Optional[str] = Field(default=None, description="Project identifier")
+    user_id: Optional[str] = Field(default=None, description="User identifier")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -44,12 +47,15 @@ class Episode(BaseModel):
     """Episode model representing raw event data."""
 
     id: UUID = Field(default_factory=uuid4, description="Episode unique identifier")
+    name: Optional[str] = Field(default=None, description="Episode name")
     content: str = Field(..., description="Episode content")
     source_type: SourceType = Field(..., description="Source type")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
     valid_at: datetime = Field(..., description="Event occurrence time")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Ingestion time")
     tenant_id: Optional[str] = Field(default=None, description="Tenant identifier")
+    project_id: Optional[str] = Field(default=None, description="Project identifier")
+    user_id: Optional[str] = Field(default=None, description="User identifier")
 
     model_config = ConfigDict(from_attributes=True)
 

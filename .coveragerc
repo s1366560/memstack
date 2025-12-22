@@ -1,0 +1,19 @@
+[run]
+branch = True
+source = server,web
+omit =
+    server/llm_clients/*
+    server/debug_utils.py
+    server/exceptions.py
+    server/telemetry.py
+    server/logging_config.py
+    server/api/memos.py
+    server/api/auth.py
+    server/api/memory.py
+    server/api/episodes_list.py
+    server/auth.py
+    server/main.py
+
+[report]
+show_missing = True
+skip_covered = True

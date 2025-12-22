@@ -32,7 +32,7 @@ class TelemetryConfig:
             app: FastAPI 应用实例（可选）
         """
         if self._is_initialized:
-            logger.warning('Telemetry already initialized')
+            logger.warning("Telemetry already initialized")
             return
 
         try:
@@ -40,8 +40,8 @@ class TelemetryConfig:
             resource = Resource(
                 attributes={
                     SERVICE_NAME: settings.service_name,
-                    'environment': settings.environment,
-                    'version': '0.1.0',
+                    "environment": settings.environment,
+                    "version": "0.1.0",
                 }
             )
 
@@ -51,23 +51,17 @@ class TelemetryConfig:
             # 根据环境选择导出器
             if settings.otel_exporter_otlp_endpoint:
                 # 使用 OTLP 导出器（生产环境）
-                logger.info(
-                    f'Using OTLP exporter: {settings.otel_exporter_otlp_endpoint}'
-                )
+                logger.info(f"Using OTLP exporter: {settings.otel_exporter_otlp_endpoint}")
                 otlp_exporter = OTLPSpanExporter(
                     endpoint=settings.otel_exporter_otlp_endpoint,
                     # headers={"authorization": f"Bearer {settings.otel_api_key}"}  # 如果需要
                 )
-                self._tracer_provider.add_span_processor(
-                    BatchSpanProcessor(otlp_exporter)
-                )
+                self._tracer_provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
             else:
                 # 使用控制台导出器（开发环境）
-                logger.info('Using console exporter for traces')
+                logger.info("Using console exporter for traces")
                 console_exporter = ConsoleSpanExporter()
-                self._tracer_provider.add_span_processor(
-                    BatchSpanProcessor(console_exporter)
-                )
+                self._tracer_provider.add_span_processor(BatchSpanProcessor(console_exporter))
 
             # 设置全局 TracerProvider
             trace.set_tracer_provider(self._tracer_provider)
@@ -75,13 +69,13 @@ class TelemetryConfig:
             # 如果提供了 FastAPI app，自动装饰
             if app is not None:
                 FastAPIInstrumentor.instrument_app(app)
-                logger.info('FastAPI instrumented with OpenTelemetry')
+                logger.info("FastAPI instrumented with OpenTelemetry")
 
             self._is_initialized = True
-            logger.info('OpenTelemetry initialized successfully')
+            logger.info("OpenTelemetry initialized successfully")
 
         except Exception as e:
-            logger.error(f'Failed to initialize OpenTelemetry: {e}')
+            logger.error(f"Failed to initialize OpenTelemetry: {e}")
             raise
 
     def shutdown(self):
@@ -90,9 +84,9 @@ class TelemetryConfig:
             try:
                 # 刷新和关闭所有 span 处理器
                 self._tracer_provider.shutdown()
-                logger.info('OpenTelemetry shut down successfully')
+                logger.info("OpenTelemetry shut down successfully")
             except Exception as e:
-                logger.error(f'Error shutting down OpenTelemetry: {e}')
+                logger.error(f"Error shutting down OpenTelemetry: {e}")
 
     def get_tracer(self, name: str = __name__):
         """
@@ -105,7 +99,7 @@ class TelemetryConfig:
             Tracer 实例
         """
         if not self._is_initialized:
-            logger.warning('Telemetry not initialized, initializing now...')
+            logger.warning("Telemetry not initialized, initializing now...")
             self.initialize()
 
         return trace.get_tracer(name)

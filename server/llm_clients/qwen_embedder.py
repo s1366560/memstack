@@ -10,7 +10,7 @@ import os
 from collections.abc import Iterable
 from http import HTTPStatus
 
-import dashscope
+import dashscope  # type: ignore[import-untyped]
 from dashscope import TextEmbedding
 from graphiti_core.embedder.client import EmbedderClient, EmbedderConfig
 from pydantic import Field

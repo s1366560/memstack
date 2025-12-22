@@ -63,3 +63,6 @@ data/
 outputs/
 .qoder/
 !.qoder/quests/
+
+
+node_modules/

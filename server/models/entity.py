@@ -23,6 +23,15 @@ class Entity(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class EntityCreate(BaseModel):
+    """Request model for creating an entity."""
+
+    name: str = Field(..., description="Entity name")
+    entity_type: str = Field(..., description="Entity type")
+    summary: Optional[str] = Field(default=None, description="Entity summary")
+    properties: Dict[str, Any] = Field(default_factory=dict, description="Entity properties")
+
+
 class EntityResponse(BaseModel):
     """Response model for entity queries."""
 

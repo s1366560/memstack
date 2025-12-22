@@ -13,7 +13,7 @@ import re
 import typing
 from http import HTTPStatus
 
-import dashscope
+import dashscope  # type: ignore[import-untyped]
 from dashscope import Generation
 from graphiti_core.cross_encoder.client import CrossEncoderClient
 from graphiti_core.helpers import semaphore_gather

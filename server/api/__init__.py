@@ -2,4 +2,4 @@
 
 from . import episodes, memory
 
-__all__ = ['episodes', 'memory']
+__all__ = ["episodes", "memory"]

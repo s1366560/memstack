@@ -25,6 +25,7 @@ from server.llm_clients.qwen_embedder import QwenEmbedder, QwenEmbedderConfig
 from server.llm_clients.qwen_reranker_client import QwenRerankerClient
 from server.models.episode import Episode, EpisodeCreate
 from server.models.memory import MemoryItem
+from server.models.recall import ShortTermRecallResponse
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -153,17 +154,40 @@ class GraphitiService:
                 metadata=episode_data.metadata or {},
                 valid_at=episode_data.valid_at or datetime.utcnow(),
                 tenant_id=episode_data.tenant_id,
+                project_id=episode_data.project_id,
+                user_id=episode_data.user_id,
+                name=episode_data.name,
             )
 
             # Add episode to Graphiti
             # Note: Graphiti will automatically extract entities and relationships
+            ep_name = episode.name or str(episode.id)
             await self.client.add_episode(
-                name=str(episode.id),
+                name=ep_name,
                 episode_body=episode.content,
                 source_description=episode_data.source_type or "User input",
                 source=EpisodeType.text,
                 reference_time=episode.valid_at,
+                update_communities=True,
             )
+
+            # Attach multi-tenant/project/user properties to Episodic node
+            try:
+                await self.client.driver.execute_query(
+                    """
+                    MATCH (e:Episodic {name: $name})
+                    SET e.tenant_id = $tenant_id,
+                        e.project_id = $project_id,
+                        e.user_id = $user_id
+                    RETURN e
+                    """,
+                    name=ep_name,
+                    tenant_id=episode.tenant_id,
+                    project_id=episode.project_id,
+                    user_id=episode.user_id,
+                )
+            except Exception as e:
+                logger.warning(f"Failed to set episodic properties: {e}")
 
             logger.info(f"Episode {episode.id} added successfully")
             return episode
@@ -173,7 +197,13 @@ class GraphitiService:
             raise
 
     async def search(
-        self, query: str, limit: int = 10, tenant_id: Optional[str] = None
+        self,
+        query: str,
+        limit: int = 10,
+        tenant_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        as_of: Optional[datetime] = None,
     ) -> List[MemoryItem]:
         """
         Search the knowledge graph for relevant memories.
@@ -197,6 +227,48 @@ class GraphitiService:
             # Convert search results to MemoryItem format
             memory_items = []
 
+            # Helper to check filters via direct property lookup when needed
+            async def _passes_filters(node_label: str, name: Optional[str]) -> bool:
+                if not (tenant_id or project_id or user_id or as_of):
+                    return True
+                if not name:
+                    return True
+                try:
+                    cy = "MATCH (n:%s {name: $name}) RETURN properties(n) as props" % node_label
+                    res = await self.client.driver.execute_query(cy, name=name)
+                    props = res.records[0]["props"] if res.records else {}
+                except Exception:
+                    props = {}
+                if tenant_id and props.get("tenant_id") != tenant_id:
+                    return False
+                if project_id and props.get("project_id") != project_id:
+                    return False
+                if user_id and props.get("user_id") != user_id:
+                    return False
+                if as_of:
+                    # valid if created/valid <= as_of and not expired/invalid before as_of
+                    from datetime import datetime
+
+                    def to_dt(v):
+                        try:
+                            return datetime.fromisoformat(v) if isinstance(v, str) else v
+                        except Exception:
+                            return None
+
+                    created = to_dt(props.get("created_at"))
+                    valid = to_dt(props.get("valid_at"))
+                    expired = to_dt(props.get("expired_at"))
+                    invalid = to_dt(props.get("invalid_at"))
+                    if created and created > as_of:
+                        return False
+                    if valid and valid > as_of:
+                        return False
+                    if expired and expired <= as_of:
+                        return False
+                    if invalid and invalid <= as_of:
+                        return False
+                return True
+
             # Process episodes from search results
             if hasattr(search_results, "episodes") and search_results.episodes:
                 for i, episode in enumerate(search_results.episodes):
@@ -205,6 +277,8 @@ class GraphitiService:
                         if i < len(search_results.episode_reranker_scores)
                         else 0.0
                     )
+                    if not await _passes_filters("Episodic", getattr(episode, "name", None)):
+                        continue
                     memory_items.append(
                         MemoryItem(
                             content=episode.content,
@@ -222,6 +296,8 @@ class GraphitiService:
                         if i < len(search_results.node_reranker_scores)
                         else 0.0
                     )
+                    if not await _passes_filters("Entity", getattr(node, "name", None)):
+                        continue
                     memory_items.append(
                         MemoryItem(
                             content=f"{node.name}: {node.summary}"
@@ -241,6 +317,9 @@ class GraphitiService:
                         if i < len(search_results.edge_reranker_scores)
                         else 0.0
                     )
+                    # For edges, validating via EntityEdge properties by uuid
+                    if not await _passes_filters("Entity", getattr(edge, "source_node_name", None)):
+                        continue
                     memory_items.append(
                         MemoryItem(
                             content=edge.fact,
@@ -265,30 +344,161 @@ class GraphitiService:
             logger.error(f"Search failed: {e}")
             raise
 
-    async def get_entities(
-        self, limit: int = 100, tenant_id: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """
-        Get entities from the knowledge graph.
-
-        Args:
-            limit: Maximum number of entities to return
-            tenant_id: Optional tenant filter
-
-        Returns:
-            List of entities
-        """
+    async def short_term_recall(
+        self, window_minutes: int = 30, limit: int = 50, tenant_id: Optional[str] = None
+    ) -> ShortTermRecallResponse:
+        """Recall recent episodic memories within a time window."""
         try:
-            # Get entities from Graphiti
-            # This is a placeholder - actual implementation depends on Graphiti's API
-            entities = await self.client.get_entities(limit=limit)
+            from datetime import datetime, timedelta
 
-            logger.info(f"Retrieved {len(entities)} entities")
-            return entities
+            since = datetime.utcnow() - timedelta(minutes=window_minutes)
+            query = """
+            MATCH (e:Episodic)
+            WHERE (
+                ($tenant_id IS NULL OR e.tenant_id = $tenant_id)
+                AND (
+                    ($since IS NULL) OR (
+                        (exists(e.updated_at) AND datetime(e.updated_at) >= datetime($since)) OR
+                        (exists(e.created_at) AND datetime(e.created_at) >= datetime($since)) OR
+                        (exists(e.valid_at)   AND datetime(e.valid_at)   >= datetime($since))
+                    )
+                )
+            )
+            OPTIONAL MATCH (e)-[r:MENTIONS|RELATES_TO]->(m)
+            RETURN e as episode, collect({edge: r, target: m}) as links
+            ORDER BY coalesce(e.updated_at, e.created_at, e.valid_at) DESC
+            LIMIT $limit
+            """
 
+            params = {
+                "tenant_id": tenant_id,
+                "since": since.isoformat(),
+                "limit": limit,
+            }
+
+            result = await self.client.driver.execute_query(query, **params)
+            records = result.records
+
+            items: List[MemoryItem] = []
+            for r in records:
+                ep = r["episode"].properties
+                items.append(
+                    MemoryItem(
+                        content=ep.get("content", ""),
+                        score=1.0,
+                        metadata={"type": "episode", "name": ep.get("name", "")},
+                        source="episode",
+                    )
+                )
+
+            return ShortTermRecallResponse(results=items[:limit], total=len(items), since=since)
         except Exception as e:
-            logger.error(f"Failed to get entities: {e}")
+            logger.error(f"Short-term recall failed: {e}")
             raise
+
+    async def rebuild_communities(self):
+        """Trigger community rebuild using Graphiti's community builder."""
+        try:
+            await self.client.build_communities()
+            logger.info("Communities rebuild triggered successfully")
+        except Exception as e:
+            logger.error(f"Failed to rebuild communities: {e}")
+            raise
+
+    async def get_graph_data(
+        self,
+        limit: int = 100,
+        since: Optional[datetime] = None,
+        tenant_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Get graph data for visualization with optional temporal and tenant filters."""
+        try:
+            query = """
+            MATCH (n)
+            WHERE 'Entity' IN labels(n) OR 'Episodic' IN labels(n) OR 'Community' IN labels(n)
+            OPTIONAL MATCH (n)-[r]->(m)
+            WHERE ('Entity' IN labels(m) OR 'Episodic' IN labels(m) OR 'Community' IN labels(m))
+            AND (
+                $tenant_id IS NULL OR
+                coalesce(n.tenant_id, m.tenant_id) = $tenant_id
+            )
+            AND (
+                $since IS NULL OR
+                (
+                    (
+                        exists(n.updated_at) OR exists(n.created_at) OR exists(n.valid_at)
+                    ) AND datetime(coalesce(n.updated_at, n.created_at, n.valid_at)) >= datetime($since)
+                ) OR (
+                    r IS NOT NULL AND (
+                        exists(r.updated_at) OR exists(r.created_at) OR exists(r.valid_at)
+                    ) AND datetime(coalesce(r.updated_at, r.created_at, r.valid_at)) >= datetime($since)
+                ) OR (
+                    m IS NOT NULL AND (
+                        exists(m.updated_at) OR exists(m.created_at) OR exists(m.valid_at)
+                    ) AND datetime(coalesce(m.updated_at, m.created_at, m.valid_at)) >= datetime($since)
+                )
+            )
+            RETURN 
+                elementId(n) as source_id, labels(n) as source_labels, properties(n) as source_props,
+                elementId(r) as edge_id, type(r) as edge_type, properties(r) as edge_props,
+                elementId(m) as target_id, labels(m) as target_labels, properties(m) as target_props
+            LIMIT $limit
+            """
+
+            params: Dict[str, Any] = {
+                "limit": limit,
+                "tenant_id": tenant_id,
+                "since": since.isoformat() if since else None,
+            }
+
+            result = await self.client.driver.execute_query(query, **params)
+            records = result.records
+
+            nodes_map = {}
+            edges_list = []
+
+            for r in records:
+                s_id = r["source_id"]
+                if s_id not in nodes_map:
+                    nodes_map[s_id] = {
+                        "data": {
+                            "id": s_id,
+                            "label": r["source_labels"][0] if r["source_labels"] else "Entity",
+                            "name": r["source_props"].get("name", "Unknown"),
+                            **r["source_props"],
+                        }
+                    }
+
+                if r["target_id"]:
+                    t_id = r["target_id"]
+                    if t_id not in nodes_map:
+                        nodes_map[t_id] = {
+                            "data": {
+                                "id": t_id,
+                                "label": r["target_labels"][0] if r["target_labels"] else "Entity",
+                                "name": r["target_props"].get("name", "Unknown"),
+                                **r["target_props"],
+                            }
+                        }
+
+                    if r["edge_id"]:
+                        edges_list.append(
+                            {
+                                "data": {
+                                    "id": r["edge_id"],
+                                    "source": s_id,
+                                    "target": t_id,
+                                    "label": r["edge_type"],
+                                    **r["edge_props"],
+                                }
+                            }
+                        )
+
+            return {"elements": {"nodes": list(nodes_map.values()), "edges": edges_list}}
+        except Exception as e:
+            logger.error(f"Failed to get graph data: {e}")
+            # Return empty graph on error
+            return {"elements": {"nodes": [], "edges": []}}
 
     async def health_check(self) -> bool:
         """
