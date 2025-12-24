@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { memoryAPI } from '../../services/api'
-import { MemorySearchResponse, MemoryItem } from '../../types/memory'
+import { MemoryItem } from '../../types/memory'
 
 export const SearchPage: React.FC = () => {
     const { projectId } = useParams()

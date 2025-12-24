@@ -14,6 +14,12 @@ from server.api.memories import router as memories_router
 from server.api.memos import router as memos_router
 from server.api.projects import router as projects_router
 from server.api.tenants import router as tenants_router
+from server.api.entities import router as entities_router
+from server.api.communities import router as communities_router
+from server.api.data_export import router as data_export_router
+from server.api import enhanced_episodes
+from server.api import search_enhanced
+from server.api import maintenance
 from server.auth import initialize_default_credentials
 from server.config import get_settings
 from server.database import Base, engine
@@ -92,12 +98,18 @@ def setup_app() -> FastAPI:
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(episodes.router, prefix="/api/v1")
     app.include_router(episodes_list.router, prefix="/api/v1")
+    app.include_router(enhanced_episodes.router, prefix="/api/v1")
     app.include_router(memory.router, prefix="/api/v1")
     app.include_router(recall.router, prefix="/api/v1")
+    app.include_router(search_enhanced.router, prefix="/api/v1")  # Enhanced search
     app.include_router(memos_router, prefix="/api/v1")
     app.include_router(memories_router)  # Already has prefix
     app.include_router(projects_router)  # Already has prefix
     app.include_router(tenants_router)   # Already has prefix
+    app.include_router(entities_router, prefix="/api/v1")  # Entity management
+    app.include_router(communities_router, prefix="/api/v1")  # Community management
+    app.include_router(data_export_router, prefix="/api/v1")  # Data export/cleanup
+    app.include_router(maintenance.router, prefix="/api/v1")  # Graph maintenance
     
     return app
 

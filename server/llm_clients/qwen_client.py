@@ -104,7 +104,7 @@ class QwenClient(LLMClient):
         for key, value in data.items():
             if value is None:
                 # 对于 null 值，根据字段名提供默认值
-                if "id" in key.lower():
+                if key.lower() == "id" or key.lower().endswith("_id"):
                     # ID 字段默认为 0
                     cleaned_data[key] = 0
                 elif "facts" in key.lower() or "edges" in key.lower():
@@ -118,13 +118,8 @@ class QwenClient(LLMClient):
                 cleaned_list = []
                 for item in value:
                     if isinstance(item, dict):
-                        # 清理字典中的 null 值
-                        cleaned_item = {}
-                        for item_key, item_value in item.items():
-                            if item_value is None and "id" in item_key.lower():
-                                cleaned_item[item_key] = 0
-                            else:
-                                cleaned_item[item_key] = item_value
+                        # Use recursive cleaning for dict items
+                        cleaned_item = self._clean_parsed_json(item, None)
                         # 只添加有效的项（例如，如果所有 ID 都是 0，跳过该项）
                         if self._is_valid_item(cleaned_item):
                             cleaned_list.append(cleaned_item)
@@ -132,10 +127,47 @@ class QwenClient(LLMClient):
                         cleaned_list.append(item)
                 cleaned_data[key] = cleaned_list
             elif isinstance(value, dict):
-                # 递归清理嵌套字典
-                cleaned_data[key] = self._clean_parsed_json(value, None)
+                # Check if it looks like a schema definition (Qwen artifact)
+                # Qwen sometimes returns {"description": "actual text", "type": "string"} for string fields
+                if (
+                    "description" in value
+                    and isinstance(value.get("description"), str)
+                    and ("type" in value or "title" in value or len(value) == 1)
+                ):
+                    cleaned_data[key] = value["description"]
+                else:
+                    # 递归清理嵌套字典
+                    cleaned_data[key] = self._clean_parsed_json(value, None)
             else:
-                cleaned_data[key] = value
+                # Handle timestamp fields that are 0 (Qwen sometimes returns 0 for null timestamps)
+                if (
+                    isinstance(value, (int, float))
+                    and value == 0
+                    and ("_at" in key.lower() or "time" in key.lower())
+                ):
+                    cleaned_data[key] = None
+                else:
+                    cleaned_data[key] = value
+
+        # Map entity_type_id to entity_type if needed
+        if "entity_type_id" in cleaned_data and (
+            "entity_type" not in cleaned_data or not cleaned_data["entity_type"]
+        ):
+            type_id = cleaned_data["entity_type_id"]
+            # Default mapping based on graphiti_service.py
+            mapping = [
+                "Entity",
+                "Person",
+                "Organization",
+                "Location",
+                "Concept",
+                "Event",
+                "Artifact",
+            ]
+            if isinstance(type_id, int) and 0 <= type_id < len(mapping):
+                cleaned_data["entity_type"] = mapping[type_id]
+            else:
+                cleaned_data["entity_type"] = "Entity"
 
         return cleaned_data
 
@@ -149,7 +181,7 @@ class QwenClient(LLMClient):
         has_valid_id = False
 
         for key, value in item.items():
-            if "id" in key.lower():
+            if key.lower() == "id" or key.lower().endswith("_id"):
                 has_id_field = True
                 if value is not None and value != 0:
                     has_valid_id = True
@@ -217,19 +249,48 @@ class QwenClient(LLMClient):
             if not raw_output:
                 raise ValueError("Empty response content from DashScope API")
 
+            logger.info(f"Qwen raw output: {raw_output}")
+
             # 如果是结构化输出请求，解析并验证响应
             if response_model is not None:
                 try:
+                    # Handle markdown code blocks
+                    json_str = raw_output.strip()
+                    if json_str.startswith("```json"):
+                        json_str = json_str[7:]
+                    elif json_str.startswith("```"):
+                        json_str = json_str[3:]
+                    if json_str.endswith("```"):
+                        json_str = json_str[:-3]
+                    json_str = json_str.strip()
+
                     # 解析 JSON
-                    parsed_json = json.loads(raw_output)
+                    try:
+                        parsed_json = json.loads(json_str)
+                    except json.JSONDecodeError as e:
+                        # Try to recover from "Extra data" error
+                        if "Extra data" in str(e):
+                            import re
+
+                            match = re.search(r"\(char (\d+)\)", str(e))
+                            if match:
+                                pos = int(match.group(1))
+                                try:
+                                    parsed_json = json.loads(json_str[:pos])
+                                    logger.warning(
+                                        f"Recovered from JSON Extra data error by truncating at {pos}"
+                                    )
+                                except Exception:
+                                    logger.error(f"Failed to recover from JSON error: {e}")
+                                    raise e
+                            else:
+                                raise e
+                        else:
+                            raise e
 
                     # Qwen 可能返回 JSON Schema 而不是实际数据
-                    # 检查是否是 Schema 格式（包含 'properties' 和 'type'）
-                    if (
-                        isinstance(parsed_json, dict)
-                        and "properties" in parsed_json
-                        and "type" in parsed_json
-                    ):
+                    # 检查是否是 Schema 格式（包含 'properties'）
+                    if isinstance(parsed_json, dict) and "properties" in parsed_json:
                         logger.warning(
                             "Qwen returned JSON Schema instead of data, extracting from description"
                         )

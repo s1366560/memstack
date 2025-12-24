@@ -3,252 +3,252 @@ import { Brain, Eye, EyeOff, AlertCircle, Share2, Database, ShieldCheck } from '
 import { useAuthStore } from '../stores/auth';
 
 export const Login: React.FC = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  
-  const { login, error, isLoading: authLoading } = useAuthStore();
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    
-    try {
-      await login(email, password);
-      // Navigation is handled by the route guard
-    } catch (error) {
-      // Error is handled in store
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    const { login, error, isLoading: authLoading } = useAuthStore();
 
-  const handleDemoLogin = (type: 'admin' | 'user') => {
-    if (type === 'admin') {
-      setEmail('admin@vipmemory.com');
-      setPassword('admin123'); // Assuming default password logic allows this, though current auth only uses API keys in backend, we simulate form fill. 
-      // Actually backend create_user doesn't set password, it uses API Key or OAuth usually. 
-      // But for this login form which likely calls an auth endpoint that expects password (even if mock), we fill it.
-      // Wait, let's check authAPI.login implementation. It sends email/password.
-      // And backend auth.py initializes user but how about password?
-      // The backend uses API Key for auth, but the login endpoint usually exchanges email/password for token.
-      // Let's assume for demo purposes we just fill these.
-    } else {
-      setEmail('user@vipmemory.com');
-      setPassword('user123');
-    }
-  };
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoading(true);
 
-  return (
-    <div className="min-h-screen flex bg-gray-50">
-      {/* Left Side - Hero Section */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-slate-900">
-        {/* Background Gradients */}
-        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-blue-600/20 to-purple-600/20 z-10"></div>
-        <div className="absolute -top-24 -left-24 w-96 h-96 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
-        <div className="absolute top-1/2 left-1/2 w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
-        <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
+        try {
+            await login(email, password);
+            // Navigation is handled by the route guard
+        } catch (error) {
+            // Error is handled in store
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-        {/* Content */}
-        <div className="relative z-20 flex flex-col justify-between w-full p-12 text-white">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-blue-500/20 rounded-lg backdrop-blur-sm border border-blue-400/20">
-              <Brain className="h-8 w-8 text-blue-400" />
-            </div>
-            <span className="text-2xl font-bold tracking-tight">VIP Memory</span>
-          </div>
+    const handleDemoLogin = (type: 'admin' | 'user') => {
+        if (type === 'admin') {
+            setEmail('admin@memstack.ai');
+            setPassword('admin123'); // Assuming default password logic allows this, though current auth only uses API keys in backend, we simulate form fill. 
+            // Actually backend create_user doesn't set password, it uses API Key or OAuth usually. 
+            // But for this login form which likely calls an auth endpoint that expects password (even if mock), we fill it.
+            // Wait, let's check authAPI.login implementation. It sends email/password.
+            // And backend auth.py initializes user but how about password?
+            // The backend uses API Key for auth, but the login endpoint usually exchanges email/password for token.
+            // Let's assume for demo purposes we just fill these.
+        } else {
+            setEmail('user@memstack.ai');
+            setPassword('user123');
+        }
+    };
 
-          <div className="space-y-8">
-            <h1 className="text-5xl font-extrabold leading-tight">
-              构建您的企业级 <br/>
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
-                AI 记忆中枢
-              </span>
-            </h1>
-            <p className="text-lg text-slate-300 max-w-md">
-              连接每一个知识点，构建可成长的企业知识图谱。让 AI 真正理解您的业务，提供精准、连贯的智能服务。
-            </p>
+    return (
+        <div className="min-h-screen flex bg-gray-50">
+            {/* Left Side - Hero Section */}
+            <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-slate-900">
+                {/* Background Gradients */}
+                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-blue-600/20 to-purple-600/20 z-10"></div>
+                <div className="absolute -top-24 -left-24 w-96 h-96 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
+                <div className="absolute top-1/2 left-1/2 w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
+                <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
 
-            <div className="grid grid-cols-2 gap-6 pt-8">
-              <div className="flex items-start space-x-3">
-                <div className="p-2 bg-blue-500/10 rounded-lg">
-                  <Database className="h-5 w-5 text-blue-400" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-white">长短期记忆</h3>
-                  <p className="text-sm text-slate-400 mt-1">完整的记忆生命周期管理</p>
-                </div>
-              </div>
-              <div className="flex items-start space-x-3">
-                <div className="p-2 bg-purple-500/10 rounded-lg">
-                  <Share2 className="h-5 w-5 text-purple-400" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-white">知识图谱</h3>
-                  <p className="text-sm text-slate-400 mt-1">自动提取实体与关系网络</p>
-                </div>
-              </div>
-            </div>
-          </div>
+                {/* Content */}
+                <div className="relative z-20 flex flex-col justify-between w-full p-12 text-white">
+                    <div className="flex items-center space-x-3">
+                        <div className="p-2 bg-blue-500/20 rounded-lg backdrop-blur-sm border border-blue-400/20">
+                            <Brain className="h-8 w-8 text-blue-400" />
+                        </div>
+                        <span className="text-2xl font-bold tracking-tight">VIP Memory</span>
+                    </div>
 
-          <div className="text-sm text-slate-400 flex justify-between items-center">
-            <span>© 2024 VIP Memory. All rights reserved.</span>
+                    <div className="space-y-8">
+                        <h1 className="text-5xl font-extrabold leading-tight">
+                            构建您的企业级 <br />
+                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
+                                AI 记忆中枢
+                            </span>
+                        </h1>
+                        <p className="text-lg text-slate-300 max-w-md">
+                            连接每一个知识点，构建可成长的企业知识图谱。让 AI 真正理解您的业务，提供精准、连贯的智能服务。
+                        </p>
+
+                        <div className="grid grid-cols-2 gap-6 pt-8">
+                            <div className="flex items-start space-x-3">
+                                <div className="p-2 bg-blue-500/10 rounded-lg">
+                                    <Database className="h-5 w-5 text-blue-400" />
+                                </div>
+                                <div>
+                                    <h3 className="font-semibold text-white">长短期记忆</h3>
+                                    <p className="text-sm text-slate-400 mt-1">完整的记忆生命周期管理</p>
+                                </div>
+                            </div>
+                            <div className="flex items-start space-x-3">
+                                <div className="p-2 bg-purple-500/10 rounded-lg">
+                                    <Share2 className="h-5 w-5 text-purple-400" />
+                                </div>
+                                <div>
+                                    <h3 className="font-semibold text-white">知识图谱</h3>
+                                    <p className="text-sm text-slate-400 mt-1">自动提取实体与关系网络</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="text-sm text-slate-400 flex justify-between items-center">
+            <span>© 2024 MemStack. All rights reserved.</span>
             <div className="flex space-x-4">
               <a href="#" className="hover:text-white transition-colors">隐私政策</a>
               <a href="#" className="hover:text-white transition-colors">服务条款</a>
             </div>
           </div>
+                </div>
+            </div>
+
+            {/* Right Side - Login Form */}
+            <div className="flex-1 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-20 xl:px-24 bg-white">
+                <div className="mx-auto w-full max-w-sm lg:w-96">
+                    {/* Mobile Logo */}
+                    <div className="lg:hidden mb-8 text-center">
+                        <div className="flex items-center justify-center space-x-2 mb-2">
+                            <div className="p-2 bg-blue-600 rounded-lg">
+                                <Brain className="h-8 w-8 text-white" />
+                            </div>
+                            <span className="text-2xl font-bold text-gray-900">VIP Memory</span>
+                        </div>
+                        <p className="text-gray-500">企业级 LLM 记忆平台</p>
+                    </div>
+
+                    <div className="mb-8">
+                        <h2 className="text-3xl font-bold text-gray-900">欢迎回来</h2>
+                        <p className="mt-2 text-sm text-gray-600">
+                            请登录您的账户以继续访问
+                        </p>
+                    </div>
+
+                    {error && (
+                        <div className="mb-6 flex items-center p-4 bg-red-50 border border-red-100 rounded-lg">
+                            <AlertCircle className="h-5 w-5 text-red-500 mr-3 flex-shrink-0" />
+                            <span className="text-sm text-red-700">{error}</span>
+                        </div>
+                    )}
+
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                        <div>
+                            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
+                                邮箱地址
+                            </label>
+                            <div className="relative">
+                                <input
+                                    id="email"
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="block w-full px-4 py-3 text-gray-900 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 focus:bg-white"
+                                    placeholder="name@company.com"
+                                    required
+                                    disabled={isLoading || authLoading}
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                                    密码
+                                </label>
+                                <a href="#" className="text-sm font-medium text-blue-600 hover:text-blue-500 transition-colors">
+                                    忘记密码？
+                                </a>
+                            </div>
+                            <div className="relative">
+                                <input
+                                    id="password"
+                                    type={showPassword ? 'text' : 'password'}
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="block w-full px-4 py-3 pr-10 text-gray-900 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 focus:bg-white"
+                                    placeholder="请输入您的密码"
+                                    required
+                                    disabled={isLoading || authLoading}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                                    disabled={isLoading || authLoading}
+                                >
+                                    {showPassword ? (
+                                        <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600 transition-colors" />
+                                    ) : (
+                                        <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600 transition-colors" />
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+
+                        <button
+                            type="submit"
+                            className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg hover:-translate-y-0.5"
+                            disabled={isLoading || authLoading}
+                        >
+                            {isLoading || authLoading ? (
+                                <>
+                                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                                    登录中...
+                                </>
+                            ) : (
+                                '登录'
+                            )}
+                        </button>
+                    </form>
+
+                    <div className="mt-8">
+                        <div className="relative">
+                            <div className="absolute inset-0 flex items-center">
+                                <div className="w-full border-t border-gray-200" />
+                            </div>
+                            <div className="relative flex justify-center text-sm">
+                                <span className="px-4 bg-white text-gray-500">或者</span>
+                            </div>
+                        </div>
+
+                        <div className="mt-8 text-center">
+                            <p className="text-sm text-gray-600">
+                                还没有账户？{' '}
+                                <a href="#" className="font-semibold text-blue-600 hover:text-blue-500 transition-colors">
+                                    立即注册
+                                </a>
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Demo Credentials Hint */}
+                    <div className="mt-10 p-5 bg-blue-50 rounded-xl border border-blue-100">
+                        <div className="flex items-center space-x-2 mb-3">
+                            <ShieldCheck className="h-4 w-4 text-blue-600" />
+                            <h3 className="text-sm font-semibold text-blue-900">演示账户 (点击填充)</h3>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                            <div
+                                onClick={() => handleDemoLogin('admin')}
+                                className="flex justify-between items-center text-blue-800 bg-blue-100/50 p-2 rounded cursor-pointer hover:bg-blue-100 transition-colors"
+                                role="button"
+                                tabIndex={0}
+                            >
+                                <span className="font-medium">管理员</span>
+                                <span className="font-mono text-xs">admin@memstack.ai / admin123</span>
+                            </div>
+                            <div
+                                onClick={() => handleDemoLogin('user')}
+                                className="flex justify-between items-center text-blue-800 bg-blue-100/50 p-2 rounded cursor-pointer hover:bg-blue-100 transition-colors"
+                                role="button"
+                                tabIndex={0}
+                            >
+                                <span className="font-medium">普通用户</span>
+                                <span className="font-mono text-xs">user@memstack.ai / user123</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
-
-      {/* Right Side - Login Form */}
-      <div className="flex-1 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-20 xl:px-24 bg-white">
-        <div className="mx-auto w-full max-w-sm lg:w-96">
-          {/* Mobile Logo */}
-          <div className="lg:hidden mb-8 text-center">
-            <div className="flex items-center justify-center space-x-2 mb-2">
-              <div className="p-2 bg-blue-600 rounded-lg">
-                <Brain className="h-8 w-8 text-white" />
-              </div>
-              <span className="text-2xl font-bold text-gray-900">VIP Memory</span>
-            </div>
-            <p className="text-gray-500">企业级 LLM 记忆平台</p>
-          </div>
-
-          <div className="mb-8">
-            <h2 className="text-3xl font-bold text-gray-900">欢迎回来</h2>
-            <p className="mt-2 text-sm text-gray-600">
-              请登录您的账户以继续访问
-            </p>
-          </div>
-
-          {error && (
-            <div className="mb-6 flex items-center p-4 bg-red-50 border border-red-100 rounded-lg">
-              <AlertCircle className="h-5 w-5 text-red-500 mr-3 flex-shrink-0" />
-              <span className="text-sm text-red-700">{error}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
-                邮箱地址
-              </label>
-              <div className="relative">
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="block w-full px-4 py-3 text-gray-900 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 focus:bg-white"
-                  placeholder="name@company.com"
-                  required
-                  disabled={isLoading || authLoading}
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                  密码
-                </label>
-                <a href="#" className="text-sm font-medium text-blue-600 hover:text-blue-500 transition-colors">
-                  忘记密码？
-                </a>
-              </div>
-              <div className="relative">
-                <input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full px-4 py-3 pr-10 text-gray-900 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 focus:bg-white"
-                  placeholder="请输入您的密码"
-                  required
-                  disabled={isLoading || authLoading}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                  disabled={isLoading || authLoading}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600 transition-colors" />
-                  ) : (
-                    <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600 transition-colors" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              className="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg hover:-translate-y-0.5"
-              disabled={isLoading || authLoading}
-            >
-              {isLoading || authLoading ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-                  登录中...
-                </>
-              ) : (
-                '登录'
-              )}
-            </button>
-          </form>
-
-          <div className="mt-8">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-4 bg-white text-gray-500">或者</span>
-              </div>
-            </div>
-
-            <div className="mt-8 text-center">
-              <p className="text-sm text-gray-600">
-                还没有账户？{' '}
-                <a href="#" className="font-semibold text-blue-600 hover:text-blue-500 transition-colors">
-                  立即注册
-                </a>
-              </p>
-            </div>
-          </div>
-
-          {/* Demo Credentials Hint */}
-          <div className="mt-10 p-5 bg-blue-50 rounded-xl border border-blue-100">
-            <div className="flex items-center space-x-2 mb-3">
-              <ShieldCheck className="h-4 w-4 text-blue-600" />
-              <h3 className="text-sm font-semibold text-blue-900">演示账户 (点击填充)</h3>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div 
-                onClick={() => handleDemoLogin('admin')}
-                className="flex justify-between items-center text-blue-800 bg-blue-100/50 p-2 rounded cursor-pointer hover:bg-blue-100 transition-colors"
-                role="button"
-                tabIndex={0}
-              >
-                <span className="font-medium">管理员</span>
-                <span className="font-mono text-xs">admin@vipmemory.com / admin123</span>
-              </div>
-              <div 
-                onClick={() => handleDemoLogin('user')}
-                className="flex justify-between items-center text-blue-800 bg-blue-100/50 p-2 rounded cursor-pointer hover:bg-blue-100 transition-colors"
-                role="button"
-                tabIndex={0}
-              >
-                <span className="font-medium">普通用户</span>
-                <span className="font-mono text-xs">user@vipmemory.com / user123</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+    );
 };

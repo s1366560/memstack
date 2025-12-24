@@ -18,6 +18,7 @@ async def get_graph(
     limit: int = 100,
     since: str | None = None,
     tenant_id: str | None = None,
+    project_id: str | None = None,
     graphiti: GraphitiService = Depends(get_graphiti_service),
     api_key: APIKey = Depends(verify_api_key_dependency),
 ):
@@ -26,7 +27,11 @@ async def get_graph(
     Optional filters:
     - since: ISO datetime string to fetch incremental updates
     - tenant_id: filter by tenant
+    - project_id: filter by project
     """
+    logger.info(
+        f"get_graph called with: limit={limit}, since={since}, tenant_id={tenant_id}, project_id={project_id}, user={api_key.user_id}"
+    )
     try:
         parsed_since = None
         if since:
@@ -37,7 +42,9 @@ async def get_graph(
             except Exception:
                 raise HTTPException(status_code=400, detail="Invalid 'since' datetime format")
 
-        return await graphiti.get_graph_data(limit=limit, since=parsed_since, tenant_id=tenant_id)
+        return await graphiti.get_graph_data(
+            limit=limit, since=parsed_since, tenant_id=tenant_id, project_id=project_id
+        )
     except HTTPException:
         raise
     except Exception as e:

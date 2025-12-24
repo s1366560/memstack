@@ -36,6 +36,41 @@ async def test_get_graph_data_filters():
 
 
 @pytest.mark.asyncio
+async def test_get_graph_data_with_project_filter():
+    service = GraphitiService()
+    mock_driver = Mock()
+    mock_result = Mock()
+    mock_result.records = [
+        {
+            "source_id": "n1",
+            "source_labels": ["Episodic"],
+            "source_props": {"name": "ep1", "project_id": "p1"},
+            "edge_id": None,
+            "edge_type": None,
+            "edge_props": None,
+            "target_id": None,
+            "target_labels": None,
+            "target_props": None,
+        }
+    ]
+    mock_driver.execute_query = AsyncMock(return_value=mock_result)
+
+    service._client = Mock()
+    service._client.driver = mock_driver
+
+    data = await service.get_graph_data(limit=10, project_id="p1")
+    
+    # Verify that project_id was passed to execute_query
+    call_args = mock_driver.execute_query.call_args
+    assert call_args is not None
+    _, kwargs = call_args
+    assert kwargs.get("project_id") == "p1"
+    
+    assert "elements" in data
+    assert len(data["elements"]["nodes"]) == 1
+
+
+@pytest.mark.asyncio
 async def test_short_term_recall():
     service = GraphitiService()
     mock_driver = Mock()
@@ -89,4 +124,3 @@ async def test_search_with_filters():
         as_of=None,
     )
     assert len(results) >= 1
-

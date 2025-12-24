@@ -31,10 +31,10 @@ async def login_for_access_token(
     logger.info(f"Login attempt for user: {form_data.username}")
     user = None
     # Demo credentials check
-    if form_data.username == "admin@vipmemory.com" and form_data.password == "admin123":
+    if form_data.username == "admin@memstack.ai" and form_data.password == "admin123":
         result = await db.execute(select(DBUser).where(DBUser.email == form_data.username))
         user = result.scalar_one_or_none()
-    elif form_data.username == "user@vipmemory.com" and form_data.password == "user123":
+    elif form_data.username == "user@memstack.ai" and form_data.password == "user123":
         result = await db.execute(select(DBUser).where(DBUser.email == form_data.username))
         user = result.scalar_one_or_none()
 

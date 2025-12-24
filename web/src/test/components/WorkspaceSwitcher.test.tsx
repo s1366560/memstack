@@ -71,6 +71,7 @@ describe('WorkspaceSwitcher', () => {
             const mockCurrentProject = { id: 'p1', name: 'Test Project' }
             vi.mocked(useProjectStore).mockReturnValue({
                 projects: [mockCurrentProject],
+                currentProject: mockCurrentProject,
                 listProjects: vi.fn(),
             } as any)
 

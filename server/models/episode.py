@@ -15,6 +15,7 @@ class SourceType(str, Enum):
     JSON = "json"
     DOCUMENT = "document"
     API = "api"
+    CONVERSATION = "conversation"
 
 
 class EpisodeCreate(BaseModel):

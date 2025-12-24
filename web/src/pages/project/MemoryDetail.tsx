@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { memoryAPI } from '../../services/api'
-import { Memory } from '../../types/memory'
+import { graphitiService } from '../../services/graphitiService'
 
 export const MemoryDetail: React.FC = () => {
     const { projectId, memoryId } = useParams()
     const navigate = useNavigate()
-    const [memory, setMemory] = useState<Memory | null>(null)
+    const [memory, setMemory] = useState<any>(null)
     const [isLoading, setIsLoading] = useState(false)
     const [activeTab, setActiveTab] = useState<'content' | 'metadata' | 'history' | 'raw'>('content')
 
@@ -15,7 +14,7 @@ export const MemoryDetail: React.FC = () => {
             if (projectId && memoryId) {
                 setIsLoading(true)
                 try {
-                    const data = await memoryAPI.get(projectId, memoryId)
+                    const data = await graphitiService.getEpisode(decodeURIComponent(memoryId))
                     setMemory(data)
                 } catch (error) {
                     console.error('Failed to fetch memory:', error)
@@ -44,7 +43,7 @@ export const MemoryDetail: React.FC = () => {
 
         if (window.confirm('Are you sure you want to delete this memory?')) {
             try {
-                await memoryAPI.delete(projectId, memoryId)
+                await graphitiService.deleteEpisode(decodeURIComponent(memoryId))
                 navigate(`/project/${projectId}/memories`)
             } catch (error) {
                 console.error('Failed to delete memory:', error)
@@ -65,7 +64,7 @@ export const MemoryDetail: React.FC = () => {
                         <Link to={`/project/${projectId}/memories`} className="text-slate-500 hover:text-primary text-sm font-medium transition-colors">Memories</Link>
                         <span className="text-slate-400 text-sm">/</span>
                         <div className="flex items-center gap-2">
-                            <span className="text-slate-900 dark:text-white text-sm font-medium truncate max-w-[200px]">{memory.title}</span>
+                            <span className="text-slate-900 dark:text-white text-sm font-medium truncate max-w-[200px]">{memory.name || 'Untitled'}</span>
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
                                 Synced
                             </span>
@@ -100,20 +99,18 @@ export const MemoryDetail: React.FC = () => {
                                     <div className="flex gap-5 items-center">
                                         <div className="relative">
                                             <div className="bg-center bg-no-repeat bg-cover rounded-full h-16 w-16 md:h-20 md:w-20 ring-4 ring-slate-50 dark:ring-slate-800 shadow-sm bg-slate-200 flex items-center justify-center text-slate-400">
-                                                <span className="material-symbols-outlined text-3xl">person</span>
+                                                <span className="material-symbols-outlined text-3xl">description</span>
                                             </div>
                                             <div className="absolute -bottom-1 -right-1 bg-white dark:bg-slate-900 rounded-full p-1 shadow-sm border border-slate-100 dark:border-slate-700">
                                                 <div className="bg-blue-500 rounded-full h-3 w-3" title="Online"></div>
                                             </div>
                                         </div>
                                         <div className="flex flex-col justify-center gap-1">
-                                            <h1 className="text-slate-900 dark:text-white text-2xl md:text-3xl font-bold leading-tight tracking-tight">{memory.title}</h1>
+                                            <h1 className="text-slate-900 dark:text-white text-2xl md:text-3xl font-bold leading-tight tracking-tight">{memory.name || 'Untitled'}</h1>
                                             <p className="text-slate-500 dark:text-slate-400 text-sm md:text-base font-normal flex items-center gap-2 flex-wrap">
-                                                <span>Created by <span className="text-slate-900 dark:text-slate-200 font-medium">Author</span></span>
+                                                <span>Type: <span className="text-slate-900 dark:text-slate-200 font-medium capitalize">{memory.source_type || 'Unknown'}</span></span>
                                                 <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
                                                 <span>{new Date(memory.created_at).toLocaleDateString()}</span>
-                                                <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                                                <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-xs font-mono text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">v{memory.version || 1}.0</span>
                                             </p>
                                         </div>
                                     </div>
@@ -145,15 +142,6 @@ export const MemoryDetail: React.FC = () => {
                                         Metadata
                                     </button>
                                     <button
-                                        onClick={() => setActiveTab('history')}
-                                        className={`relative flex items-center justify-center pb-4 font-semibold text-sm tracking-wide transition-colors ${activeTab === 'history'
-                                            ? 'text-primary border-b-2 border-primary'
-                                            : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
-                                            }`}
-                                    >
-                                        Version History
-                                    </button>
-                                    <button
                                         onClick={() => setActiveTab('raw')}
                                         className={`relative flex items-center justify-center pb-4 font-semibold text-sm tracking-wide transition-colors ${activeTab === 'raw'
                                             ? 'text-primary border-b-2 border-primary'
@@ -174,22 +162,17 @@ export const MemoryDetail: React.FC = () => {
                                 {activeTab === 'metadata' && (
                                     <div className="grid grid-cols-2 gap-4 text-sm">
                                         <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                                            <span className="block text-xs font-bold text-slate-500 uppercase mb-1">ID</span>
-                                            <span className="font-mono">{memory.id}</span>
+                                            <span className="block text-xs font-bold text-slate-500 uppercase mb-1">ID (UUID)</span>
+                                            <span className="font-mono break-all">{memory.uuid}</span>
                                         </div>
                                         <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
                                             <span className="block text-xs font-bold text-slate-500 uppercase mb-1">Type</span>
-                                            <span className="capitalize">{memory.content_type}</span>
+                                            <span className="capitalize">{memory.source_type}</span>
                                         </div>
                                         <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg col-span-2">
                                             <span className="block text-xs font-bold text-slate-500 uppercase mb-1">Custom Metadata</span>
                                             <pre className="text-xs font-mono overflow-auto">{JSON.stringify(memory.metadata || {}, null, 2)}</pre>
                                         </div>
-                                    </div>
-                                )}
-                                {activeTab === 'history' && (
-                                    <div className="text-center text-slate-500 py-10">
-                                        No version history available.
                                     </div>
                                 )}
                                 {activeTab === 'raw' && (
@@ -202,10 +185,10 @@ export const MemoryDetail: React.FC = () => {
                             <div className="bg-slate-50 dark:bg-slate-800/50 px-6 py-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
                                 <div className="flex items-center gap-2">
                                     <span className="material-symbols-outlined text-[16px]">history</span>
-                                    Last updated {new Date(memory.updated_at || memory.created_at).toLocaleString()}
+                                    Created {new Date(memory.created_at).toLocaleString()}
                                 </div>
                                 <div>
-                                    ID: {memory.id.slice(0, 12)}...
+                                    ID: {memory.uuid ? memory.uuid.slice(0, 12) : 'N/A'}...
                                 </div>
                             </div>
                         </div>
@@ -224,47 +207,13 @@ export const MemoryDetail: React.FC = () => {
                     </h2>
                 </div>
                 <div className="overflow-y-auto flex-1 p-5 flex flex-col gap-6">
-                    {/* Graph Widget */}
-                    <div className="flex flex-col gap-3">
-                        <div className="flex justify-between items-center">
-                            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Graph Relationship</h3>
-                            <button className="text-primary text-xs hover:underline">Expand</button>
-                        </div>
-                        {/* Graph Placeholder */}
-                        <div className="relative w-full aspect-[4/3] bg-slate-50 dark:bg-slate-800 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 group cursor-pointer flex items-center justify-center">
-                            <span className="material-symbols-outlined text-4xl text-slate-300 dark:text-slate-600">hub</span>
-                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/5 dark:bg-black/20">
-                                <span className="bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-1.5 rounded-full text-xs font-medium shadow-md">
-                                    View Interactive Graph
-                                </span>
-                            </div>
-                        </div>
-                        <p className="text-xs text-slate-500 leading-relaxed">
-                            This memory is connected to <span className="font-medium text-slate-700 dark:text-slate-300">{memory.relationships?.length || 0} other nodes</span> in the graph.
-                        </p>
-                    </div>
-                    {/* Divider */}
-                    <div className="h-px bg-slate-100 dark:bg-slate-800 w-full"></div>
-                    {/* Related Memories */}
-                    <div className="flex flex-col gap-3">
-                        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Related Memories</h3>
-                        <div className="flex flex-col gap-2">
-                            {/* Placeholder related memories - in real app would fetch these */}
-                            <div className="p-3 rounded-lg border border-dashed border-slate-200 dark:border-slate-700 text-center text-xs text-slate-500">
-                                No related memories found via similarity search.
-                            </div>
-                        </div>
-                    </div>
                     {/* Tags */}
                     <div className="flex flex-col gap-3">
                         <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Tags</h3>
                         <div className="flex flex-wrap gap-2">
-                            {memory.tags?.map(tag => (
+                            {memory.metadata?.tags?.map((tag: string) => (
                                 <span key={tag} className="px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer transition-colors dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">#{tag}</span>
-                            ))}
-                            <button className="px-2 py-1 rounded-md text-xs font-medium text-slate-400 border border-dashed border-slate-300 hover:border-primary hover:text-primary transition-colors flex items-center">
-                                <span className="material-symbols-outlined text-[14px] mr-1">add</span> Add
-                            </button>
+                            )) || <span className="text-xs text-slate-500">No tags</span>}
                         </div>
                     </div>
                 </div>

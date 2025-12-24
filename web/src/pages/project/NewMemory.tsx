@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { memoryAPI } from '../../services/api'
+import { graphitiService } from '../../services/graphitiService'
 
 export const NewMemory: React.FC = () => {
     const { projectId } = useParams()
@@ -27,12 +27,15 @@ export const NewMemory: React.FC = () => {
 
         setIsSaving(true)
         try {
-            await memoryAPI.create(projectId, {
-                title,
-                content,
+            await graphitiService.addEpisode({
+                name: title,
+                content: content,
                 project_id: projectId,
-                tags,
-                content_type: 'text'
+                source_type: 'text',
+                metadata: {
+                    tags: tags,
+                    source: 'web_console'
+                }
             })
             navigate(`/project/${projectId}/memories`)
         } catch (error) {

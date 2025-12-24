@@ -44,7 +44,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     navigationItems = [],
     navigationGroups = [],
     activeItem,
-    contextInfo,
+    contextInfo: _contextInfo,
     backButton,
     breadcrumbs = ['Home', 'Overview'],
     customHeader
@@ -99,7 +99,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                             <div className="bg-blue-600 p-1 rounded-md">
                                 <Brain className="h-5 w-5 text-white" />
                             </div>
-                            <span className="text-lg font-bold text-blue-900">MemStack<span className="text-purple-600">.ai</span></span>
+                            <span className="text-lg font-bold text-blue-900">{title}</span>
                         </div>
                     </div>
 
@@ -175,14 +175,23 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 </nav>
 
                 <div className="p-4 border-t border-gray-200">
-                    <div className="flex items-center p-2 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
-                        <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-bold border-2 border-white shadow-sm">
-                            {user?.name?.[0]?.toUpperCase() || 'TA'}
+                    <div className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 transition-colors group">
+                        <div className="flex items-center min-w-0">
+                            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-bold border-2 border-white shadow-sm">
+                                {user?.name?.[0]?.toUpperCase() || 'TA'}
+                            </div>
+                            <div className="ml-3 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">{user?.name || 'Tenant Admin'}</p>
+                                <p className="text-xs text-gray-500 truncate">{user?.email || 'admin@tenant.co'}</p>
+                            </div>
                         </div>
-                        <div className="ml-3 flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">{user?.name || 'Tenant Admin'}</p>
-                            <p className="text-xs text-gray-500 truncate">{user?.email || 'admin@tenant.co'}</p>
-                        </div>
+                        <button
+                            onClick={handleLogout}
+                            className="p-2 text-gray-400 hover:text-red-600 transition-colors rounded-full hover:bg-red-50"
+                            title="Sign out"
+                        >
+                            <LogOut className="h-5 w-5" />
+                        </button>
                     </div>
                 </div>
             </div>
@@ -190,43 +199,45 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             {/* Main Content Area */}
             <div className="flex-1 lg:ml-64 flex flex-col min-h-screen">
                 {/* Desktop Top Bar */}
-                <div className="hidden lg:flex lg:items-center lg:justify-between lg:h-16 lg:px-8 lg:bg-white lg:border-b lg:border-gray-200 sticky top-0 z-20">
-                    {/* Breadcrumbs */}
-                    <div className="flex items-center text-sm text-gray-500">
-                        {breadcrumbs.map((crumb, index) => (
-                            <React.Fragment key={index}>
-                                {index > 0 && <span className="mx-2 text-gray-300">/</span>}
-                                <span className={index === breadcrumbs.length - 1 ? "font-medium text-gray-900" : "hover:text-gray-700"}>
-                                    {crumb}
-                                </span>
-                            </React.Fragment>
-                        ))}
-                    </div>
-
-                    {/* Right Side: Search + Actions */}
-                    <div className="flex items-center space-x-6">
-                        <div className="relative">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <Search className="h-4 w-4 text-gray-400" />
-                            </div>
-                            <input
-                                type="text"
-                                placeholder="Search resources..."
-                                className="block w-64 pl-10 pr-3 py-2 border border-gray-200 rounded-lg leading-5 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-150 ease-in-out"
-                            />
+                {customHeader ? customHeader : (
+                    <div className="hidden lg:flex lg:items-center lg:justify-between lg:h-16 lg:px-8 lg:bg-white lg:border-b lg:border-gray-200 sticky top-0 z-20">
+                        {/* Breadcrumbs */}
+                        <div className="flex items-center text-sm text-gray-500">
+                            {breadcrumbs.map((crumb, index) => (
+                                <React.Fragment key={index}>
+                                    {index > 0 && <span className="mx-2 text-gray-300">/</span>}
+                                    <span className={index === breadcrumbs.length - 1 ? "font-medium text-gray-900" : "hover:text-gray-700"}>
+                                        {crumb}
+                                    </span>
+                                </React.Fragment>
+                            ))}
                         </div>
 
-                        <div className="flex items-center space-x-4">
-                            <button className="relative p-2 text-gray-400 hover:text-gray-600 transition-colors">
-                                <Bell className="h-5 w-5" />
-                                <span className="absolute top-1.5 right-1.5 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
-                            </button>
-                            <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold text-sm">
-                                A
+                        {/* Right Side: Search + Actions */}
+                        <div className="flex items-center space-x-6">
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <Search className="h-4 w-4 text-gray-400" />
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="Search resources..."
+                                    className="block w-64 pl-10 pr-3 py-2 border border-gray-200 rounded-lg leading-5 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-150 ease-in-out"
+                                />
+                            </div>
+
+                            <div className="flex items-center space-x-4">
+                                <button className="relative p-2 text-gray-400 hover:text-gray-600 transition-colors">
+                                    <Bell className="h-5 w-5" />
+                                    <span className="absolute top-1.5 right-1.5 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+                                </button>
+                                <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold text-sm">
+                                    A
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                )}
 
                 <main className="flex-1 p-6 lg:p-8 overflow-x-hidden bg-gray-50">
                     {children}

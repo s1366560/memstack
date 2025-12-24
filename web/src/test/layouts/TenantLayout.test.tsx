@@ -1,14 +1,21 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen, fireEvent, render } from '../utils'
+import { screen, fireEvent, render, waitFor } from '../utils'
 import { TenantLayout } from '../../layouts/TenantLayout'
 import { useTenantStore } from '../../stores/tenant'
+import { useAuthStore } from '../../stores/auth'
+
+vi.mock('../../stores/auth', () => ({
+    useAuthStore: vi.fn()
+}))
 
 vi.mock('../../stores/tenant', () => {
     const mockStore = vi.fn()
-    // @ts-ignore
+    // @ts-expect-error Mocking partial state
     mockStore.getState = vi.fn(() => ({
-        tenants: [{ id: 't1', name: 'Test Tenant' }]
+        tenants: [{ id: 't1', name: 'Test Tenant' }],
+        listTenants: vi.fn(),
+        createTenant: vi.fn()
     }))
     return { useTenantStore: mockStore }
 })
@@ -19,6 +26,10 @@ vi.mock('../../components/WorkspaceSwitcher', () => ({
 describe('TenantLayout', () => {
     beforeEach(() => {
         vi.clearAllMocks()
+        vi.mocked(useAuthStore).mockReturnValue({
+            user: { name: 'Test User', email: 'test@example.com' },
+            logout: vi.fn()
+        } as any)
     })
 
     it('renders layout elements', () => {
@@ -71,5 +82,42 @@ describe('TenantLayout', () => {
         // The component uses useParams which might not work perfectly with MemoryRouter initialEntries directly 
         // unless we render with a Route path.
         // But let's see if we can mock useParams or use a Route wrapper in render.
+    })
+
+    it('auto creates tenant when none exist', async () => {
+        const createTenantMock = vi.fn().mockResolvedValue({})
+        const listTenantsMock = vi.fn().mockResolvedValue({ tenants: [], total: 0 })
+        const setCurrentTenantMock = vi.fn()
+
+        // Mock the store hook return value
+        vi.mocked(useTenantStore).mockReturnValue({
+            currentTenant: null,
+            setCurrentTenant: setCurrentTenantMock,
+            getTenant: vi.fn(),
+            tenants: [], // Initially empty
+        } as any)
+
+            // Mock getState for non-hook usage
+            ; (useTenantStore as any).getState = vi.fn(() => ({
+                tenants: [],
+                listTenants: listTenantsMock,
+                createTenant: createTenantMock.mockImplementation(async () => {
+                    // Simulate state update after creation
+                    (useTenantStore as any).getState = vi.fn(() => ({
+                        tenants: [{ id: 'new-t', name: "Test User's Workspace" }],
+                        listTenants: listTenantsMock,
+                        createTenant: createTenantMock
+                    }))
+                })
+            }))
+
+        render(<TenantLayout />)
+
+        await waitFor(() => {
+            expect(listTenantsMock).toHaveBeenCalled()
+            expect(createTenantMock).toHaveBeenCalledWith(expect.objectContaining({
+                name: "Test User's Workspace"
+            }))
+        })
     })
 })

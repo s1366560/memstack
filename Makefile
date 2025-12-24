@@ -1,4 +1,4 @@
-.PHONY: install test format lint clean dev serve help web-install web-dev web-build
+.PHONY: install test format lint clean dev serve help web-install web-dev web-build test-data get-api-key
 
 help:
 	@echo "MemStack Development Commands"
@@ -15,6 +15,12 @@ help:
 	@echo "docker-up   - Start all services with Docker Compose"
 	@echo "docker-down - Stop all Docker services"
 	@echo ""
+	@echo "API & Test Data:"
+	@echo "get-api-key - Get or show how to obtain API key"
+	@echo "test-data   - Generate test data (default: 50 random episodes)"
+	@echo "test-data-user - Generate user activity series"
+	@echo "test-data-collab - Generate project collaboration data"
+	@echo ""
 	@echo "Web Commands:"
 	@echo "web-install - Install web dependencies"
 	@echo "web-dev     - Start web development server"
@@ -24,7 +30,7 @@ install:
 	pip install -e ".[dev,neo4j,evaluation]"
 
 test:
-	uv run pytest tests/ --cov=server --cov=sdk/python/memstack --cov-report=html --cov-report=term-missing --cov-fail-under=50
+	uv run pytest tests/ --cov=server --cov=sdk/python/memstack --cov-report=html --cov-report=term-missing --cov-fail-under=80
 
 test-unit:
 	uv run pytest tests/ -m "not integration" --cov=server --cov=sdk/python/memstack --cov-report=term-missing
@@ -107,3 +113,22 @@ web-test-coverage:
 
 web-lint:
 	cd web && npm run lint
+
+# API Key helper
+get-api-key:
+	@./scripts/get_api_key.sh
+
+# Test data generation commands
+COUNT?=50
+USER_NAME?="Alice Johnson"
+PROJECT_NAME?="Alpha Research"
+DAYS?=7
+
+test-data:
+	uv run python scripts/generate_test_data.py --count $(COUNT) --mode random
+
+test-data-user:
+	uv run python scripts/generate_test_data.py --mode user-series --user-name "$(USER_NAME)" --days $(DAYS)
+
+test-data-collab:
+	uv run python scripts/generate_test_data.py --mode collaboration --project-name "$(PROJECT_NAME)" --days $(DAYS)

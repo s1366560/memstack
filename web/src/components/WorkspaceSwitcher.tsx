@@ -16,7 +16,7 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ mode }) =>
 
     // Stores
     const { tenants, currentTenant, setCurrentTenant, listTenants } = useTenantStore()
-    const { projects, listProjects } = useProjectStore()
+    const { projects, listProjects, currentProject: storeProject } = useProjectStore()
 
     // Load data if missing
     useEffect(() => {
@@ -48,7 +48,19 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ mode }) =>
 
     const handleProjectSwitch = (project: Project) => {
         setIsOpen(false)
-        navigate(`/project/${project.id}`)
+
+        // Check current location to decide where to navigate
+        const currentPath = window.location.pathname
+        const projectPathPrefix = `/project/${projectId}`
+
+        if (projectId && currentPath.startsWith(projectPathPrefix)) {
+            // If we are already in a project context, preserve the sub-path
+            const subPath = currentPath.substring(projectPathPrefix.length)
+            navigate(`/project/${project.id}${subPath}`)
+        } else {
+            // Default to overview
+            navigate(`/project/${project.id}`)
+        }
     }
 
     const handleBackToTenant = () => {
@@ -61,8 +73,8 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ mode }) =>
     }
 
     // Get current project object if in project mode
-    const currentProject = mode === 'project'
-        ? projects.find(p => p.id === projectId)
+    const displayProject = mode === 'project'
+        ? (storeProject?.id === projectId ? storeProject : projects.find(p => p.id === projectId))
         : null
 
     return (
@@ -90,7 +102,7 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ mode }) =>
                         </div>
                         <div className="flex flex-col overflow-hidden">
                             <h1 className="text-sm font-bold text-slate-900 dark:text-white leading-none truncate">
-                                {currentProject?.name || 'Select Project'}
+                                {displayProject?.name || 'Select Project'}
                             </h1>
                             <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium truncate leading-tight opacity-80 mt-0.5">
                                 {currentTenant?.name}

@@ -1,13 +1,26 @@
 import React, { useEffect, useState } from 'react'
-import { Link, Outlet, useLocation, useParams } from 'react-router-dom'
+import { Link, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { WorkspaceSwitcher } from '../components/WorkspaceSwitcher'
+import { ThemeToggle } from '../components/ThemeToggle'
 import { useTenantStore } from '../stores/tenant'
+import { useAuthStore } from '../stores/auth'
+import { useProjectStore } from '../stores/project'
+import { LogOut } from 'lucide-react'
 
 export const TenantLayout: React.FC = () => {
     const location = useLocation()
-    const { tenantId } = useParams()
+    const navigate = useNavigate()
+    const { tenantId, projectId } = useParams()
     const { currentTenant, setCurrentTenant, getTenant } = useTenantStore()
+    const { currentProject } = useProjectStore()
+    const { logout, user } = useAuthStore()
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+    const [noTenants, setNoTenants] = useState(false)
+
+    const handleLogout = () => {
+        logout()
+        navigate('/login')
+    }
 
     // Sync tenant ID from URL with store
     useEffect(() => {
@@ -26,11 +39,139 @@ export const TenantLayout: React.FC = () => {
                     const tenants = useTenantStore.getState().tenants
                     if (tenants.length > 0) {
                         setCurrentTenant(tenants[0])
+                    } else {
+                        // Auto create default tenant
+                        const defaultName = user?.name ? `${user.name}'s Workspace` : 'My Workspace'
+                        useTenantStore.getState().createTenant({
+                            name: defaultName,
+                            description: 'Automatically created default workspace'
+                        }).then(() => {
+                            const newTenants = useTenantStore.getState().tenants
+                            if (newTenants.length > 0) {
+                                setCurrentTenant(newTenants[newTenants.length - 1])
+                            } else {
+                                setNoTenants(true)
+                            }
+                        }).catch((err) => {
+                            console.error("Failed to auto-create tenant:", err)
+                            setNoTenants(true)
+                        })
                     }
+                }).catch(() => {
+                    // Ignore error
                 })
             }
         }
-    }, [tenantId, currentTenant, getTenant, setCurrentTenant])
+    }, [tenantId, currentTenant, getTenant, setCurrentTenant, user])
+
+    // Sync project ID from URL with store
+    useEffect(() => {
+        if (projectId && currentTenant && (!currentProject || currentProject.id !== projectId)) {
+            const { projects, setCurrentProject, getProject } = useProjectStore.getState()
+            // Try to find in existing list first
+            const project = projects.find(p => p.id === projectId)
+            if (project) {
+                setCurrentProject(project)
+            } else {
+                // Fetch specific project
+                getProject(currentTenant.id, projectId).then(p => {
+                    setCurrentProject(p)
+                }).catch(console.error)
+            }
+        } else if (!projectId && currentProject) {
+            // Clear current project if not in project route
+            useProjectStore.getState().setCurrentProject(null)
+        }
+    }, [projectId, currentTenant, currentProject])
+
+    if (noTenants) {
+        return (
+            <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 dark:bg-slate-900">
+                <div className="mx-auto flex w-full max-w-md flex-col items-center space-y-6 p-6 text-center">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-primary/10 p-2 rounded-lg">
+                            <span className="material-symbols-outlined text-primary text-4xl">memory</span>
+                        </div>
+                        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+                            MemStack<span className="text-primary">.ai</span>
+                        </h1>
+                    </div>
+
+                    <div className="space-y-2">
+                        <h2 className="text-xl font-semibold text-slate-900 dark:text-white">欢迎来到 MemStack</h2>
+                        <p className="text-slate-500 dark:text-slate-400">
+                            您还没有加入任何租户空间。请联系管理员邀请您加入，或者创建一个新的租户空间。
+                        </p>
+                    </div>
+
+                    <div className="flex flex-col gap-4 w-full">
+                        <button
+                            onClick={() => {
+                                // TODO: Implement create tenant modal or page
+                                // For now we can maybe redirect to a create tenant page if it exists
+                                // or show a modal. Since we don't have a route, let's just show a message or 
+                                // navigate to a hypothetical create page.
+                                // Actually, WorkspaceSwitcher usually has a create button. 
+                                // Let's just guide them to logout for now or retry.
+                                window.location.reload()
+                            }}
+                            className="inline-flex w-full items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-center text-sm font-medium text-white hover:bg-primary/90 focus:outline-none focus:ring-4 focus:ring-primary/30 transition-all"
+                        >
+                            刷新页面
+                        </button>
+                        <button
+                            onClick={handleLogout}
+                            className="inline-flex w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-center text-sm font-medium text-slate-900 hover:bg-slate-50 hover:text-primary focus:outline-none focus:ring-4 focus:ring-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700 transition-all"
+                        >
+                            退出登录
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+    const getBreadcrumbs = () => {
+        const paths = location.pathname.split('/').filter(Boolean)
+        // paths: ['tenant', 't1', 'project', 'p1', ...] or ['tenant', 't1', 'projects']
+
+        // Always start with Home (Overview)
+        const breadcrumbs = [
+            { label: 'Home', path: getLink('') }
+        ]
+
+        // If we are deeper than tenant root
+        if (paths.length > 2) {
+            const section = paths[2] // 'projects', 'users', etc.
+
+            if (section === 'project' && projectId && currentProject) {
+                // Project context: Home / Projects / Project Name
+                breadcrumbs.push({ label: 'Projects', path: getLink('/projects') })
+                breadcrumbs.push({ label: currentProject.name, path: getLink(`/project/${projectId}`) })
+
+                // Add sub-section if any (e.g. memories)
+                if (paths.length > 4) {
+                    const subSection = paths[4]
+                    breadcrumbs.push({
+                        label: subSection.charAt(0).toUpperCase() + subSection.slice(1),
+                        path: getLink(`/project/${projectId}/${subSection}`)
+                    })
+                }
+            } else {
+                // Standard section: Home / Section Name
+                breadcrumbs.push({
+                    label: section.charAt(0).toUpperCase() + section.slice(1),
+                    path: getLink(`/${section}`)
+                })
+            }
+        } else if (paths.length === 2) {
+            // Root tenant path, just show Overview (which is Home)
+            // breadcrumbs already has Home
+            breadcrumbs[0].label = 'Overview'
+        }
+
+        return breadcrumbs
+    }
 
     const isActive = (path: string) => {
         // Handle exact match or nested paths
@@ -154,15 +295,26 @@ export const TenantLayout: React.FC = () => {
                 </nav>
 
                 <div className="p-4 border-t border-slate-100 dark:border-slate-800">
-                    <div className={`flex items-center gap-3 p-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
-                        <div className="size-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 shrink-0">
-                            TA
+                    <div className={`flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 ${isSidebarCollapsed ? 'justify-center' : ''} group`}>
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="size-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 shrink-0">
+                                {user?.name?.[0]?.toUpperCase() || 'TA'}
+                            </div>
+                            {!isSidebarCollapsed && (
+                                <div className="flex flex-col overflow-hidden">
+                                    <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{user?.name || 'Tenant Admin'}</p>
+                                    <p className="text-xs text-slate-500 truncate">{user?.email || 'admin@tenant.co'}</p>
+                                </div>
+                            )}
                         </div>
                         {!isSidebarCollapsed && (
-                            <div className="flex flex-col overflow-hidden">
-                                <p className="text-sm font-medium text-slate-900 dark:text-white truncate">Tenant Admin</p>
-                                <p className="text-xs text-slate-500 truncate">admin@tenant.co</p>
-                            </div>
+                            <button
+                                onClick={handleLogout}
+                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                                title="Sign out"
+                            >
+                                <LogOut className="size-4" />
+                            </button>
                         )}
                     </div>
                 </div>
@@ -180,12 +332,20 @@ export const TenantLayout: React.FC = () => {
                             <span className="material-symbols-outlined">menu</span>
                         </button>
                         <div className="flex items-center">
-                            <Link to={getLink('')} className="hover:text-primary transition-colors">Home</Link>
-                            <span className="mx-2 text-slate-300">/</span>
-                            <span className="font-medium text-slate-900 dark:text-white">
-                                {location.pathname === getLink('') ? 'Overview' :
-                                    location.pathname.split('/').pop()?.charAt(0).toUpperCase()! + location.pathname.split('/').pop()?.slice(1)!}
-                            </span>
+                            {getBreadcrumbs().map((crumb, index, array) => (
+                                <React.Fragment key={crumb.path}>
+                                    {index > 0 && <span className="mx-2 text-slate-300">/</span>}
+                                    {index === array.length - 1 ? (
+                                        <span className="font-medium text-slate-900 dark:text-white">
+                                            {crumb.label}
+                                        </span>
+                                    ) : (
+                                        <Link to={crumb.path} className="hover:text-primary transition-colors">
+                                            {crumb.label}
+                                        </Link>
+                                    )}
+                                </React.Fragment>
+                            ))}
                         </div>
                     </div>
 
@@ -198,6 +358,7 @@ export const TenantLayout: React.FC = () => {
                                 className="pl-10 pr-4 py-2 w-64 bg-slate-100 dark:bg-slate-800 border-none rounded-full text-sm focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white placeholder-slate-500 transition-all outline-none"
                             />
                         </div>
+                        <ThemeToggle />
                         <button className="relative p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-colors">
                             <span className="material-symbols-outlined text-[22px]">notifications</span>
                             <span className="absolute top-2 right-2 size-2 bg-red-500 rounded-full border-2 border-white dark:border-slate-900"></span>

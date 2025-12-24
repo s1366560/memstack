@@ -153,6 +153,10 @@ export const useTenantStore = create<TenantState>((set, get) => ({
 
   setCurrentTenant: (tenant: Tenant | null) => {
     set({ currentTenant: tenant });
+    // If tenant is cleared (logout), also clear the list
+    if (tenant === null) {
+      set({ tenants: [] });
+    }
   },
 
   addMember: async (tenantId: string, userId: string, role: string) => {

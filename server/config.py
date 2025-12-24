@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import List, Optional
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -93,6 +93,15 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def auto_select_provider(self) -> "Settings":
+        """Auto-select provider based on available API keys if not explicitly set to a valid one."""
+        # If provider is default (gemini) but no Gemini key, and Qwen key exists, switch to Qwen
+        if self.llm_provider.lower() == "gemini" and not self.gemini_api_key and self.qwen_api_key:
+            self.llm_provider = "qwen"
+
+        return self
 
     @property
     def postgres_url(self) -> str:

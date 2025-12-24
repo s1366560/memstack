@@ -13,6 +13,10 @@ import { NewMemory } from './pages/project/NewMemory'
 import { MemoryDetail } from './pages/project/MemoryDetail'
 import { SearchPage } from './pages/project/SearchPage'
 import { MemoryGraph } from './pages/project/MemoryGraph'
+import { EntitiesList } from './pages/project/EntitiesList'
+import { CommunitiesList } from './pages/project/CommunitiesList'
+import { EnhancedSearch } from './pages/project/EnhancedSearch'
+import { Maintenance } from './pages/project/Maintenance'
 import { useAuthStore } from './stores/auth'
 import './App.css'
 
@@ -65,6 +69,10 @@ function App() {
                 <Route path="memory/:memoryId" element={<MemoryDetail />} />
                 <Route path="search" element={<SearchPage />} />
                 <Route path="graph" element={<MemoryGraph />} />
+                <Route path="entities" element={<EntitiesList />} />
+                <Route path="communities" element={<CommunitiesList />} />
+                <Route path="advanced-search" element={<EnhancedSearch />} />
+                <Route path="maintenance" element={<Maintenance />} />
                 <Route path="team" element={<div className="p-8 text-slate-500">Team Management (Coming Soon)</div>} />
                 <Route path="settings" element={<div className="p-8 text-slate-500">Project Settings (Coming Soon)</div>} />
                 <Route path="support" element={<div className="p-8 text-slate-500">Support (Coming Soon)</div>} />

@@ -226,6 +226,14 @@ async def initialize_default_credentials():
                     role="user",
                 )
 
+                plain_user_key, _ = await create_api_key(
+                    db,
+                    user_id=normal_user.id,
+                    name="Default User Key",
+                    permissions=["read", "write"],
+                )
+
+                print(f"🔑 Default User API Key created: {plain_user_key}")
                 print(f"👤 Default User ID: {normal_user.id}")
                 print(f"📧 Default User Email: {normal_user.email}")
 

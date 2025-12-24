@@ -9,20 +9,17 @@ import {
     ZoomIn,
     ZoomOut,
     Maximize,
-    Minimize,
     FileText,
-    MessageSquare,
     Image as ImageIcon,
     ExternalLink,
     Filter,
-    ChevronDown,
     ArrowRight
 } from 'lucide-react';
 import { AppLayout, NavigationGroup } from '../components/AppLayout';
 
 export const Search: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('Project Alpha architecture decisions');
-    const [timeRange, setTimeRange] = useState('Last 30 Days');
+    const [timeRange] = useState('Last 30 Days');
     const [similarity, setSimilarity] = useState(85);
 
     const navGroups: NavigationGroup[] = [

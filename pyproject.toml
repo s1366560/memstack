@@ -27,6 +27,7 @@ dependencies = [
     "opentelemetry-exporter-otlp>=1.22.0",
     "dashscope>=1.20.0",
     "greenlet>=3.3.0",
+    "datasets>=4.4.1",
 ]
 
 [project.optional-dependencies]
