@@ -24,6 +24,7 @@ from server.config import get_settings
 from server.llm_clients.qwen_client import QwenClient
 from server.llm_clients.qwen_embedder import QwenEmbedder, QwenEmbedderConfig
 from server.llm_clients.qwen_reranker_client import QwenRerankerClient
+from server.services.queue_service import QueueService
 from server.models.episode import Episode, EpisodeCreate
 from server.models.memory import MemoryItem
 from server.models.recall import ShortTermRecallResponse
@@ -148,6 +149,7 @@ class GraphitiService:
     def __init__(self):
         """Initialize Graphiti service."""
         self._client: Optional[Graphiti] = None
+        self.queue_service = QueueService()
 
     async def initialize(self, provider: str = "gemini"):
         """
@@ -192,6 +194,38 @@ class GraphitiService:
                 reranker = QwenRerankerClient(config=reranker_config)
 
                 logger.info("Qwen LLM client, Embedder and Reranker created successfully")
+            elif provider.lower() == "openai":
+                # 使用 OpenAI
+                logger.info("Initializing Graphiti with OpenAI LLM, Embedder and Reranker")
+
+                # Create OpenAI LLM client config
+                llm_config = LLMConfig(
+                    api_key=settings.openai_api_key,
+                    model=settings.openai_model,
+                    small_model=settings.openai_small_model,
+                    base_url=settings.openai_base_url,
+                )
+
+                # Create OpenAI LLM client
+                llm_client = OpenAIClient(config=llm_config)
+
+                # Create OpenAI embedder
+                embedder_config = OpenAIEmbedderConfig(
+                    api_key=settings.openai_api_key,
+                    embedding_model=settings.openai_embedding_model,
+                    base_url=settings.openai_base_url,
+                )
+                embedder = OpenAIEmbedder(config=embedder_config)
+
+                # Create OpenAI reranker
+                reranker_config = LLMConfig(
+                    api_key=settings.openai_api_key,
+                    model=settings.openai_small_model,
+                    base_url=settings.openai_base_url,
+                )
+                reranker = OpenAIRerankerClient(config=reranker_config)
+
+                logger.info("OpenAI LLM client, Embedder and Reranker created successfully")
             else:
                 # 使用 Gemini（默认）
                 logger.info("Initializing Graphiti with Gemini LLM, Embedder and Reranker")
@@ -233,9 +267,40 @@ class GraphitiService:
             logger.info(
                 f"Graphiti client initialized successfully with {provider.upper()} LLM, Embedder and Reranker"
             )
+            
+            # Initialize queue service
+            await self.queue_service.initialize(self._client)
+            
+            # Ensure indices exist to avoid Neo4j warnings and improve performance
+            await self.ensure_indices()
+            
         except Exception as e:
             logger.error(f"Failed to initialize Graphiti client: {e}")
             raise
+
+    async def ensure_indices(self):
+        """Ensure necessary indices exist."""
+        try:
+            # Graphiti indices
+            await self.client.build_indices_and_constraints()
+            
+            # Custom indices for multi-tenancy
+            queries = [
+                "CREATE INDEX episodic_tenant_id IF NOT EXISTS FOR (n:Episodic) ON (n.tenant_id)",
+                "CREATE INDEX episodic_project_id IF NOT EXISTS FOR (n:Episodic) ON (n.project_id)",
+                "CREATE INDEX episodic_user_id IF NOT EXISTS FOR (n:Episodic) ON (n.user_id)",
+                "CREATE INDEX entity_tenant_id IF NOT EXISTS FOR (n:Entity) ON (n.tenant_id)",
+                "CREATE INDEX entity_project_id IF NOT EXISTS FOR (n:Entity) ON (n.project_id)",
+                "CREATE INDEX community_tenant_id IF NOT EXISTS FOR (n:Community) ON (n.tenant_id)",
+                "CREATE INDEX community_project_id IF NOT EXISTS FOR (n:Community) ON (n.project_id)",
+            ]
+            
+            for q in queries:
+                await self.client.driver.execute_query(q)
+                
+            logger.info("Database indices verified/created")
+        except Exception as e:
+            logger.warning(f"Failed to create indices: {e}")
 
     async def close(self):
         """Close Graphiti client connection."""
@@ -273,16 +338,50 @@ class GraphitiService:
                 name=episode_data.name,
             )
 
-            # Add episode to Graphiti
-            # Note: Graphiti will automatically extract entities and relationships
-            ep_name = episode.name or str(episode.id)
-            await self.client.add_episode(
-                name=ep_name,
-                episode_body=episode.content,
+            # Pre-create EpisodicNode in Neo4j to avoid race conditions or Graphiti lookup failures
+            now = datetime.utcnow()
+            group_id = episode.project_id or "global"
+            
+            # Using MERGE to be safe, though CREATE should be fine since UUID is new
+            await self.client.driver.execute_query(
+                """
+                MERGE (e:Episodic {uuid: $uuid})
+                SET e:Node,
+                    e.name = $name,
+                    e.content = $content,
+                    e.source_description = $source_description,
+                    e.source = $source,
+                    e.created_at = datetime($created_at),
+                    e.valid_at = datetime($valid_at),
+                    e.group_id = $group_id,
+                    e.tenant_id = $tenant_id,
+                    e.project_id = $project_id,
+                    e.user_id = $user_id,
+                    e.status = 'Processing',
+                    e.entity_edges = []
+                """,
+                uuid=str(episode.id),
+                name=episode.name or str(episode.id),
+                content=episode.content,
                 source_description=episode_data.source_type or "User input",
-                source=EpisodeType.text,
-                reference_time=episode.valid_at,
-                update_communities=True,
+                source=EpisodeType.text.value,
+                created_at=now.isoformat(),
+                valid_at=episode.valid_at.isoformat(),
+                group_id=group_id,
+                tenant_id=episode.tenant_id,
+                project_id=episode.project_id,
+                user_id=episode.user_id,
+            )
+
+            # Add to queue
+            # Use project_id as group_id for isolation, or default to 'global'
+            
+            await self.queue_service.add_episode(
+                group_id=group_id,
+                name=episode.name or str(episode.id),
+                content=episode.content,
+                source_description=episode_data.source_type or "User input",
+                episode_type=EpisodeType.text,
                 entity_types={
                     "Entity": BaseModel,
                     "Person": BaseModel,
@@ -292,27 +391,13 @@ class GraphitiService:
                     "Event": BaseModel,
                     "Artifact": BaseModel,
                 },
+                uuid=str(episode.id),
+                tenant_id=episode.tenant_id,
+                project_id=episode.project_id,
+                user_id=episode.user_id,
             )
 
-            # Attach multi-tenant/project/user properties to Episodic node
-            try:
-                await self.client.driver.execute_query(
-                    """
-                    MATCH (e:Episodic {name: $name})
-                    SET e.tenant_id = $tenant_id,
-                        e.project_id = $project_id,
-                        e.user_id = $user_id
-                    RETURN e
-                    """,
-                    name=ep_name,
-                    tenant_id=episode.tenant_id,
-                    project_id=episode.project_id,
-                    user_id=episode.user_id,
-                )
-            except Exception as e:
-                logger.warning(f"Failed to set episodic properties: {e}")
-
-            logger.info(f"Episode {episode.id} added successfully")
+            logger.info(f"Episode {episode.id} queued for processing in group {group_id}")
             return episode
 
         except Exception as e:
@@ -513,17 +598,36 @@ class GraphitiService:
                         return v.isoformat()
                     return v
 
+                # Handle Name: if UUID, try to use content snippet
+                name = ep.get("name", "")
+                if not name or (len(name) == 36 and "-" in name):
+                    content = ep.get("content", "")
+                    if content:
+                        name = (content[:50] + "...") if len(content) > 50 else content
+
+                # Handle Created At: fallback to valid_at
+                created_at = _convert_val(ep.get("created_at"))
+                if not created_at:
+                    created_at = _convert_val(ep.get("valid_at"))
+
+                # Handle Source Type
+                source_type = ep.get("source_description", "Text")
+                if not source_type or source_type == "User input":
+                    source_type = "Text"
+
                 items.append(
                     MemoryItem(
                         content=ep.get("content", ""),
                         score=1.0,
                         metadata={
                             "type": "episode",
-                            "name": ep.get("name", ""),
+                            "source_type": source_type,
+                            "name": name,
                             "project_id": ep.get("project_id"),
                             "tenant_id": ep.get("tenant_id"),
                             "user_id": ep.get("user_id"),
-                            "created_at": _convert_val(ep.get("created_at")),
+                            "created_at": created_at,
+                            "status": ep.get("status", "Synced"),
                         },
                         source="episode",
                     )
@@ -1083,7 +1187,40 @@ class GraphitiService:
             """
             result = await self.client.driver.execute_query(query, name=episode_name)
             if result.records:
-                return dict(result.records[0]["episode"])
+                ep = dict(result.records[0]["episode"])
+                
+                # Helper to convert Neo4j types to Python types
+                def _convert_val(v):
+                    if hasattr(v, "isoformat"):
+                        return v.isoformat()
+                    return v
+
+                # Convert Neo4j types
+                for k, v in ep.items():
+                    ep[k] = _convert_val(v)
+                
+                # Enhance display fields
+                name = ep.get("name", "")
+                if not name or (len(name) == 36 and "-" in name):
+                     content = ep.get("content", "")
+                     if content:
+                         ep["name"] = (content[:50] + "...") if len(content) > 50 else content
+                
+                source_type = ep.get("source_description", "Text")
+                if not source_type or source_type == "User input":
+                    ep["source_type"] = "Text"
+                else:
+                    ep["source_type"] = source_type
+                
+                # Ensure created_at exists
+                if not ep.get("created_at") and ep.get("valid_at"):
+                    ep["created_at"] = ep.get("valid_at")
+
+                # Set default status if missing
+                if not ep.get("status"):
+                    ep["status"] = "Synced"
+                    
+                return ep
             return None
         except Exception as e:
             logger.error(f"Failed to get episode: {e}")
@@ -1159,7 +1296,42 @@ class GraphitiService:
                 limit=limit,
             )
 
-            episodes = [dict(r["episode"]) for r in list_result.records]
+            episodes = []
+            for r in list_result.records:
+                ep = dict(r["episode"])
+                
+                # Helper to convert Neo4j types to Python types
+                def _convert_val(v):
+                    if hasattr(v, "isoformat"):
+                        return v.isoformat()
+                    return v
+
+                # Convert Neo4j types
+                for k, v in ep.items():
+                    ep[k] = _convert_val(v)
+                
+                # Enhance display fields
+                name = ep.get("name", "")
+                if not name or (len(name) == 36 and "-" in name):
+                     content = ep.get("content", "")
+                     if content:
+                         ep["name"] = (content[:50] + "...") if len(content) > 50 else content
+                
+                source_type = ep.get("source_description", "Text")
+                if not source_type or source_type == "User input":
+                    ep["source_type"] = "Text"
+                else:
+                    ep["source_type"] = source_type
+                
+                # Ensure created_at exists
+                if not ep.get("created_at") and ep.get("valid_at"):
+                    ep["created_at"] = ep.get("valid_at")
+
+                # Set default status if missing
+                if not ep.get("status"):
+                    ep["status"] = "Synced"
+                    
+                episodes.append(ep)
 
             return PaginatedResponse(
                 items=episodes,

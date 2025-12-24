@@ -2,7 +2,7 @@
 Qwen (通义千问) LLM Client for Graphiti
 
 基于 Graphiti 的 LLM 客户端接口实现 Qwen API 支持
-使用阿里云百炼官方的 DashScope SDK
+使用 OpenAI SDK 连接到阿里云 DashScope 兼容端点
 """
 
 import asyncio
@@ -10,10 +10,8 @@ import json
 import logging
 import os
 import typing
-from http import HTTPStatus
 
-import dashscope  # type: ignore[import-untyped]
-from dashscope import Generation
+from openai import AsyncOpenAI, APIError, RateLimitError as OpenAIRateLimitError
 from graphiti_core.llm_client.client import LLMClient
 from graphiti_core.llm_client.config import DEFAULT_MAX_TOKENS, LLMConfig, ModelSize
 from graphiti_core.llm_client.errors import RateLimitError
@@ -26,12 +24,15 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL = "qwen-plus"
 DEFAULT_SMALL_MODEL = "qwen-turbo"
 
+# DashScope Base URL (Beijing Region)
+DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
 
 class QwenClient(LLMClient):
     """
     QwenClient 是用于与阿里云通义千问 (Qwen) 模型交互的客户端类。
 
-    使用阿里云百炼官方的 DashScope SDK。
+    使用 OpenAI SDK 连接到阿里云 DashScope 兼容端点。
 
     Attributes:
         model (str): 用于生成响应的模型名称
@@ -60,12 +61,19 @@ class QwenClient(LLMClient):
         super().__init__(config, cache)
 
         # 设置 API 密钥
-        if config.api_key:
-            dashscope.api_key = config.api_key
-        elif not os.environ.get("DASHSCOPE_API_KEY"):
+        api_key = config.api_key or os.environ.get("DASHSCOPE_API_KEY")
+        if not api_key:
             logger.warning(
                 "API key not provided and DASHSCOPE_API_KEY environment variable not set"
             )
+        
+        base_url = os.environ.get("DASHSCOPE_BASE_URL", DEFAULT_BASE_URL)
+
+        # 初始化 OpenAI Client
+        self.client = AsyncOpenAI(
+            api_key=api_key,
+            base_url=base_url,
+        )
 
         # 设置默认值
         if not config.model:
@@ -104,28 +112,33 @@ class QwenClient(LLMClient):
         for key, value in data.items():
             if value is None:
                 # 对于 null 值，根据字段名提供默认值
-                if key.lower() == "id" or key.lower().endswith("_id"):
-                    # ID 字段默认为 0
-                    cleaned_data[key] = 0
-                elif "facts" in key.lower() or "edges" in key.lower():
+                if key.lower() == "id" or key.lower().endswith("_id") or key == "duplicate_idx":
+                    # ID 字段默认为 "0" (字符串以兼容 Graphiti)
+                    cleaned_data[key] = "0"
+                elif "facts" in key.lower() or "edges" in key.lower() or key == "duplicates":
                     # 列表字段默认为空列表
                     cleaned_data[key] = []
                 else:
                     # 其他字段保持 None，让 Pydantic 验证器处理
                     cleaned_data[key] = value
             elif isinstance(value, list):
-                # 递归清理列表中的元素
-                cleaned_list = []
-                for item in value:
-                    if isinstance(item, dict):
-                        # Use recursive cleaning for dict items
-                        cleaned_item = self._clean_parsed_json(item, None)
-                        # 只添加有效的项（例如，如果所有 ID 都是 0，跳过该项）
-                        if self._is_valid_item(cleaned_item):
-                            cleaned_list.append(cleaned_item)
-                    else:
-                        cleaned_list.append(item)
-                cleaned_data[key] = cleaned_list
+                # Special handling for duplicates list to ensure strings
+                if key == "duplicates":
+                    cleaned_list = [str(item) if isinstance(item, (int, float)) else item for item in value]
+                    cleaned_data[key] = cleaned_list
+                else:
+                    # 递归清理列表中的元素
+                    cleaned_list = []
+                    for item in value:
+                        if isinstance(item, dict):
+                            # Use recursive cleaning for dict items
+                            cleaned_item = self._clean_parsed_json(item, None)
+                            # 只添加有效的项（例如，如果所有 ID 都是 0，跳过该项）
+                            if self._is_valid_item(cleaned_item):
+                                cleaned_list.append(cleaned_item)
+                        else:
+                            cleaned_list.append(item)
+                    cleaned_data[key] = cleaned_list
             elif isinstance(value, dict):
                 # Check if it looks like a schema definition (Qwen artifact)
                 # Qwen sometimes returns {"description": "actual text", "type": "string"} for string fields
@@ -146,6 +159,9 @@ class QwenClient(LLMClient):
                     and ("_at" in key.lower() or "time" in key.lower())
                 ):
                     cleaned_data[key] = None
+                # Ensure ID fields are strings for Graphiti compatibility
+                elif (key.lower() == "id" or key.lower().endswith("_id") or key == "duplicate_idx") and isinstance(value, (int, float)):
+                    cleaned_data[key] = str(int(value))
                 else:
                     cleaned_data[key] = value
 
@@ -169,27 +185,44 @@ class QwenClient(LLMClient):
             else:
                 cleaned_data["entity_type"] = "Entity"
 
+        # Heuristic fix for Qwen's duplicate_idx behavior
+        # If duplicate_idx points to self (id), but duplicates list has other IDs,
+        # pick the first other ID as the duplicate target.
+        current_id = cleaned_data.get("id")
+        dup_idx = cleaned_data.get("duplicate_idx")
+        duplicates = cleaned_data.get("duplicates", [])
+        
+        if current_id is not None and dup_idx is not None and duplicates:
+            # Ensure types match for comparison (they should be strings now due to cleaning above)
+            if str(dup_idx) == str(current_id):
+                other_dups = [d for d in duplicates if str(d) != str(current_id)]
+                if other_dups:
+                    cleaned_data["duplicate_idx"] = str(other_dups[0])
+                    logger.info(f"Fixed duplicate_idx from {dup_idx} to {other_dups[0]} based on duplicates list {duplicates}")
+
         return cleaned_data
 
     def _is_valid_item(self, item: dict[str, typing.Any]) -> bool:
         """
         检查一个项是否有效。
-
-        如果项中的所有 ID 字段都是 0 或 None，则认为无效。
         """
-        has_id_field = False
-        has_valid_id = False
+        # 如果有名称、内容或事实，无论 ID 如何都认为是有效的
+        if item.get("name") or item.get("content") or item.get("fact"):
+            return True
 
+        # 如果是去重结果，包含 duplicates 字段，认为是有效的
+        if "duplicates" in item or "duplicate_idx" in item:
+            return True
+
+        # 如果有非空的 id 字段，也认为是有效的（即使是 0 或 "0"）
+        # 只有当 ID 为 None 且没有其他内容时才无效
         for key, value in item.items():
             if key.lower() == "id" or key.lower().endswith("_id"):
-                has_id_field = True
-                if value is not None and value != 0:
-                    has_valid_id = True
-                    break
+                if value is not None:
+                    return True
 
         # 如果没有 ID 字段，认为有效
-        # 如果有 ID 字段，则必须至少有一个有效的 ID
-        return not has_id_field or has_valid_id
+        return True
 
     async def _generate_response(
         self,
@@ -197,6 +230,7 @@ class QwenClient(LLMClient):
         response_model: type[BaseModel] | None = None,
         max_tokens: int = DEFAULT_MAX_TOKENS,
         model_size: ModelSize = ModelSize.medium,
+        retry_count: int = 0,
     ) -> dict[str, typing.Any]:
         """
         从 Qwen 语言模型生成响应。
@@ -214,163 +248,137 @@ class QwenClient(LLMClient):
             RateLimitError: 如果超出 API 速率限制
             Exception: 如果生成响应时出错
         """
+        # 准备 OpenAI 格式的消息
+        openai_messages = []
+        
+        # 如果需要结构化输出，确保 System Prompt 包含 JSON 指令
+        # Qwen 的 JSON Mode 要求 System/User Prompt 中必须包含 "json"
+        has_system = any(m.role == "system" for m in messages)
+        json_instruction = "You must output valid JSON only."
+        
+        if not has_system and response_model:
+            openai_messages.append({"role": "system", "content": json_instruction})
+            
+        for m in messages:
+            content = self._clean_input(m.content)
+            if response_model and m.role == "system":
+                content += f" {json_instruction}"
+            
+            # OpenAI Mode 下，我们可以简化 Prompt，因为 json_object mode 很强
+            openai_messages.append({"role": m.role, "content": content})
+
+        model = self._get_model_for_size(model_size)
+        
         try:
-            # 转换消息格式为 DashScope 格式
-            dashscope_messages = []
-            for m in messages:
-                dashscope_messages.append({"role": m.role, "content": self._clean_input(m.content)})
-
-            # 获取适当大小的模型
-            model = self._get_model_for_size(model_size)
-
-            # 准备请求参数
-            request_params = {
+            kwargs = {
                 "model": model,
-                "messages": dashscope_messages,
+                "messages": openai_messages,
+                "max_tokens": max_tokens,
             }
-
-            # 如果需要结构化输出，设置 result_format 为 message
-            if response_model is not None:
-                request_params["result_format"] = "message"
-
-            # 调用 DashScope Generation API（使用 asyncio.to_thread 包装同步调用）
-            response = await asyncio.to_thread(Generation.call, **request_params)
-
-            # 检查响应状态
-            if response.status_code != HTTPStatus.OK:
-                raise ValueError(f"DashScope API error: {response.code} - {response.message}")
-
-            # 提取响应内容
-            if not response.output or not response.output.choices:
-                raise ValueError("No response choices returned from DashScope API")
-
-            raw_output = response.output.choices[0].message.content
-
+            
+            # 启用 JSON Mode
+            if response_model:
+                kwargs["response_format"] = {"type": "json_object"}
+            
+            response = await self.client.chat.completions.create(**kwargs)
+            
+            if not response.choices:
+                raise ValueError("No choices in response")
+                
+            raw_output = response.choices[0].message.content
+            
             if not raw_output:
-                raise ValueError("Empty response content from DashScope API")
+                raise ValueError("Empty response content")
 
             logger.info(f"Qwen raw output: {raw_output}")
-
-            # 如果是结构化输出请求，解析并验证响应
-            if response_model is not None:
+            
+            if response_model:
                 try:
-                    # Handle markdown code blocks
-                    json_str = raw_output.strip()
-                    if json_str.startswith("```json"):
-                        json_str = json_str[7:]
-                    elif json_str.startswith("```"):
-                        json_str = json_str[3:]
-                    if json_str.endswith("```"):
-                        json_str = json_str[:-3]
-                    json_str = json_str.strip()
-
-                    # 解析 JSON
+                    # 尝试解析 JSON
                     try:
-                        parsed_json = json.loads(json_str)
-                    except json.JSONDecodeError as e:
-                        # Try to recover from "Extra data" error
-                        if "Extra data" in str(e):
-                            import re
-
-                            match = re.search(r"\(char (\d+)\)", str(e))
-                            if match:
-                                pos = int(match.group(1))
-                                try:
-                                    parsed_json = json.loads(json_str[:pos])
-                                    logger.warning(
-                                        f"Recovered from JSON Extra data error by truncating at {pos}"
-                                    )
-                                except Exception:
-                                    logger.error(f"Failed to recover from JSON error: {e}")
-                                    raise e
-                            else:
-                                raise e
-                        else:
-                            raise e
-
-                    # Qwen 可能返回 JSON Schema 而不是实际数据
-                    # 检查是否是 Schema 格式（包含 'properties'）
+                        parsed_json = json.loads(raw_output)
+                    except json.JSONDecodeError:
+                        # 尝试清理 markdown
+                        clean_output = raw_output.strip()
+                        if clean_output.startswith("```json"):
+                            clean_output = clean_output[7:]
+                        elif clean_output.startswith("```"):
+                            clean_output = clean_output[3:]
+                        if clean_output.endswith("```"):
+                            clean_output = clean_output[:-3]
+                        parsed_json = json.loads(clean_output.strip())
+                    
+                    # Check if returned JSON is a Schema (properties, type, etc.)
+                    # and try to extract data from description or default fields
                     if isinstance(parsed_json, dict) and "properties" in parsed_json:
-                        logger.warning(
-                            "Qwen returned JSON Schema instead of data, extracting from description"
-                        )
-                        # 尝试从 Schema 的 properties 字段提取实际值
-                        extracted_data = {}
+                        logger.warning("Qwen returned JSON Schema instead of data. Attempting heuristic extraction...")
+                        
+                        extracted = {}
                         properties = parsed_json.get("properties", {})
-
-                        for field_name, field_value in properties.items():
-                            # 如果值是字典且包含 'type' 键，说明这是 Schema 定义
-                            if isinstance(field_value, dict) and "type" in field_value:
-                                # 尝试从各种字段提取值
-                                if "description" in field_value:
-                                    # description 字段可能包含实际值（对于字符串类型）
-                                    extracted_data[field_name] = field_value["description"]
-                                elif "default" in field_value:
-                                    extracted_data[field_name] = field_value["default"]
-                                elif "enum" in field_value and field_value["enum"]:
-                                    extracted_data[field_name] = field_value["enum"][0]
-                                else:
-                                    # 根据类型提供默认值
-                                    field_type = field_value.get("type", "string")
-                                    if field_type == "array":
-                                        extracted_data[field_name] = []
-                                    elif field_type == "object":
-                                        extracted_data[field_name] = {}
-                                    elif field_type == "boolean":
-                                        extracted_data[field_name] = False
-                                    elif field_type == "number" or field_type == "integer":
-                                        extracted_data[field_name] = 0
-                                    else:
-                                        extracted_data[field_name] = ""
-                            else:
-                                # 直接使用值（这是 Qwen 有时的返回格式）
-                                extracted_data[field_name] = field_value
-
-                        if extracted_data:
-                            logger.info(f"Extracted data from Schema: {extracted_data}")
-                            parsed_json = extracted_data
+                        for k, v in properties.items():
+                            if isinstance(v, dict):
+                                # If description is long enough, it might be the content
+                                desc = v.get("description", "")
+                                # Heuristic: if description looks like content (not just "The summary of...")
+                                # But for 'summary' field, description often IS the summary if model is confused
+                                if desc and len(str(desc)) > 10:
+                                     extracted[k] = desc
+                                # Check default
+                                if "default" in v:
+                                    extracted[k] = v["default"]
+                        
+                        if extracted:
+                            logger.info(f"Heuristically extracted data: {extracted}")
+                            # Merge with parsed_json to keep other fields if any
+                            # But usually schema only has properties
+                            parsed_json = extracted
                         else:
-                            logger.error(
-                                "Could not extract data from Schema, using original response"
-                            )
+                            logger.warning("Failed to extract data from Schema.")
+                            # Trigger retry logic below by raising error
+                            raise ValueError("LLM returned JSON Schema instead of data")
 
-                    # 清理数据：处理 null 值和无效数据
+                    # 清理数据
                     parsed_json = self._clean_parsed_json(parsed_json, response_model)
-
-                    # 使用 Pydantic 模型验证
-                    validated_model = response_model.model_validate(parsed_json)
-
-                    # 返回为字典以保持 API 一致性
-                    return validated_model.model_dump()
-                except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse JSON response: {e}")
-                    logger.error(f"Raw output: {raw_output}")
-                    raise Exception(f"Failed to parse JSON response: {e}") from e
+                    
+                    # 验证
+                    validated = response_model.model_validate(parsed_json)
+                    return validated.model_dump()
                 except Exception as e:
-                    logger.error(f"Failed to validate response with model: {e}")
+                    logger.error(f"Failed to parse/validate JSON: {e}")
                     logger.error(f"Raw output: {raw_output}")
-                    raise Exception(f"Failed to validate structured response: {e}") from e
+                    
+                    # Retry logic
+                    if retry_count < 2:
+                         logger.info(f"Retrying generation (attempt {retry_count + 1})...")
+                         
+                         # Add error feedback to messages
+                         # We need to construct new messages list carefully
+                         # messages is list[Message]
+                         new_messages = list(messages)
+                         
+                         # Add assistant output (what it generated)
+                         new_messages.append(Message(role="assistant", content=raw_output))
+                         
+                         # Add user correction
+                         correction = "You returned the JSON Schema definition instead of the actual data. Please output the JSON object containing the actual extracted data."
+                         new_messages.append(Message(role="user", content=correction))
+                         
+                         return await self._generate_response(
+                             messages=new_messages,
+                             response_model=response_model,
+                             max_tokens=max_tokens,
+                             model_size=model_size,
+                             retry_count=retry_count + 1
+                         )
+                    raise
 
-            # 否则，返回响应文本作为字典
             return {"content": raw_output}
 
+        except OpenAIRateLimitError as e:
+            raise RateLimitError from e
         except Exception as e:
-            # 检查是否是速率限制错误
-            error_message = str(e).lower()
-            if (
-                "rate limit" in error_message
-                or "quota" in error_message
-                or "throttling" in error_message
-                or "429" in str(e)
-            ):
-                raise RateLimitError from e
-
             logger.error(f"Error in generating LLM response: {e}")
             raise
-
-    def _get_provider_type(self) -> str:
-        """获取提供商类型"""
-        return "qwen"
 
     def _get_provider_type(self) -> str:
         """获取提供商类型"""

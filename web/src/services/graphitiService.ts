@@ -289,6 +289,16 @@ export const graphitiService = {
         const response = await apiClient.delete(`/episodes-enhanced/${encodeURIComponent(episodeName)}`)
         return response.data
     },
+
+    // AI Tools
+    async optimizeContent(data: {
+        content: string
+        instruction?: string
+    }): Promise<{ content: string }> {
+        const response = await apiClient.post('/ai/optimize', data)
+        return response.data
+    },
 }
+
 
 export default graphitiService

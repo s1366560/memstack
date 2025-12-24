@@ -20,6 +20,7 @@ from server.api.data_export import router as data_export_router
 from server.api import enhanced_episodes
 from server.api import search_enhanced
 from server.api import maintenance
+from server.api import ai_tools
 from server.auth import initialize_default_credentials
 from server.config import get_settings
 from server.database import Base, engine
@@ -110,6 +111,7 @@ def setup_app() -> FastAPI:
     app.include_router(communities_router, prefix="/api/v1")  # Community management
     app.include_router(data_export_router, prefix="/api/v1")  # Data export/cleanup
     app.include_router(maintenance.router, prefix="/api/v1")  # Graph maintenance
+    app.include_router(ai_tools.router, prefix="/api/v1")  # AI tools
     
     return app
 

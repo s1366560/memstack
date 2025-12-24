@@ -13,6 +13,7 @@ help:
 	@echo "dev         - Start development server with hot reload"
 	@echo "serve       - Start production server"
 	@echo "docker-up   - Start all services with Docker Compose"
+	@echo "docker-dev  - Start infrastructure services only (Neo4j, Postgres, Redis)"
 	@echo "docker-down - Stop all Docker services"
 	@echo ""
 	@echo "API & Test Data:"
@@ -65,6 +66,9 @@ serve:
 
 docker-up:
 	docker-compose up -d
+
+docker-dev:
+	docker-compose up -d neo4j postgres redis
 
 docker-down:
 	docker-compose down

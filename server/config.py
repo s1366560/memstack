@@ -1,9 +1,9 @@
 """Configuration management for MemStack."""
 
 from functools import lru_cache
-from typing import List, Optional
+from typing import List, Optional, Union
 
-from pydantic import Field, model_validator
+from pydantic import Field, model_validator, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     api_host: str = Field(default="0.0.0.0", alias="API_HOST")
     api_port: int = Field(default=8000, alias="API_PORT")
     api_workers: int = Field(default=4, alias="API_WORKERS")
-    api_allowed_origins: List[str] = Field(default=["*"], alias="API_ALLOWED_ORIGINS")
+    api_allowed_origins: Union[str, List[str]] = Field(default=["*"], alias="API_ALLOWED_ORIGINS")
 
     # Database Settings
     neo4j_uri: str = Field(default="bolt://localhost:7687", alias="NEO4J_URI")
@@ -52,9 +52,11 @@ class Settings(BaseSettings):
         alias="QWEN_BASE_URL",
     )
 
-    # OpenAI (for embeddings)
+    # OpenAI
     openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")
     openai_base_url: Optional[str] = Field(default=None, alias="OPENAI_BASE_URL")
+    openai_model: str = Field(default="gpt-4o", alias="OPENAI_MODEL")
+    openai_small_model: str = Field(default="gpt-4o-mini", alias="OPENAI_SMALL_MODEL")
     openai_embedding_model: str = Field(
         default="text-embedding-3-small", alias="OPENAI_EMBEDDING_MODEL"
     )
@@ -97,9 +99,12 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def auto_select_provider(self) -> "Settings":
         """Auto-select provider based on available API keys if not explicitly set to a valid one."""
-        # If provider is default (gemini) but no Gemini key, and Qwen key exists, switch to Qwen
-        if self.llm_provider.lower() == "gemini" and not self.gemini_api_key and self.qwen_api_key:
-            self.llm_provider = "qwen"
+        # If provider is default (gemini) but no Gemini key, try other providers
+        if self.llm_provider.lower() == "gemini" and not self.gemini_api_key:
+            if self.qwen_api_key:
+                self.llm_provider = "qwen"
+            elif self.openai_api_key:
+                self.llm_provider = "openai"
 
         return self
 

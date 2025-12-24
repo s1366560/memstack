@@ -37,7 +37,36 @@ async def create_episode(
         Episode response with ID and status
     """
     try:
-        # Add episode to Graphiti (this triggers async processing)
+        # Auto-generate title if missing
+        if not episode.name:
+            try:
+                llm_client = graphiti.client.llm_client
+                prompt = f"""
+                Generate a concise and descriptive title (max 10 words) for the following text.
+                The title must be plain text, no markdown, no hash symbols, no newlines.
+                
+                Text:
+                {episode.content[:1000]}...
+                
+                Output ONLY the title. Do not use quotes.
+                """
+                response = await llm_client.generate_response(
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                
+                # Handle response whether it's a dict or object
+                if isinstance(response, dict):
+                    content = response.get("content", "")
+                else:
+                    content = getattr(response, "content", str(response))
+                    
+                episode.name = content.strip().strip('"').strip("'")
+            except Exception as e:
+                logger.warning(f"Failed to auto-generate title: {e}")
+                # Fallback to truncated content
+                episode.name = episode.content[:50] + "..."
+
+        # Add episode to Graphiti (this triggers async processing via QueueService)
         created_episode = await graphiti.add_episode(episode)
 
         logger.info(f"Episode created by user {api_key.user_id}: {created_episode.id}")

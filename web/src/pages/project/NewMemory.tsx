@@ -5,11 +5,13 @@ import { graphitiService } from '../../services/graphitiService'
 export const NewMemory: React.FC = () => {
     const { projectId } = useParams()
     const navigate = useNavigate()
+    const textareaRef = React.useRef<HTMLTextAreaElement>(null)
     const [title, setTitle] = useState('')
     const [content, setContent] = useState('')
     const [tags, setTags] = useState<string[]>(['meeting', 'strategy'])
     const [newTag, setNewTag] = useState('')
     const [isSaving, setIsSaving] = useState(false)
+    const [isOptimizing, setIsOptimizing] = useState(false)
 
     const handleAddTag = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && newTag.trim()) {
@@ -22,13 +24,46 @@ export const NewMemory: React.FC = () => {
         setTags(tags.filter(tag => tag !== tagToRemove))
     }
 
+    const insertMarkdown = (prefix: string, suffix: string = '') => {
+        const textarea = textareaRef.current
+        if (!textarea) return
+
+        const start = textarea.selectionStart
+        const end = textarea.selectionEnd
+        const text = content
+        const before = text.substring(0, start)
+        const selection = text.substring(start, end)
+        const after = text.substring(end)
+
+        const newText = before + prefix + selection + suffix + after
+        setContent(newText)
+        
+        setTimeout(() => {
+            textarea.focus()
+            textarea.setSelectionRange(start + prefix.length, end + prefix.length)
+        }, 0)
+    }
+
+    const handleAIAssist = async () => {
+        if (!content) return
+        setIsOptimizing(true)
+        try {
+            const result = await graphitiService.optimizeContent({ content })
+            setContent(result.content)
+        } catch (error) {
+            console.error('Failed to optimize content:', error)
+        } finally {
+            setIsOptimizing(false)
+        }
+    }
+
     const handleSave = async () => {
-        if (!projectId || !title || !content) return
+        if (!projectId || !content) return
 
         setIsSaving(true)
         try {
             await graphitiService.addEpisode({
-                name: title,
+                name: title, // Backend will auto-generate if empty
                 content: content,
                 project_id: projectId,
                 source_type: 'text',
@@ -60,7 +95,7 @@ export const NewMemory: React.FC = () => {
                     </button>
                     <button
                         onClick={handleSave}
-                        disabled={isSaving || !title || !content}
+                        disabled={isSaving || !content}
                         className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary/90 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                     >
                         {isSaving ? (
@@ -88,7 +123,7 @@ export const NewMemory: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 p-6 border-b border-slate-100 dark:border-slate-800">
                             {/* Title */}
                             <div className="md:col-span-8">
-                                <label className="mb-2 block text-sm font-medium text-slate-900 dark:text-white">Title</label>
+                                <label className="mb-2 block text-sm font-medium text-slate-900 dark:text-white">Title <span className="text-slate-400 font-normal">(Optional)</span></label>
                                 <input
                                     type="text"
                                     value={title}
@@ -139,34 +174,42 @@ export const NewMemory: React.FC = () => {
                         <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#1a1d26] px-4 py-2">
                             <div className="flex items-center gap-1">
                                 <div className="flex items-center rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-1 shadow-sm">
-                                    <button className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-primary dark:text-slate-400 dark:hover:bg-slate-700 transition-colors" title="Bold">
+                                    <button onClick={() => insertMarkdown('**', '**')} className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-primary dark:text-slate-400 dark:hover:bg-slate-700 transition-colors" title="Bold">
                                         <span className="material-symbols-outlined text-[20px]">format_bold</span>
                                     </button>
-                                    <button className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-primary dark:text-slate-400 dark:hover:bg-slate-700 transition-colors" title="Italic">
+                                    <button onClick={() => insertMarkdown('*', '*')} className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-primary dark:text-slate-400 dark:hover:bg-slate-700 transition-colors" title="Italic">
                                         <span className="material-symbols-outlined text-[20px]">format_italic</span>
                                     </button>
-                                    <button className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-primary dark:text-slate-400 dark:hover:bg-slate-700 transition-colors" title="Heading">
+                                    <button onClick={() => insertMarkdown('### ')} className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-primary dark:text-slate-400 dark:hover:bg-slate-700 transition-colors" title="Heading">
                                         <span className="material-symbols-outlined text-[20px]">title</span>
                                     </button>
                                 </div>
                                 <div className="w-px h-6 bg-slate-300 dark:bg-slate-700 mx-2"></div>
                                 <div className="flex items-center rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-1 shadow-sm">
-                                    <button className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-primary dark:text-slate-400 dark:hover:bg-slate-700 transition-colors" title="List">
+                                    <button onClick={() => insertMarkdown('- ')} className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-primary dark:text-slate-400 dark:hover:bg-slate-700 transition-colors" title="List">
                                         <span className="material-symbols-outlined text-[20px]">format_list_bulleted</span>
                                     </button>
-                                    <button className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-primary dark:text-slate-400 dark:hover:bg-slate-700 transition-colors" title="Link">
+                                    <button onClick={() => insertMarkdown('[', '](url)')} className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-primary dark:text-slate-400 dark:hover:bg-slate-700 transition-colors" title="Link">
                                         <span className="material-symbols-outlined text-[20px]">link</span>
                                     </button>
-                                    <button className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-primary dark:text-slate-400 dark:hover:bg-slate-700 transition-colors" title="Code Block">
+                                    <button onClick={() => insertMarkdown('```\n', '\n```')} className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-primary dark:text-slate-400 dark:hover:bg-slate-700 transition-colors" title="Code Block">
                                         <span className="material-symbols-outlined text-[20px]">code</span>
                                     </button>
                                 </div>
                             </div>
                             {/* AI Features */}
                             <div className="flex items-center gap-3">
-                                <button className="flex items-center gap-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors border border-indigo-100 dark:border-indigo-800">
-                                    <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
-                                    AI Assist
+                                <button
+                                    onClick={handleAIAssist}
+                                    disabled={isOptimizing || !content}
+                                    className="flex items-center gap-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors border border-indigo-100 dark:border-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isOptimizing ? (
+                                        <span className="material-symbols-outlined animate-spin text-[16px]">progress_activity</span>
+                                    ) : (
+                                        <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
+                                    )}
+                                    {isOptimizing ? 'Optimizing...' : 'AI Assist'}
                                 </button>
                                 <div className="flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-100 dark:bg-slate-800">
                                     <button className="rounded px-3 py-1 text-xs font-medium bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white">Split</button>
@@ -181,8 +224,10 @@ export const NewMemory: React.FC = () => {
                             {/* Left: Markdown Input */}
                             <div className="flex flex-col h-full bg-white dark:bg-surface-dark relative">
                                 <textarea
+                                    ref={textareaRef}
                                     className="w-full h-full resize-none border-none p-6 outline-none text-slate-800 dark:text-slate-200 font-mono text-sm leading-relaxed bg-transparent focus:ring-0"
                                     placeholder="# Start typing your memory here...
+
 
 You can use Markdown syntax to format your text.
 
