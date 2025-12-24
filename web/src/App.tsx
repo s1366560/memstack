@@ -1,9 +1,18 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { ConfigProvider, theme, App as AntdApp } from 'antd'
 import { Login } from './pages/Login'
-import { SpaceListPage } from './pages/SpaceListPage'
-import { SpaceDashboard } from './pages/SpaceDashboard'
-import { ProjectDashboard } from './pages/ProjectDashboard'
+import { TenantLayout } from './layouts/TenantLayout'
+import { TenantOverview } from './pages/tenant/TenantOverview'
+import { ProjectList } from './pages/tenant/ProjectList'
+import { NewProject } from './pages/tenant/NewProject'
+import { NewTenant } from './pages/tenant/NewTenant'
+import { TenantSettings } from './pages/tenant/TenantSettings'
+import { ProjectLayout } from './layouts/ProjectLayout'
+import { ProjectOverview } from './pages/project/ProjectOverview'
+import { MemoryList } from './pages/project/MemoryList'
+import { NewMemory } from './pages/project/NewMemory'
+import { MemoryDetail } from './pages/project/MemoryDetail'
+import { SearchPage } from './pages/project/SearchPage'
+import { MemoryGraph } from './pages/project/MemoryGraph'
 import { useAuthStore } from './stores/auth'
 import './App.css'
 
@@ -11,44 +20,59 @@ function App() {
     const { isAuthenticated } = useAuthStore()
 
     return (
-        <ConfigProvider
-            theme={{
-                algorithm: theme.defaultAlgorithm,
-                token: {
-                    colorPrimary: '#1890ff',
-                },
-            }}
-        >
-            <AntdApp>
-                <Routes>
-                    <Route
-                        path="/login"
-                        element={!isAuthenticated ? <Login /> : <Navigate to="/" replace />}
-                    />
+        <Routes>
+            <Route
+                path="/login"
+                element={!isAuthenticated ? <Login /> : <Navigate to="/" replace />}
+            />
 
-                    {/* Protected Routes */}
-                    <Route
-                        path="/"
-                        element={isAuthenticated ? <Navigate to="/spaces" replace /> : <Navigate to="/login" replace />}
-                    />
-                    <Route
-                        path="/spaces"
-                        element={isAuthenticated ? <SpaceListPage /> : <Navigate to="/login" replace />}
-                    />
-                    <Route
-                        path="/space/:spaceId"
-                        element={isAuthenticated ? <SpaceDashboard /> : <Navigate to="/login" replace />}
-                    />
-                    <Route
-                        path="/space/:spaceId/project/:projectId"
-                        element={isAuthenticated ? <ProjectDashboard /> : <Navigate to="/login" replace />}
-                    />
+            {/* Protected Routes */}
+            {/* Redirect root to tenant overview if authenticated */}
+            <Route
+                path="/"
+                element={isAuthenticated ? <Navigate to="/tenant" replace /> : <Navigate to="/login" replace />}
+            />
 
-                    {/* Fallback */}
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-            </AntdApp>
-        </ConfigProvider>
+            <Route path="/tenants/new" element={isAuthenticated ? <NewTenant /> : <Navigate to="/login" replace />} />
+
+            {/* Tenant Console */}
+            <Route path="/tenant" element={isAuthenticated ? <TenantLayout /> : <Navigate to="/login" replace />}>
+                <Route index element={<TenantOverview />} />
+
+                {/* Generic routes (use currentTenant from store) */}
+                <Route path="projects" element={<ProjectList />} />
+                <Route path="projects/new" element={<NewProject />} />
+                <Route path="users" element={<div className="p-8 text-slate-500">Users Management (Coming Soon)</div>} />
+                <Route path="analytics" element={<div className="p-8 text-slate-500">Analytics (Coming Soon)</div>} />
+                <Route path="billing" element={<div className="p-8 text-slate-500">Billing (Coming Soon)</div>} />
+                <Route path="settings" element={<TenantSettings />} />
+
+                {/* Tenant specific routes */}
+                <Route path=":tenantId" element={<TenantOverview />} />
+                <Route path=":tenantId/projects" element={<ProjectList />} />
+                <Route path=":tenantId/projects/new" element={<NewProject />} />
+                <Route path=":tenantId/users" element={<div className="p-8 text-slate-500">Users Management (Coming Soon)</div>} />
+                <Route path=":tenantId/analytics" element={<div className="p-8 text-slate-500">Analytics (Coming Soon)</div>} />
+                <Route path=":tenantId/billing" element={<div className="p-8 text-slate-500">Billing (Coming Soon)</div>} />
+                <Route path=":tenantId/settings" element={<TenantSettings />} />
+            </Route>
+
+            {/* Project Workbench */}
+            <Route path="/project/:projectId" element={isAuthenticated ? <ProjectLayout /> : <Navigate to="/login" replace />}>
+                <Route index element={<ProjectOverview />} />
+                <Route path="memories" element={<MemoryList />} />
+                <Route path="memories/new" element={<NewMemory />} />
+                <Route path="memory/:memoryId" element={<MemoryDetail />} />
+                <Route path="search" element={<SearchPage />} />
+                <Route path="graph" element={<MemoryGraph />} />
+                <Route path="team" element={<div className="p-8 text-slate-500">Team Management (Coming Soon)</div>} />
+                <Route path="settings" element={<div className="p-8 text-slate-500">Project Settings (Coming Soon)</div>} />
+                <Route path="support" element={<div className="p-8 text-slate-500">Support (Coming Soon)</div>} />
+            </Route>
+
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
     )
 }
 

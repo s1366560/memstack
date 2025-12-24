@@ -98,6 +98,10 @@ export const tenantAPI = {
         const response = await api.get(`/tenants/${id}`);
         return response.data;
     },
+    getStats: async (id: string) => {
+        const response = await api.get(`/tenants/${id}/stats`);
+        return response.data;
+    },
 };
 
 export const projectAPI = {
@@ -120,6 +124,10 @@ export const projectAPI = {
         const response = await api.get(`/projects/${projectId}`);
         return response.data;
     },
+    getStats: async (projectId: string) => {
+        const response = await api.get(`/projects/${projectId}/stats`);
+        return response.data;
+    },
 };
 
 export const memoryAPI = {
@@ -139,7 +147,7 @@ export const memoryAPI = {
         await api.delete(`/memories/${memoryId}`);
     },
     search: async (projectId: string, query: MemoryQuery) => {
-        const response = await api.post('/memories/search', { ...query, project_id: projectId });
+        const response = await api.post('/memory/search', { ...query, project_id: projectId });
         return response.data;
     },
     get: async (_projectId: string, memoryId: string) => {

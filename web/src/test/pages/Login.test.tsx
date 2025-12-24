@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { Login } from '../../pages/Login'
 import { useAuthStore } from '../../stores/auth'
 
@@ -59,13 +59,16 @@ describe('Login', () => {
 
         fireEvent.change(emailInput, { target: { value: 'test@example.com' } })
         fireEvent.change(passwordInput, { target: { value: 'password123' } })
-        fireEvent.click(submitButton)
+
+        await waitFor(async () => {
+            fireEvent.click(submitButton)
+        })
 
         expect(mockLogin).toHaveBeenCalledWith('test@example.com', 'password123')
     })
 
     it('displays error', () => {
-         (useAuthStore as any).mockReturnValue({
+        (useAuthStore as any).mockReturnValue({
             login: mockLogin,
             error: 'Invalid credentials',
             isLoading: false
@@ -75,7 +78,7 @@ describe('Login', () => {
     })
 
     it('displays loading state', () => {
-         (useAuthStore as any).mockReturnValue({
+        (useAuthStore as any).mockReturnValue({
             login: mockLogin,
             error: null,
             isLoading: true

@@ -51,7 +51,10 @@ describe('MemoryManager', () => {
     })
 
     it('renders loading state', () => {
-        (useMemoryStore as any).mockReturnValue({ isLoading: true })
+        (useMemoryStore as any).mockReturnValue({
+            isLoading: true,
+            listMemories: mockListMemories
+        })
         const { container } = render(<MemoryManager />)
         expect(container.querySelector('.animate-spin')).toBeInTheDocument()
     })

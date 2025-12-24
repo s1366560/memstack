@@ -2,7 +2,7 @@
 Unit tests for authentication module.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -100,4 +100,4 @@ async def test_api_key_expiration(mock_db_session):
     )
 
     # Check if expired
-    assert api_key_obj.expires_at < datetime.utcnow()
+    assert api_key_obj.expires_at < datetime.now(timezone.utc)

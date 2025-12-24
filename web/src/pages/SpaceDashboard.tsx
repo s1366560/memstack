@@ -7,14 +7,23 @@ import {
     Settings,
     Plus,
     ArrowLeft,
-    Calendar,
-    MoreVertical
+    CreditCard,
+    BarChart2,
+    Database,
+    FolderOpen,
+    Cpu,
+    Cloud,
+    Beaker,
+    MoreVertical,
+    Badge,
+    Globe
 } from 'lucide-react';
-import { AppLayout, NavigationItem } from '../components/AppLayout';
+import { AppLayout, NavigationGroup } from '../components/AppLayout';
 import { useTenantStore } from '../stores/tenant';
 import { useProjectStore } from '../stores/project';
 import { ProjectCreateModal } from '../components/ProjectCreateModal';
 import { Project } from '../types/memory';
+import { tenantAPI } from '../services/api';
 
 export const SpaceDashboard: React.FC = () => {
     const { spaceId } = useParams<{ spaceId: string }>();
@@ -22,58 +31,337 @@ export const SpaceDashboard: React.FC = () => {
     const { currentTenant, getTenant } = useTenantStore();
     const { projects, listProjects, setCurrentProject } = useProjectStore();
     const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState('projects');
+    const [activeTab, setActiveTab] = useState('overview');
+    const [stats, setStats] = useState<any>(null);
 
     useEffect(() => {
         if (spaceId) {
             getTenant(spaceId);
-            listProjects(spaceId); // Assuming listProjects takes tenantId (spaceId)
+            listProjects(spaceId);
+            fetchStats(spaceId);
         }
     }, [spaceId, getTenant, listProjects]);
+
+    const fetchStats = async (id: string) => {
+        try {
+            const data = await tenantAPI.getStats(id);
+            setStats(data);
+        } catch (error) {
+            console.error("Failed to fetch tenant stats", error);
+        }
+    };
 
     const handleEnterProject = (project: Project) => {
         setCurrentProject(project);
         navigate(`/space/${spaceId}/project/${project.id}`);
     };
 
-    const navItems: NavigationItem[] = [
-        { id: 'projects', label: '项目列表', icon: Folder, onClick: () => setActiveTab('projects') },
-        { id: 'overview', label: '空间概览', icon: LayoutDashboard, onClick: () => setActiveTab('overview') },
-        { id: 'members', label: '成员管理', icon: Users, onClick: () => setActiveTab('members') },
-        { id: 'settings', label: '空间设置', icon: Settings, onClick: () => setActiveTab('settings') },
+    const navGroups: NavigationGroup[] = [
+        {
+            title: 'PLATFORM',
+            items: [
+                { id: 'overview', label: 'Overview', icon: LayoutDashboard, onClick: () => setActiveTab('overview') },
+                { id: 'projects', label: 'Projects', icon: Folder, onClick: () => setActiveTab('projects') },
+                { id: 'users', label: 'Users', icon: Users, onClick: () => setActiveTab('users') },
+                { id: 'analytics', label: 'Analytics', icon: BarChart2, onClick: () => setActiveTab('analytics') },
+            ]
+        },
+        {
+            title: 'ADMINISTRATION',
+            items: [
+                { id: 'billing', label: 'Billing', icon: CreditCard, onClick: () => setActiveTab('billing') },
+                { id: 'settings', label: 'Settings', icon: Settings, onClick: () => setActiveTab('settings') },
+            ]
+        }
     ];
 
     const BackButton = (
         <button
             onClick={() => navigate('/spaces')}
             className="p-1 hover:bg-blue-700 rounded transition-colors mr-2"
-            title="返回空间列表"
+            title="Back to Spaces"
         >
             <ArrowLeft className="h-5 w-5 text-white" />
         </button>
     );
 
+    const generatePath = (data: { usage: number }[], width: number, height: number) => {
+        if (!data || data.length === 0) return '';
+        const points = data.map((point, i) => {
+            const x = (i / (data.length - 1)) * width;
+            const y = height - (point.usage / 100) * height;
+            return `${x},${y}`;
+        });
+        return `M 0,${height} L 0,${height - (data[0].usage / 100) * height} L ${points.join(' L ')} L ${width},${height} Z`;
+    };
+
+    const generateLinePath = (data: { usage: number }[], width: number, height: number) => {
+        if (!data || data.length === 0) return '';
+        return data.map((point, i) => {
+            const x = (i / (data.length - 1)) * width;
+            const y = height - (point.usage / 100) * height;
+            return `${i === 0 ? 'M' : 'L'} ${x},${y}`;
+        }).join(' ');
+    };
+
     return (
         <AppLayout
-            title={currentTenant?.name || 'Loading...'}
-            navigationItems={navItems}
+            title={currentTenant?.name || 'Overview'}
+            navigationGroups={navGroups}
             activeItem={activeTab}
             contextInfo={{ tenantName: currentTenant?.name }}
             backButton={BackButton}
+            breadcrumbs={['Home', activeTab.charAt(0).toUpperCase() + activeTab.slice(1)]}
         >
+            {activeTab === 'overview' && stats && (
+                <div className="max-w-7xl mx-auto flex flex-col gap-8">
+                    {/* Page Heading */}
+                    <div className="flex flex-col gap-1">
+                        <h2 className="text-3xl font-bold text-gray-900 tracking-tight">Overview</h2>
+                        <p className="text-gray-500">Welcome back, here's what's happening with your tenant today.</p>
+                    </div>
+
+                    {/* Stats Cards (Gradient) */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Card 1: Total Storage */}
+                        <div className="relative overflow-hidden rounded-xl p-6 shadow-lg bg-gradient-to-br from-[#1e3fae] to-[#3b82f6] text-white group hover:shadow-xl transition-shadow duration-300">
+                            <div className="absolute right-0 top-0 h-full w-1/2 bg-white/5 skew-x-12 -mr-10"></div>
+                            <div className="relative z-10 flex flex-col justify-between h-full gap-4">
+                                <div className="flex items-start justify-between">
+                                    <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                                        <Database className="h-6 w-6 text-white" />
+                                    </div>
+                                    <span className="text-xs font-medium bg-white/20 px-2 py-1 rounded text-white backdrop-blur-sm">+12%</span>
+                                </div>
+                                <div>
+                                    <p className="text-blue-100 text-sm font-medium mb-1">Total Storage</p>
+                                    <div className="flex items-baseline gap-2">
+                                        <h3 className="text-3xl font-bold tracking-tight">{(stats.storage.used / (1024 * 1024 * 1024 * 1024)).toFixed(1)} TB</h3>
+                                        <span className="text-blue-200 text-sm">/ {(stats.storage.total / (1024 * 1024 * 1024 * 1024)).toFixed(0)} TB</span>
+                                    </div>
+                                </div>
+                                <div className="w-full bg-black/20 rounded-full h-1.5 mt-1">
+                                    <div className="bg-white h-1.5 rounded-full" style={{ width: `${stats.storage.percentage}%` }}></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Card 2: Active Projects */}
+                        <div className="relative overflow-hidden rounded-xl p-6 shadow-lg bg-gradient-to-br from-indigo-600 to-violet-500 text-white group hover:shadow-xl transition-shadow duration-300">
+                            <div className="absolute right-0 top-0 h-full w-1/2 bg-white/5 skew-x-12 -mr-10"></div>
+                            <div className="relative z-10 flex flex-col justify-between h-full gap-4">
+                                <div className="flex items-start justify-between">
+                                    <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                                        <FolderOpen className="h-6 w-6 text-white" />
+                                    </div>
+                                    <span className="text-xs font-medium bg-white/20 px-2 py-1 rounded text-white backdrop-blur-sm">{stats.projects.active} Active</span>
+                                </div>
+                                <div>
+                                    <p className="text-indigo-100 text-sm font-medium mb-1">Active Projects</p>
+                                    <h3 className="text-3xl font-bold tracking-tight">{stats.projects.active}</h3>
+                                </div>
+                                <p className="text-indigo-100 text-sm">+{stats.projects.new_this_week} new project this week</p>
+                            </div>
+                        </div>
+
+                        {/* Card 3: Team Members */}
+                        <div className="relative overflow-hidden rounded-xl p-6 shadow-lg bg-gradient-to-br from-slate-700 to-slate-600 text-white group hover:shadow-xl transition-shadow duration-300">
+                            <div className="absolute right-0 top-0 h-full w-1/2 bg-white/5 skew-x-12 -mr-10"></div>
+                            <div className="relative z-10 flex flex-col justify-between h-full gap-4">
+                                <div className="flex items-start justify-between">
+                                    <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                                        <Users className="h-6 w-6 text-white" />
+                                    </div>
+                                    <span className="text-xs font-medium bg-white/20 px-2 py-1 rounded text-white backdrop-blur-sm">Total {stats.members.total}</span>
+                                </div>
+                                <div>
+                                    <p className="text-slate-200 text-sm font-medium mb-1">Team Members</p>
+                                    <h3 className="text-3xl font-bold tracking-tight">{stats.members.total}</h3>
+                                </div>
+                                <div className="flex -space-x-2 overflow-hidden mt-1">
+                                    {[1, 2, 3].map((i) => (
+                                        <div key={i} className="inline-block h-6 w-6 rounded-full ring-2 ring-slate-600 bg-gray-400 flex items-center justify-center text-xs font-medium text-white">
+                                            U{i}
+                                        </div>
+                                    ))}
+                                    <div className="h-6 w-6 rounded-full bg-slate-500 ring-2 ring-slate-600 flex items-center justify-center text-[10px] font-medium text-white">+{stats.members.new_added}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Middle Row: Chart & Tenant Info */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Main Chart Area */}
+                        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col">
+                            <div className="flex justify-between items-center mb-6">
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-900">Memory Usage History</h3>
+                                    <p className="text-sm text-gray-500">Last 30 Days</p>
+                                </div>
+                                <select className="form-select bg-gray-50 border-gray-200 text-gray-700 text-sm rounded-lg py-1.5 px-3 focus:ring-blue-500 focus:border-blue-500">
+                                    <option>Last 30 Days</option>
+                                    <option>Last 7 Days</option>
+                                    <option>Last 24 Hours</option>
+                                </select>
+                            </div>
+
+                            {/* Simulated Chart using SVG */}
+                            <div className="flex-1 w-full min-h-[240px] relative">
+                                {/* Grid Lines */}
+                                <div className="absolute inset-0 flex flex-col justify-between text-xs text-gray-400">
+                                    {[100, 75, 50, 25, 0].map((val) => (
+                                        <div key={val} className="flex w-full items-center">
+                                            <span className="w-8 text-right pr-2">{val}%</span>
+                                            <div className="h-px bg-gray-100 flex-1"></div>
+                                        </div>
+                                    ))}
+                                </div>
+                                {/* Chart Curve */}
+                                <svg className="absolute inset-0 h-full w-full pl-8 pb-4 pt-2" preserveAspectRatio="none" viewBox="0 0 800 300">
+                                    <defs>
+                                        <linearGradient id="chartGradient" x1="0" x2="0" y1="0" y2="1">
+                                            <stop offset="0%" stopColor="#1e3fae" stopOpacity="0.2"></stop>
+                                            <stop offset="100%" stopColor="#1e3fae" stopOpacity="0"></stop>
+                                        </linearGradient>
+                                    </defs>
+                                    <path d={generatePath(stats.memory_history, 800, 300)} fill="url(#chartGradient)"></path>
+                                    <path d={generateLinePath(stats.memory_history, 800, 300)} fill="none" stroke="#1e3fae" strokeWidth="2" vectorEffect="non-scaling-stroke"></path>
+                                </svg>
+                                {/* X-Axis Labels */}
+                                <div className="absolute bottom-0 left-8 right-0 flex justify-between text-xs text-gray-400 pt-2">
+                                    {stats.memory_history.filter((_: any, i: number) => i % 7 === 0).map((point: any) => (
+                                        <span key={point.date}>{point.date}</span>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Tenant Details */}
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                            <h3 className="text-lg font-bold text-gray-900 mb-6">Tenant Information</h3>
+                            <div className="flex flex-col gap-6">
+                                <div className="flex items-center gap-4">
+                                    <div className="bg-blue-50 p-3 rounded-lg text-blue-600">
+                                        <Badge className="h-6 w-6" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Organization ID</p>
+                                        <p className="text-gray-900 font-mono font-medium">{stats.tenant_info.organization_id}</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <div className="bg-purple-50 p-3 rounded-lg text-purple-600">
+                                        <Database className="h-6 w-6" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Current Plan</p>
+                                        <p className="text-gray-900 font-medium capitalize">{stats.tenant_info.plan}</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <div className="bg-emerald-50 p-3 rounded-lg text-emerald-600">
+                                        <Globe className="h-6 w-6" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Region</p>
+                                        <p className="text-gray-900 font-medium">{stats.tenant_info.region}</p>
+                                    </div>
+                                </div>
+                                <div className="h-px w-full bg-gray-100 my-2"></div>
+                                <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="text-sm text-gray-500">Next Billing Date</span>
+                                        <span className="text-sm font-semibold text-gray-900">{stats.tenant_info.next_billing_date}</span>
+                                    </div>
+                                    <button className="w-full py-2 px-4 bg-white border border-gray-200 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                                        View Invoice
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Bottom Row: Recent Active Projects */}
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
+                        <div className="p-6 border-b border-gray-100 flex flex-wrap gap-4 items-center justify-between">
+                            <h3 className="text-lg font-bold text-gray-900">Most Active Projects</h3>
+                            <button onClick={() => setActiveTab('projects')} className="text-blue-600 text-sm font-medium hover:underline">View All Projects</button>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-gray-50 border-b border-gray-100">
+                                        <th className="py-4 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider">Project Name</th>
+                                        <th className="py-4 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider">Owner</th>
+                                        <th className="py-4 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider">Memory Consumed</th>
+                                        <th className="py-4 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Status</th>
+                                        <th className="py-4 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {stats.projects.list.map((project: any, index: number) => (
+                                        <tr key={project.id} className="hover:bg-gray-50 transition-colors">
+                                            <td className="py-4 px-6">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`p-2 rounded-lg ${index % 3 === 0 ? 'bg-blue-50 text-blue-600' : index % 3 === 1 ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-600'}`}>
+                                                        {index % 3 === 0 ? <Cpu className="h-5 w-5" /> : index % 3 === 1 ? <Cloud className="h-5 w-5" /> : <Beaker className="h-5 w-5" />}
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-medium text-gray-900 cursor-pointer hover:text-blue-600" onClick={() => navigate(`/space/${spaceId}/project/${project.id}`)}>{project.name}</p>
+                                                        <p className="text-xs text-gray-500">ID: #{project.id.substring(0, 8)}</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="py-4 px-6">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">
+                                                        {project.owner.charAt(0)}
+                                                    </div>
+                                                    <span className="text-sm text-gray-700">{project.owner}</span>
+                                                </div>
+                                            </td>
+                                            <td className="py-4 px-6">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-24 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                                                        <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: `${Math.random() * 80 + 20}%` }}></div>
+                                                    </div>
+                                                    <span className="text-sm font-medium text-gray-700">{project.memory_consumed}</span>
+                                                </div>
+                                            </td>
+                                            <td className="py-4 px-6 text-right">
+                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${project.status === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                                    <span className={`h-1.5 w-1.5 rounded-full ${project.status === 'Active' ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                                                    {project.status}
+                                                </span>
+                                            </td>
+                                            <td className="py-4 px-6 text-right">
+                                                <button className="text-gray-400 hover:text-blue-600 transition-colors">
+                                                    <MoreVertical className="h-5 w-5" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {activeTab === 'projects' && (
                 <div className="max-w-7xl mx-auto">
                     <div className="flex justify-between items-center mb-6">
                         <div>
-                            <h2 className="text-xl font-bold text-gray-900">项目列表</h2>
-                            <p className="text-sm text-gray-500 mt-1">管理当前空间下的所有项目</p>
+                            <h2 className="text-xl font-bold text-gray-900">Projects</h2>
+                            <p className="text-sm text-gray-500 mt-1">Manage all projects in this space</p>
                         </div>
                         <button
                             onClick={() => setIsCreateProjectOpen(true)}
                             className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
                         >
                             <Plus className="h-4 w-4" />
-                            <span>新建项目</span>
+                            <span>New Project</span>
                         </button>
                     </div>
 
@@ -89,49 +377,22 @@ export const SpaceDashboard: React.FC = () => {
                                         <div className="p-2 bg-green-50 rounded-lg">
                                             <Folder className="h-6 w-6 text-green-600" />
                                         </div>
-                                        <button className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100" onClick={(e) => e.stopPropagation()}>
-                                            <MoreVertical className="h-4 w-4" />
-                                        </button>
                                     </div>
                                     <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors truncate">
                                         {project.name}
                                     </h3>
                                     <p className="text-sm text-gray-500 line-clamp-3 mb-4 h-10">
-                                        {project.description || '暂无描述'}
+                                        {project.description || 'No description'}
                                     </p>
                                 </div>
 
                                 <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 rounded-b-lg flex items-center justify-between text-xs text-gray-500">
-                                    <div className="flex items-center space-x-1">
-                                        <Calendar className="h-3 w-3" />
-                                        <span>{new Date(project.created_at).toLocaleDateString()}</span>
-                                    </div>
-                                    <div className="flex items-center space-x-1">
-                                        <Users className="h-3 w-3" />
-                                        <span>1 成员</span>
-                                    </div>
+                                    <span>{new Date(project.created_at).toLocaleDateString()}</span>
+                                    <span>1 Member</span>
                                 </div>
                             </div>
                         ))}
-
-                        {/* Empty State */}
-                        {projects.length === 0 && (
-                            <div className="col-span-full py-12 flex flex-col items-center justify-center text-center bg-white border border-dashed border-gray-300 rounded-lg">
-                                <div className="p-3 bg-gray-100 rounded-full mb-3">
-                                    <Folder className="h-8 w-8 text-gray-400" />
-                                </div>
-                                <h3 className="text-lg font-medium text-gray-900">暂无项目</h3>
-                                <p className="text-gray-500 max-w-sm mt-1 mb-4">当前空间下还没有项目，创建一个新项目来开始管理记忆。</p>
-                                <button
-                                    onClick={() => setIsCreateProjectOpen(true)}
-                                    className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors font-medium"
-                                >
-                                    立即创建
-                                </button>
-                            </div>
-                        )}
                     </div>
-
                     <ProjectCreateModal
                         isOpen={isCreateProjectOpen}
                         onClose={() => setIsCreateProjectOpen(false)}
@@ -140,24 +401,16 @@ export const SpaceDashboard: React.FC = () => {
                 </div>
             )}
 
-            {activeTab === 'overview' && (
-                <div className="text-center py-20 text-gray-500">
-                    <LayoutDashboard className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p className="text-lg">空间概览功能开发中...</p>
-                </div>
-            )}
-
-            {activeTab === 'members' && (
-                <div className="text-center py-20 text-gray-500">
-                    <Users className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p className="text-lg">成员管理功能开发中...</p>
-                </div>
-            )}
-
-            {activeTab === 'settings' && (
-                <div className="text-center py-20 text-gray-500">
-                    <Settings className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p className="text-lg">空间设置功能开发中...</p>
+            {/* Other Tabs */}
+            {(activeTab === 'users' || activeTab === 'analytics' || activeTab === 'billing' || activeTab === 'settings') && (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                    <div className="p-4 bg-gray-100 rounded-full mb-4">
+                        <Settings className="h-8 w-8 text-gray-400" />
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-900">Coming Soon</h3>
+                    <p className="text-gray-500 max-w-sm mt-1">
+                        The {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} module is currently under development.
+                    </p>
                 </div>
             )}
         </AppLayout>

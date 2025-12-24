@@ -4,7 +4,8 @@ import {
     X,
     Bell,
     LogOut,
-    Brain
+    Brain,
+    Search
 } from 'lucide-react';
 import { useAuthStore } from '../stores/auth';
 import { useNavigate } from 'react-router-dom';
@@ -17,29 +18,45 @@ export interface NavigationItem {
     onClick?: () => void; // Optional click handler
 }
 
+export interface NavigationGroup {
+    title?: string;
+    items: NavigationItem[];
+}
+
 interface AppLayoutProps {
     children: React.ReactNode;
     title?: string;
-    navigationItems: NavigationItem[];
+    navigationItems?: NavigationItem[];
+    navigationGroups?: NavigationGroup[];
     activeItem?: string;
     contextInfo?: {
         tenantName?: string;
         projectName?: string;
     };
     backButton?: React.ReactNode;
+    breadcrumbs?: string[];
+    customHeader?: React.ReactNode;
 }
 
 export const AppLayout: React.FC<AppLayoutProps> = ({
     children,
-    title = 'VIP Memory',
-    navigationItems,
+    title = 'MemStack.ai',
+    navigationItems = [],
+    navigationGroups = [],
     activeItem,
     contextInfo,
-    backButton
+    backButton,
+    breadcrumbs = ['Home', 'Overview'],
+    customHeader
 }) => {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const { logout, user } = useAuthStore();
     const navigate = useNavigate();
+
+    // Normalize navigation into groups if only items are provided
+    const finalGroups: NavigationGroup[] = navigationGroups.length > 0
+        ? navigationGroups
+        : [{ items: navigationItems }];
 
     const handleLogout = () => {
         logout();
@@ -60,26 +77,30 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                     }
                     if (isMobile) setIsMobileMenuOpen(false);
                 }}
-                className={`flex items-center space-x-3 w-full px-4 py-3 text-sm font-medium rounded-lg transition-colors ${isActive
-                    ? 'bg-blue-100 text-blue-700 border-r-2 border-blue-700'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                className={`flex items-center space-x-3 w-full px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive
+                    ? 'bg-blue-50 text-blue-700'
+                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
                     } ${isMobile ? 'justify-start' : 'justify-start'}`}
             >
-                <Icon className="h-5 w-5" />
+                <Icon className={`h-5 w-5 ${isActive ? 'text-blue-600' : 'text-gray-400'}`} />
                 <span>{item.label}</span>
             </button>
         );
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col lg:flex-row">
+        <div className="min-h-screen bg-gray-50 flex flex-col lg:flex-row font-sans">
             {/* Mobile Header */}
             <div className="lg:hidden bg-white shadow-sm border-b border-gray-200">
                 <div className="flex items-center justify-between px-4 py-3">
                     <div className="flex items-center space-x-3">
                         {backButton}
-                        <Brain className="h-6 w-6 text-blue-600" />
-                        <span className="text-lg font-bold text-gray-900">{title}</span>
+                        <div className="flex items-center space-x-1">
+                            <div className="bg-blue-600 p-1 rounded-md">
+                                <Brain className="h-5 w-5 text-white" />
+                            </div>
+                            <span className="text-lg font-bold text-blue-900">MemStack<span className="text-purple-600">.ai</span></span>
+                        </div>
                     </div>
 
                     <div className="flex items-center space-x-3">
@@ -91,21 +112,6 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                         </button>
                     </div>
                 </div>
-
-                {/* Context Info Mobile */}
-                {contextInfo && (
-                    <div className="px-4 py-2 bg-blue-50 border-t border-blue-100 flex items-center text-sm">
-                        {contextInfo.tenantName && (
-                            <span className="font-medium text-blue-800">{contextInfo.tenantName}</span>
-                        )}
-                        {contextInfo.projectName && (
-                            <>
-                                <span className="mx-2 text-blue-300">/</span>
-                                <span className="text-blue-600">{contextInfo.projectName}</span>
-                            </>
-                        )}
-                    </div>
-                )}
             </div>
 
             {/* Mobile Menu Overlay */}
@@ -117,9 +123,18 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                             <button onClick={() => setIsMobileMenuOpen(false)}><X className="h-5 w-5" /></button>
                         </div>
                         <div className="flex-1 p-4 overflow-y-auto">
-                            <div className="space-y-1">
-                                {navigationItems.map(item => <NavItem key={item.id} item={item} isMobile />)}
-                            </div>
+                            {finalGroups.map((group, groupIndex) => (
+                                <div key={groupIndex} className="mb-6">
+                                    {group.title && (
+                                        <div className="px-4 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                                            {group.title}
+                                        </div>
+                                    )}
+                                    <div className="space-y-1">
+                                        {group.items.map(item => <NavItem key={item.id} item={item} isMobile />)}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                         <div className="p-4 border-t border-gray-200">
                             <button onClick={handleLogout} className="flex items-center space-x-2 text-red-600">
@@ -132,70 +147,88 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             )}
 
             {/* Desktop Sidebar */}
-            <div className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-white shadow-lg z-10">
-                <div className="flex items-center justify-center h-16 px-4 bg-blue-600 text-white shadow-md">
-                    {backButton && <div className="mr-2">{backButton}</div>}
-                    <Brain className="h-8 w-8 mr-2" />
-                    <span className="text-xl font-bold">VIP Memory</span>
+            <div className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-white border-r border-gray-200 z-10">
+                <div className="flex items-center h-16 px-6 border-b border-gray-100">
+                    <div className="flex items-center space-x-2">
+                        <div className="bg-blue-100 p-1.5 rounded-lg">
+                            <Brain className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <span className="text-xl font-bold text-gray-900">MemStack<span className="text-purple-600">.ai</span></span>
+                    </div>
                 </div>
 
-                {/* Context Info Desktop */}
-                {contextInfo && (
-                    <div className="px-4 py-4 bg-gray-50 border-b border-gray-200">
-                        {contextInfo.tenantName && (
-                            <div className="text-xs text-gray-500 uppercase font-semibold mb-1">Space</div>
-                        )}
-                        {contextInfo.tenantName && (
-                            <div className="font-medium text-gray-900 truncate mb-2">{contextInfo.tenantName}</div>
-                        )}
-                        {contextInfo.projectName && (
-                            <>
-                                <div className="text-xs text-gray-500 uppercase font-semibold mb-1">Project</div>
-                                <div className="font-medium text-gray-900 truncate">{contextInfo.projectName}</div>
-                            </>
-                        )}
-                    </div>
-                )}
-
-                <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-                    {navigationItems.map((item) => (
-                        <NavItem key={item.id} item={item} />
+                <nav className="flex-1 px-4 py-6 overflow-y-auto">
+                    {finalGroups.map((group, groupIndex) => (
+                        <div key={groupIndex} className="mb-8">
+                            {group.title && (
+                                <div className="px-4 mb-3 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                    {group.title}
+                                </div>
+                            )}
+                            <div className="space-y-1">
+                                {group.items.map((item) => (
+                                    <NavItem key={item.id} item={item} />
+                                ))}
+                            </div>
+                        </div>
                     ))}
                 </nav>
 
                 <div className="p-4 border-t border-gray-200">
-                    <div className="flex items-center space-x-3 mb-4">
-                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
-                            {user?.name?.[0]?.toUpperCase() || 'U'}
+                    <div className="flex items-center p-2 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
+                        <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-bold border-2 border-white shadow-sm">
+                            {user?.name?.[0]?.toUpperCase() || 'TA'}
                         </div>
-                        <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">{user?.name || 'User'}</p>
-                            <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                        <div className="ml-3 flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{user?.name || 'Tenant Admin'}</p>
+                            <p className="text-xs text-gray-500 truncate">{user?.email || 'admin@tenant.co'}</p>
                         </div>
                     </div>
-                    <button
-                        onClick={handleLogout}
-                        className="flex items-center space-x-3 w-full px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    >
-                        <LogOut className="h-4 w-4" />
-                        <span>退出登录</span>
-                    </button>
                 </div>
             </div>
 
             {/* Main Content Area */}
             <div className="flex-1 lg:ml-64 flex flex-col min-h-screen">
                 {/* Desktop Top Bar */}
-                <div className="hidden lg:flex lg:items-center lg:justify-between lg:h-16 lg:px-8 lg:bg-white lg:border-b lg:border-gray-200 shadow-sm sticky top-0 z-20">
-                    <h1 className="text-xl font-semibold text-gray-800">{title}</h1>
-                    <div className="flex items-center space-x-4">
-                        <button className="p-2 text-gray-400 hover:text-gray-600 rounded-full transition-colors">
-                            <Bell className="h-5 w-5" />
-                        </button>
+                <div className="hidden lg:flex lg:items-center lg:justify-between lg:h-16 lg:px-8 lg:bg-white lg:border-b lg:border-gray-200 sticky top-0 z-20">
+                    {/* Breadcrumbs */}
+                    <div className="flex items-center text-sm text-gray-500">
+                        {breadcrumbs.map((crumb, index) => (
+                            <React.Fragment key={index}>
+                                {index > 0 && <span className="mx-2 text-gray-300">/</span>}
+                                <span className={index === breadcrumbs.length - 1 ? "font-medium text-gray-900" : "hover:text-gray-700"}>
+                                    {crumb}
+                                </span>
+                            </React.Fragment>
+                        ))}
+                    </div>
+
+                    {/* Right Side: Search + Actions */}
+                    <div className="flex items-center space-x-6">
+                        <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <Search className="h-4 w-4 text-gray-400" />
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Search resources..."
+                                className="block w-64 pl-10 pr-3 py-2 border border-gray-200 rounded-lg leading-5 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-150 ease-in-out"
+                            />
+                        </div>
+
+                        <div className="flex items-center space-x-4">
+                            <button className="relative p-2 text-gray-400 hover:text-gray-600 transition-colors">
+                                <Bell className="h-5 w-5" />
+                                <span className="absolute top-1.5 right-1.5 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+                            </button>
+                            <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold text-sm">
+                                A
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <main className="flex-1 p-4 lg:p-8 overflow-x-hidden">
+                <main className="flex-1 p-6 lg:p-8 overflow-x-hidden bg-gray-50">
                     {children}
                 </main>
             </div>

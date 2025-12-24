@@ -450,3 +450,78 @@ async def list_project_members(
         })
 
     return {"members": members, "total": len(members)}
+
+
+@router.get("/{project_id}/stats")
+async def get_project_stats(
+    project_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Get project statistics for the dashboard."""
+    # Check if user has access to project
+    user_project_result = await db.execute(
+        select(UserProject).where(
+            and_(UserProject.user_id == current_user.id, UserProject.project_id == project_id)
+        )
+    )
+    if not user_project_result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to project"
+        )
+
+    # Get project
+    project_result = await db.execute(select(Project).where(Project.id == project_id))
+    project = project_result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Get memory count
+    from server.db_models import Memory
+    memory_count_result = await db.execute(
+        select(func.count(Memory.id)).where(Memory.project_id == project_id)
+    )
+    memory_count = memory_count_result.scalar()
+
+    # Get member count
+    member_count_result = await db.execute(
+        select(func.count(UserProject.id)).where(UserProject.project_id == project_id)
+    )
+    member_count = member_count_result.scalar()
+
+    # Mock data for dashboard
+    import random
+    
+    # Mock storage usage (random between 1GB and 50GB)
+    storage_used = random.uniform(1, 50) * 1024 * 1024 * 1024
+    
+    # Mock active nodes (random between 5 and 50)
+    active_nodes = random.randint(5, 50)
+    
+    # Mock recent activity
+    activities = []
+    actions = ["created a memory", "updated a document", "commented on", "shared"]
+    for i in range(5):
+        activities.append({
+            "id": f"act_{i}",
+            "user": "Team Member",
+            "action": random.choice(actions),
+            "target": f"Memory #{100+i}",
+            "time": f"{random.randint(1, 24)}h ago"
+        })
+
+    return {
+        "memory_count": memory_count,
+        "storage_used": storage_used,
+        "storage_limit": 100 * 1024 * 1024 * 1024,  # 100GB mock limit
+        "member_count": member_count,
+        "active_nodes": active_nodes,
+        "collaborators": member_count,  # Same as members for now
+        "recent_activity": activities,
+        "system_status": {
+            "status": "operational",
+            "indexing_active": True,
+            "indexing_progress": 76
+        }
+    }
