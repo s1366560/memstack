@@ -1,5 +1,5 @@
 """
-Asynchronous client for VIP Memory API.
+Asynchronous client for MemStack API.
 """
 
 import asyncio
@@ -8,8 +8,8 @@ from urllib.parse import urljoin
 
 import httpx
 
-from vip_memory.exceptions import APIError, AuthenticationError, NetworkError, RateLimitError
-from vip_memory.models import (
+from .exceptions import APIError, AuthenticationError, NetworkError, RateLimitError
+from .models import (
     APIKey,
     APIKeyCreate,
     EpisodeCreate,
@@ -22,12 +22,12 @@ from vip_memory.models import (
 )
 
 
-class VipMemoryAsyncClient:
+class MemStackAsyncClient:
     """
-    Asynchronous client for VIP Memory API.
+    Asynchronous client for MemStack API.
 
     Example:
-        >>> async with VipMemoryAsyncClient(api_key="vpm_sk_...") as client:
+        >>> async with MemStackAsyncClient(api_key="ms_sk_...") as client:
         ...     episode = await client.create_episode(
         ...         name="User Preference",
         ...         content="User loves hiking",
@@ -44,18 +44,18 @@ class VipMemoryAsyncClient:
         retry_delay: float = 1.0,
     ):
         """
-        Initialize VIP Memory async client.
+        Initialize MemStack async client.
 
         Args:
-            api_key: VIP Memory API key (starts with 'vpm_sk_')
-            base_url: Base URL of the VIP Memory API
+            api_key: MemStack API key (starts with 'ms_sk_')
+            base_url: Base URL of the MemStack API
             timeout: Request timeout in seconds
             max_retries: Maximum number of retry attempts
             retry_delay: Initial delay between retries (exponential backoff)
         """
-        if not api_key or not api_key.startswith("vpm_sk_"):
+        if not api_key or not api_key.startswith("ms_sk_"):
             raise AuthenticationError(
-                "Invalid API key format. API keys should start with 'vpm_sk_'"
+                "Invalid API key format. API keys should start with 'ms_sk_'"
             )
 
         self.api_key = api_key
@@ -74,7 +74,7 @@ class VipMemoryAsyncClient:
         return {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "User-Agent": "vip-memory-python/0.1.0",
+            "User-Agent": "memstack-python/0.1.0",
         }
 
     async def _make_request(

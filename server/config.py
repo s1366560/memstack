@@ -1,4 +1,4 @@
-"""Configuration management for VIP Memory."""
+"""Configuration management for MemStack."""
 
 from functools import lru_cache
 from typing import List, Optional
@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     postgres_host: str = Field(default="localhost", alias="POSTGRES_HOST")
     postgres_port: int = Field(default=5432, alias="POSTGRES_PORT")
-    postgres_db: str = Field(default="vip_memory", alias="POSTGRES_DB")
+    postgres_db: str = Field(default="memstack", alias="POSTGRES_DB")
     postgres_user: str = Field(default="postgres", alias="POSTGRES_USER")
     postgres_password: str = Field(default="password", alias="POSTGRES_PASSWORD")
 
@@ -80,7 +80,7 @@ class Settings(BaseSettings):
     metrics_port: int = Field(default=9090, alias="METRICS_PORT")
 
     # OpenTelemetry Settings
-    service_name: str = Field(default="vip-memory", alias="SERVICE_NAME")
+    service_name: str = Field(default="memstack", alias="SERVICE_NAME")
     environment: str = Field(default="development", alias="ENVIRONMENT")
     otel_exporter_otlp_endpoint: Optional[str] = Field(
         default=None, alias="OTEL_EXPORTER_OTLP_ENDPOINT"

@@ -1,11 +1,11 @@
-# VIP Memory Python SDK
+# MemStack Python SDK
 
-Official Python client library for VIP Memory - Enterprise-grade AI Memory Cloud Platform based on Graphiti.
+Official Python client library for MemStack - Enterprise-grade AI Memory Cloud Platform based on Graphiti.
 
 ## Installation
 
 ```bash
-pip install vip-memory-sdk
+pip install memstack-sdk
 ```
 
 Or install from source:
@@ -20,12 +20,12 @@ pip install -e .
 ### Synchronous Client
 
 ```python
-from vip_memory import VipMemoryClient
+from memstack import MemStackClient
 
 # Initialize client with API key
-client = VipMemoryClient(
-    api_key="vpm_sk_your_api_key_here",
-    base_url="https://api.vipmemory.com"  # Optional, defaults to localhost
+client = MemStackClient(
+    api_key="ms_sk_your_api_key_here",
+    base_url="https://api.memstack.ai"  # Optional, defaults to localhost
 )
 
 # Create an episode
@@ -54,11 +54,11 @@ client.close()
 
 ```python
 import asyncio
-from vip_memory import VipMemoryAsyncClient
+from memstack import MemStackAsyncClient
 
 async def main():
     # Use async context manager
-    async with VipMemoryAsyncClient(api_key="vpm_sk_your_api_key_here") as client:
+    async with MemStackAsyncClient(api_key="ms_sk_your_api_key_here") as client:
         # Create episode
         episode = await client.create_episode(
             name="User Conversation",
@@ -89,13 +89,13 @@ asyncio.run(main())
 
 ## API Reference
 
-### VipMemoryClient / VipMemoryAsyncClient
+### MemStackClient / MemStackAsyncClient
 
 #### Constructor
 
 ```python
-client = VipMemoryClient(
-    api_key: str,              # Your VIP Memory API key (required)
+client = MemStackClient(
+    api_key: str,              # Your MemStack API key (required)
     base_url: str = "http://localhost:8000",  # API base URL
     timeout: float = 60.0,     # Request timeout in seconds
     max_retries: int = 3,      # Maximum retry attempts
@@ -146,8 +146,8 @@ health = client.health_check() -> dict
 The SDK provides a comprehensive exception hierarchy:
 
 ```python
-from vip_memory import (
-    VipMemoryError,      # Base exception
+from memstack import (
+    MemStackError,        # Base exception
     AuthenticationError,  # Authentication failed
     APIError,             # API request error
     RateLimitError,       # Rate limit exceeded
@@ -170,8 +170,8 @@ except APIError as e:
 ### Custom Retry Logic
 
 ```python
-client = VipMemoryClient(
-    api_key="vpm_sk_...",
+client = MemStackClient(
+    api_key="ms_sk_...",
     max_retries=5,        # Try up to 5 times
     retry_delay=2.0,      # Start with 2 second delay
 )
@@ -181,11 +181,11 @@ client = VipMemoryClient(
 
 ```python
 import os
-from vip_memory import VipMemoryClient
+from memstack import MemStackClient
 
-client = VipMemoryClient(
-    api_key=os.getenv("VIP_MEMORY_API_KEY"),
-    base_url=os.getenv("VIP_MEMORY_BASE_URL", "http://localhost:8000"),
+client = MemStackClient(
+    api_key=os.getenv("MEMSTACK_API_KEY"),
+    base_url=os.getenv("MEMSTACK_BASE_URL", "http://localhost:8000"),
 )
 ```
 
@@ -218,20 +218,20 @@ pip install -e ".[dev]"
 ### Run Tests
 
 ```bash
-pytest tests/ --cov=vip_memory --cov-report=term-missing
+pytest tests/ --cov=memstack --cov-report=term-missing
 ```
 
 ### Format Code
 
 ```bash
-black vip_memory/ tests/
-ruff check --fix vip_memory/ tests/
+black memstack/ tests/
+ruff check --fix memstack/ tests/
 ```
 
 ### Type Checking
 
 ```bash
-mypy vip_memory/
+mypy memstack/
 ```
 
 ## License
@@ -240,6 +240,6 @@ MIT License - see LICENSE file for details.
 
 ## Support
 
-- Documentation: https://docs.vipmemory.com
-- Issues: https://github.com/vipmemory/vip-memory/issues
-- Email: support@vipmemory.com
+- Documentation: https://docs.memstack.ai
+- Issues: https://github.com/s1366560/memstack/issues
+- Email: support@memstack.ai

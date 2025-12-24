@@ -1,8 +1,8 @@
-# VIP Memory 部署指南
+# MemStack 部署指南
 
 ## 部署方式概览
 
-VIP Memory 支持多种部署方式：
+MemStack 支持多种部署方式：
 
 1. **Docker Compose** - 推荐用于开发和小规模生产环境
 2. **Kubernetes** - 推荐用于大规模生产环境（待完善）
@@ -33,8 +33,8 @@ VIP Memory 支持多种部署方式：
 ### 1.1 克隆仓库
 
 ```bash
-git clone https://github.com/yourusername/vip-memory.git
-cd vip-memory
+git clone https://github.com/s1366560/memstack.git
+cd memstack
 ```
 
 ### 1.2 配置环境变量
@@ -106,7 +106,7 @@ docker-compose logs api | grep "Generated default API key"
 
 输出示例：
 ```
-INFO:     Generated default API key: vpm_sk_abc123...
+INFO:     Generated default API key: ms_sk_abc123...
 ```
 
 ### 1.6 停止服务
@@ -206,10 +206,10 @@ VITE_API_URL=https://api.your-domain.com
 
 ```bash
 # 复制构建文件
-cp -r dist/* /var/www/vip-memory/
+cp -r dist/* /var/www/memstack/
 
 # Nginx配置
-sudo nano /etc/nginx/sites-available/vip-memory
+sudo nano /etc/nginx/sites-available/memstack
 ```
 
 Nginx配置示例：
@@ -217,7 +217,7 @@ Nginx配置示例：
 server {
     listen 80;
     server_name your-domain.com;
-    root /var/www/vip-memory;
+    root /var/www/memstack;
     index index.html;
 
     # SPA路由
@@ -245,13 +245,13 @@ server {
 ```bash
 # 构建镜像
 cd web
-docker build -t vip-memory-web .
+docker build -t memstack-web .
 
 # 运行容器
 docker run -d -p 80:80 \
   -e API_URL=http://api:8000 \
-  --name vip-memory-web \
-  vip-memory-web
+  --name memstack-web \
+  memstack-web
 ```
 
 #### 选项C: Vercel
@@ -469,10 +469,10 @@ aws s3 cp $BACKUP_DIR/neo4j-$(date +%Y%m%d).dump \
 
 ```bash
 # pg_dump备份
-docker exec postgres pg_dump -U postgres vip_memory > backup.sql
+docker exec postgres pg_dump -U postgres memstack > backup.sql
 
 # 恢复
-docker exec -i postgres psql -U postgres vip_memory < backup.sql
+docker exec -i postgres psql -U postgres memstack < backup.sql
 ```
 
 ## 高可用部署 (HA)
@@ -560,7 +560,7 @@ docker-compose logs neo4j
 docker exec neo4j cypher-shell -u neo4j -p password "RETURN 1"
 
 # 检查网络
-docker network inspect vip-memory_default
+docker network inspect memstack_default
 ```
 
 #### 3. API Key认证失败
@@ -571,7 +571,7 @@ docker-compose logs api | grep -i auth
 
 # 验证API Key格式
 curl -v http://localhost:8000/api/v1/episodes/ \
-  -H "Authorization: Bearer vpm_sk_your_key"
+  -H "Authorization: Bearer ms_sk_your_key"
 ```
 
 #### 4. 内存不足
@@ -660,11 +660,11 @@ docker exec new-neo4j neo4j-admin database load neo4j --from=/tmp/neo4j.dump
 
 ## 技术支持
 
-- **文档**: https://vip-memory.readthedocs.io
-- **Issues**: https://github.com/yourusername/vip-memory/issues
-- **讨论**: https://github.com/yourusername/vip-memory/discussions
+- **文档**: https://memstack.readthedocs.io
+- **Issues**: https://github.com/s1366560/memstack/issues
+- **讨论**: https://github.com/s1366560/memstack/discussions
 
 ---
 
-**更新时间**: 2024-12-19  
+**更新时间**: 2024-12-19
 **文档版本**: 1.0

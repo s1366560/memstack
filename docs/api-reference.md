@@ -1,4 +1,4 @@
-# VIP Memory API参考文档
+# MemStack API参考文档
 
 ## 基础信息
 
@@ -12,7 +12,7 @@
 所有API请求都需要在Header中包含API Key：
 
 ```http
-Authorization: Bearer vpm_sk_your_api_key_here
+Authorization: Bearer ms_sk_your_api_key_here
 ```
 
 ### 获取API Key
@@ -20,8 +20,8 @@ Authorization: Bearer vpm_sk_your_api_key_here
 开发环境下，服务器启动时会自动生成默认API Key并打印到日志：
 
 ```
-INFO:     Generated default API key: vpm_sk_abc123...
-INFO:     Default user created: developer@vip-memory.local
+INFO:     Generated default API key: ms_sk_abc123...
+INFO:     Default user created: developer@memstack.local
 ```
 
 生产环境下，通过用户管理系统创建API Key。
@@ -75,7 +75,7 @@ Host: localhost:8000
 **响应**
 ```json
 {
-  "name": "VIP Memory API",
+  "name": "MemStack API",
   "version": "0.1.0",
   "description": "Enterprise AI Memory Platform",
   "docs_url": "/docs"
@@ -137,7 +137,7 @@ Host: localhost:8000
 cURL:
 ```bash
 curl -X POST http://localhost:8000/api/v1/episodes/ \
-  -H "Authorization: Bearer vpm_sk_your_api_key" \
+  -H "Authorization: Bearer ms_sk_your_api_key" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "用户咨询",
@@ -147,9 +147,9 @@ curl -X POST http://localhost:8000/api/v1/episodes/ \
 
 Python SDK:
 ```python
-from vip_memory import VipMemoryClient
+from memstack import MemStackClient
 
-client = VipMemoryClient(api_key="vpm_sk_...")
+client = MemStackClient(api_key="ms_sk_...")
 response = client.create_episode(
     name="用户咨询",
     content="用户询问产品价格和配送时间"
@@ -238,7 +238,7 @@ print(f"Episode ID: {response.id}")
 cURL:
 ```bash
 curl -X POST http://localhost:8000/api/v1/memory/search \
-  -H "Authorization: Bearer vpm_sk_your_api_key" \
+  -H "Authorization: Bearer ms_sk_your_api_key" \
   -H "Content-Type: application/json" \
   -d '{
     "query": "会议室预订",
@@ -248,7 +248,7 @@ curl -X POST http://localhost:8000/api/v1/memory/search \
 
 Python SDK:
 ```python
-client = VipMemoryClient(api_key="vpm_sk_...")
+client = MemStackClient(api_key="ms_sk_...")
 results = client.search_memory(
     query="会议室预订",
     limit=5
@@ -328,10 +328,10 @@ X-RateLimit-Reset: 1703001600
 
 ### 1. 错误处理
 ```python
-from vip_memory import VipMemoryClient
-from vip_memory.exceptions import AuthenticationError, APIError
+from memstack import MemStackClient
+from memstack.exceptions import AuthenticationError, APIError
 
-client = VipMemoryClient(api_key="vpm_sk_...")
+client = MemStackClient(api_key="ms_sk_...")
 
 try:
     response = client.create_episode(name="Test", content="...")
@@ -349,8 +349,8 @@ SDK自动实现指数退避重试：
 
 ### 3. 超时设置
 ```python
-client = VipMemoryClient(
-    api_key="vpm_sk_...",
+client = MemStackClient(
+    api_key="ms_sk_...",
     timeout=60  # 60秒超时
 )
 ```
@@ -369,11 +369,11 @@ for episode in episodes:
 
 ### 5. 异步调用
 ```python
-from vip_memory import VipMemoryAsyncClient
+from memstack import MemStackAsyncClient
 import asyncio
 
 async def main():
-    async with VipMemoryAsyncClient(api_key="vpm_sk_...") as client:
+    async with MemStackAsyncClient(api_key="ms_sk_...") as client:
         tasks = [
             client.create_episode(name=f"Episode {i}", content="...")
             for i in range(10)
@@ -405,12 +405,12 @@ asyncio.run(main())
 
 ## 技术支持
 
-- **文档**: https://vip-memory.readthedocs.io
-- **GitHub**: https://github.com/yourusername/vip-memory
-- **Issues**: https://github.com/yourusername/vip-memory/issues
+- **文档**: https://memstack.readthedocs.io
+- **GitHub**: https://github.com/s1366560/memstack
+- **Issues**: https://github.com/s1366560/memstack/issues
 
 ---
 
-**更新时间**: 2024-12-19  
-**API版本**: v1  
+**更新时间**: 2024-12-19
+**API版本**: v1
 **文档版本**: 1.0

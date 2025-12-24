@@ -4,7 +4,7 @@ services:
   # Neo4j Graph Database
   neo4j:
     image: neo4j:5.26-community
-    container_name: vip-memory-neo4j
+    container_name: memstack-neo4j
     ports:
       - "7474:7474"  # HTTP
       - "7687:7687"  # Bolt
@@ -25,11 +25,11 @@ services:
   # PostgreSQL for metadata
   postgres:
     image: postgres:16-alpine
-    container_name: vip-memory-postgres
+    container_name: memstack-postgres
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_DB=vip_memory
+      - POSTGRES_DB=memstack
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=your_password_here
     volumes:
@@ -43,7 +43,7 @@ services:
   # Redis for caching
   redis:
     image: redis:7-alpine
-    container_name: vip-memory-redis
+    container_name: memstack-redis
     ports:
       - "6379:6379"
     volumes:
@@ -54,12 +54,12 @@ services:
       timeout: 5s
       retries: 5
 
-  # VIP Memory API Server
+  # MemStack API Server
   api:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: vip-memory-api
+    container_name: memstack-api
     ports:
       - "8000:8000"
     environment:
@@ -70,7 +70,7 @@ services:
       - NEO4J_PASSWORD=your_password_here
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
-      - POSTGRES_DB=vip_memory
+      - POSTGRES_DB=memstack
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=your_password_here
       - REDIS_HOST=redis

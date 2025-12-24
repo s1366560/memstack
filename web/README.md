@@ -1,6 +1,6 @@
-# VIP Memory Web Console
+# MemStack Web Console
 
-Modern React-based web console for VIP Memory - Enterprise AI Memory Cloud Platform.
+Modern React-based web console for MemStack - Enterprise AI Memory Cloud Platform.
 
 ## Features
 
@@ -25,7 +25,7 @@ Modern React-based web console for VIP Memory - Enterprise AI Memory Cloud Platf
 ### Prerequisites
 
 - Node.js 18+ and npm/yarn
-- Running VIP Memory API server (default: http://localhost:8000)
+- Running MemStack API server (default: http://localhost:8000)
 
 ### Install Dependencies
 
@@ -59,7 +59,7 @@ npm run preview
 
 ### API Endpoint
 
-The web console connects to the VIP Memory API. During development, the API is proxied through Vite:
+The web console connects to the MemStack API. During development, the API is proxied through Vite:
 
 ```typescript
 // vite.config.ts
@@ -108,13 +108,13 @@ web/
 ### Build Docker Image
 
 ```bash
-docker build -t vip-memory-web .
+docker build -t memstack-web .
 ```
 
 ### Run Container
 
 ```bash
-docker run -p 80:80 vip-memory-web
+docker run -p 80:80 memstack-web
 ```
 
 ### Docker Compose
@@ -135,7 +135,7 @@ services:
 ### 1. Configure API Key
 
 1. Navigate to Settings
-2. Enter your VIP Memory API key (starts with `vpm_sk_`)
+2. Enter your MemStack API key (starts with `ms_sk_`)
 3. Click "Save Settings"
 
 ### 2. Create Episodes

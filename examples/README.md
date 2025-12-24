@@ -1,12 +1,12 @@
-# VIP Memory 使用示例
+# MemStack 使用示例
 
-本目录包含 VIP Memory API 的使用示例。
+本目录包含 MemStack API 的使用示例。
 
 ## 基础使用示例
 
 ### basic_usage.py
 
-演示如何使用 VIP Memory API 的基本功能：
+演示如何使用 MemStack API 的基本功能：
 
 1. 创建 Episodes（文本和 JSON 格式）
 2. 搜索记忆
@@ -26,7 +26,7 @@ python examples/basic_usage.py
 
 ```
 ================================================================================
-VIP Memory API 使用示例
+MemStack API 使用示例
 ================================================================================
 
 确保服务正在运行: python -m server.main
@@ -35,7 +35,7 @@ VIP Memory API 使用示例
 ================================================================================
 
 1. 检查服务健康状态...
-   状态: {'status': 'healthy', 'service': 'vip-memory'}
+   状态: {'status': 'healthy', 'service': 'memstack'}
 
 2. 创建第一个 Episode（用户偏好）...
    响应: {'id': '...', 'status': 'processing', 'message': 'Episode queued for ingestion', 'created_at': '...'}

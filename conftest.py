@@ -20,7 +20,7 @@ def test_config():
         "neo4j_user": os.getenv("TEST_NEO4J_USER", "neo4j"),
         "neo4j_password": os.getenv("TEST_NEO4J_PASSWORD", "testpassword"),
         "redis_url": os.getenv("TEST_REDIS_URL", "redis://localhost:6379"),
-        "postgres_url": os.getenv("TEST_POSTGRES_URL", "postgresql://localhost/vip_memory_test"),
+        "postgres_url": os.getenv("TEST_POSTGRES_URL", "postgresql://localhost/memstack_test"),
         "secret_key": "test-secret-key-for-testing-only",
     }
 

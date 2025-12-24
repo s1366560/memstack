@@ -12,31 +12,31 @@ import pytest
 sdk_path = Path(__file__).parent.parent / "sdk" / "python"
 sys.path.insert(0, str(sdk_path))
 
-from vip_memory import VipMemoryAsyncClient, VipMemoryClient  # noqa: E402
-from vip_memory.exceptions import AuthenticationError  # noqa: E402
-from vip_memory.models import EpisodeResponse, MemoryResponse  # noqa: E402
+from memstack import MemStackAsyncClient, MemStackClient  # noqa: E402
+from memstack.exceptions import AuthenticationError  # noqa: E402
+from memstack.models import EpisodeResponse, MemoryResponse  # noqa: E402
 
 
-class TestVipMemoryClient:
+class TestMemStackClient:
     """Tests for synchronous client."""
 
     def test_init_with_valid_key(self):
         """Test client initialization with valid API key."""
-        client = VipMemoryClient(api_key="vpm_sk_test123")
-        assert client.api_key == "vpm_sk_test123"
+        client = MemStackClient(api_key="ms_sk_test123")
+        assert client.api_key == "ms_sk_test123"
 
     def test_init_with_invalid_key(self):
         """Test client initialization with invalid API key."""
         with pytest.raises(AuthenticationError):
-            VipMemoryClient(api_key="invalid_key")
+            MemStackClient(api_key="invalid_key")
 
     def test_get_headers(self):
         """Test header generation."""
-        client = VipMemoryClient(api_key="vpm_sk_test123")
+        client = MemStackClient(api_key="ms_sk_test123")
         headers = client._get_headers()
 
         assert "Authorization" in headers
-        assert headers["Authorization"] == "Bearer vpm_sk_test123"
+        assert headers["Authorization"] == "Bearer ms_sk_test123"
         assert headers["Content-Type"] == "application/json"
 
     @patch("httpx.Client.request")
@@ -52,7 +52,7 @@ class TestVipMemoryClient:
         }
         mock_request.return_value = mock_response
 
-        client = VipMemoryClient(api_key="vpm_sk_test123")
+        client = MemStackClient(api_key="ms_sk_test123")
         response = client.create_episode(
             name="Test Episode",
             content="Test content",
@@ -70,7 +70,7 @@ class TestVipMemoryClient:
         mock_response.text = "Unauthorized"
         mock_request.return_value = mock_response
 
-        client = VipMemoryClient(api_key="vpm_sk_test123")
+        client = MemStackClient(api_key="ms_sk_test123")
 
         with pytest.raises(AuthenticationError):
             client.create_episode(name="Test", content="Content")
@@ -94,7 +94,7 @@ class TestVipMemoryClient:
         }
         mock_request.return_value = mock_response
 
-        client = VipMemoryClient(api_key="vpm_sk_test123")
+        client = MemStackClient(api_key="ms_sk_test123")
         response = client.search_memory(query="test query")
 
         assert isinstance(response, MemoryResponse)
@@ -103,26 +103,26 @@ class TestVipMemoryClient:
 
     def test_context_manager(self):
         """Test client as context manager."""
-        with VipMemoryClient(api_key="vpm_sk_test123") as client:
-            assert client.api_key == "vpm_sk_test123"
+        with MemStackClient(api_key="ms_sk_test123") as client:
+            assert client.api_key == "ms_sk_test123"
 
 
 @pytest.mark.asyncio
-class TestVipMemoryAsyncClient:
+class TestMemStackAsyncClient:
     """Tests for asynchronous client."""
 
     async def test_init_with_valid_key(self):
         """Test async client initialization with valid API key."""
-        client = VipMemoryAsyncClient(api_key="vpm_sk_test123")
-        assert client.api_key == "vpm_sk_test123"
+        client = MemStackAsyncClient(api_key="ms_sk_test123")
+        assert client.api_key == "ms_sk_test123"
         await client.close()
 
     async def test_init_with_invalid_key(self):
         """Test async client initialization with invalid API key."""
         with pytest.raises(AuthenticationError):
-            VipMemoryAsyncClient(api_key="invalid_key")
+            MemStackAsyncClient(api_key="invalid_key")
 
     async def test_context_manager(self):
         """Test async client as context manager."""
-        async with VipMemoryAsyncClient(api_key="vpm_sk_test123") as client:
-            assert client.api_key == "vpm_sk_test123"
+        async with MemStackAsyncClient(api_key="ms_sk_test123") as client:
+            assert client.api_key == "ms_sk_test123"

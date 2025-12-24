@@ -1,15 +1,34 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SpaceDashboard } from '../../pages/SpaceDashboard';
 import { useTenantStore } from '../../stores/tenant';
 import { useProjectStore } from '../../stores/project';
+import { tenantAPI } from '../../services/api';
 
-// Mock AppLayout
+// Mock tenantAPI
+vi.mock('../../services/api', () => ({
+  tenantAPI: {
+    getStats: vi.fn(),
+  },
+}));
+
+// Mock AppLayout to render navigation items so we can switch tabs
 vi.mock('../../components/AppLayout', () => ({
-  AppLayout: ({ children, title }: any) => (
+  AppLayout: ({ children, title, navigationGroups }: any) => (
     <div data-testid="app-layout">
       <h1>{title}</h1>
+      <nav>
+        {navigationGroups?.map((group: any) => (
+          <div key={group.title}>
+            {group.items.map((item: any) => (
+              <button key={item.id} onClick={item.onClick}>
+                {item.label}
+              </button>
+            ))}
+          </div>
+        ))}
+      </nav>
       {children}
     </div>
   ),
@@ -56,6 +75,13 @@ describe('SpaceDashboard', () => {
       listProjects: mockListProjects,
       setCurrentProject: mockSetCurrentProject,
     });
+    (tenantAPI.getStats as any).mockResolvedValue({
+      storage: { used: 0, total: 100, percentage: 0 },
+      projects: { active: 0, new_this_week: 0, list: [] },
+      members: { total: 0, new_added: 0 },
+      memory_history: [],
+      tenant_info: { organization_id: 'org', plan: 'free', region: 'us', next_billing_date: '2023-01-01' }
+    });
   });
 
   it('should load initial data', () => {
@@ -69,7 +95,7 @@ describe('SpaceDashboard', () => {
     expect(mockListProjects).toHaveBeenCalledWith('123');
   });
 
-  it('should render project list', () => {
+  it('should render project list', async () => {
     const mockProjects = [
       { id: 'p1', name: 'Project 1', created_at: new Date().toISOString() },
       { id: 'p2', name: 'Project 2', created_at: new Date().toISOString() },
@@ -86,6 +112,9 @@ describe('SpaceDashboard', () => {
         <SpaceDashboard />
       </BrowserRouter>
     );
+
+    // Switch to Projects tab
+    fireEvent.click(screen.getByText('Projects'));
 
     expect(screen.getByText('Project 1')).toBeInTheDocument();
     expect(screen.getByText('Project 2')).toBeInTheDocument();
@@ -105,6 +134,9 @@ describe('SpaceDashboard', () => {
       </BrowserRouter>
     );
 
+    // Switch to Projects tab
+    fireEvent.click(screen.getByText('Projects'));
+
     fireEvent.click(screen.getByText('Project 1'));
     expect(mockSetCurrentProject).toHaveBeenCalledWith(mockProject);
     expect(mockNavigate).toHaveBeenCalledWith('/space/123/project/p1');
@@ -117,7 +149,12 @@ describe('SpaceDashboard', () => {
       </BrowserRouter>
     );
 
-    fireEvent.click(screen.getByText('新建项目'));
+    // Switch to Projects tab (New Project button is in Projects tab)
+    fireEvent.click(screen.getByText('Projects'));
+
+    // In the Projects tab, there is a "New Project" button, not "新建项目" (English in SpaceDashboard.tsx)
+    // Looking at SpaceDashboard.tsx: <span>New Project</span>
+    fireEvent.click(screen.getByText('New Project'));
     expect(screen.getByTestId('create-project-modal')).toBeInTheDocument();
   });
 });

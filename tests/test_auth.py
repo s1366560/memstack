@@ -20,13 +20,13 @@ def test_generate_api_key():
     """Test API key generation."""
     key = generate_api_key()
 
-    assert key.startswith("vpm_sk_")
+    assert key.startswith("ms_sk_")
     assert len(key) > 20
 
 
 def test_hash_api_key():
     """Test API key hashing."""
-    key = "vpm_sk_test123"
+    key = "ms_sk_test123"
     hashed = hash_api_key(key)
 
     assert hashed != key
@@ -35,7 +35,7 @@ def test_hash_api_key():
 
 def test_verify_api_key():
     """Test API key verification."""
-    key = "vpm_sk_test123"
+    key = "ms_sk_test123"
     hashed = hash_api_key(key)
 
     assert verify_api_key(key, hashed) is True
@@ -76,7 +76,7 @@ async def test_create_api_key(mock_db_session):
         expires_in_days=30,
     )
 
-    assert plain_key.startswith("vpm_sk_")
+    assert plain_key.startswith("ms_sk_")
     assert isinstance(api_key_obj, APIKey)
     assert api_key_obj.name == "Test Key"
     assert api_key_obj.user_id == user.id

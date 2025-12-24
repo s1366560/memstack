@@ -1,7 +1,7 @@
-# VIP Memory Repository Guidelines
+# MemStack Repository Guidelines
 
 ## Project Structure & Module Organization
-VIP Memory is a knowledge graph-based memory system built on FastAPI and Graphiti. The project structure follows a three-tier architecture:
+MemStack is a knowledge graph-based memory system built on FastAPI and Graphiti. The project structure follows a three-tier architecture:
 
 - **Server** (`server/`): FastAPI backend with authentication, API routes, and Graphiti service integration
   - `api/`: REST endpoints for episodes and memory search
@@ -13,10 +13,10 @@ VIP Memory is a knowledge graph-based memory system built on FastAPI and Graphit
   - `main.py`: FastAPI application entry point
 
 - **SDK** (`sdk/python/`): Python client library for programmatic access
-  - `vip_memory/client.py`: Synchronous HTTP client with retry logic
-  - `vip_memory/async_client.py`: Async/await client for high-performance applications  
-  - `vip_memory/models.py`: Request/response models mirroring server schemas
-  - `vip_memory/exceptions.py`: Client error hierarchy
+  - `memstack/client.py`: Synchronous HTTP client with retry logic
+  - `memstack/async_client.py`: Async/await client for high-performance applications  
+  - `memstack/models.py`: Request/response models mirroring server schemas
+  - `memstack/exceptions.py`: Client error hierarchy
 
 - **Web Console** (`web/`): React-based management interface
   - Built with Vite, TypeScript, Ant Design
@@ -44,7 +44,7 @@ VIP Memory is a knowledge graph-based memory system built on FastAPI and Graphit
 ## Coding Style & Naming Conventions
 Python code uses 4-space indentation, 100-character lines, and single quotes (enforced by ruff). 
 - Modules and files: `snake_case` (e.g., `graphiti_service.py`)
-- Classes: `PascalCase` (e.g., `VipMemoryClient`, `APIKey`)
+- Classes: `PascalCase` (e.g., `MemStackClient`, `APIKey`)
 - Functions and variables: `snake_case` (e.g., `verify_api_key`, `created_at`)
 - Constants: `UPPER_SNAKE_CASE` (e.g., `API_KEY_PREFIX`)
 - Pydantic models use explicit type hints with Field(...) descriptors
@@ -87,7 +87,7 @@ Pull requests should include:
 Keep PRs focused and reasonably sized. For large refactors, break into incremental PRs that maintain functionality at each step.
 
 ## Authentication & Security
-- API Key format: `vpm_sk_<64-character-hex>`
+- API Key format: `ms_sk_<64-character-hex>`
 - Keys are SHA256 hashed before storage (never store plaintext)
 - Default dev key auto-generated on server startup (logged to console)
 - SDK clients automatically add `Authorization: Bearer <key>` header
@@ -104,7 +104,7 @@ Keep PRs focused and reasonably sized. For large refactors, break into increment
 7. Commit with clear message, push, open PR
 
 For SDK development:
-- Work in `sdk/python/vip_memory/`
+- Work in `sdk/python/memstack/`
 - Test with `make sdk-test` 
 - Build distribution: `make sdk-build`
 - SDK versioning follows semantic versioning (MAJOR.MINOR.PATCH)

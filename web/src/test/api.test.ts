@@ -223,7 +223,7 @@ describe('API Services', () => {
 
             const result = await memoryAPI.search('project-1', { query: 'test' })
 
-            expect(mockApiInstance.post).toHaveBeenCalledWith('/memories/search', { query: 'test', project_id: 'project-1' })
+            expect(mockApiInstance.post).toHaveBeenCalledWith('/memory/search', { query: 'test', project_id: 'project-1' })
             expect(result).toEqual(mockResponse.data)
         })
 

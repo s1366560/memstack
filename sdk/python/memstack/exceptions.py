@@ -1,23 +1,23 @@
 """
-Custom exceptions for VIP Memory SDK.
+Custom exceptions for MemStack SDK.
 """
 
 
-class VipMemoryError(Exception):
-    """Base exception for VIP Memory SDK."""
+class MemStackError(Exception):
+    """Base exception for MemStack SDK."""
 
     def __init__(self, message: str):
         super().__init__(message)
         self.message = message
 
 
-class AuthenticationError(VipMemoryError):
+class AuthenticationError(MemStackError):
     """Raised when authentication fails."""
 
     pass
 
 
-class APIError(VipMemoryError):
+class APIError(MemStackError):
     """Raised when API request fails."""
 
     def __init__(self, message: str, status_code: int = None, response_body: dict = None):
@@ -26,7 +26,7 @@ class APIError(VipMemoryError):
         self.response_body = response_body
 
 
-class RateLimitError(VipMemoryError):
+class RateLimitError(MemStackError):
     """Raised when rate limit is exceeded."""
 
     def __init__(self, message: str, retry_after: int = None):
@@ -34,13 +34,13 @@ class RateLimitError(VipMemoryError):
         self.retry_after = retry_after
 
 
-class ValidationError(VipMemoryError):
+class ValidationError(MemStackError):
     """Raised when input validation fails."""
 
     pass
 
 
-class NetworkError(VipMemoryError):
+class NetworkError(MemStackError):
     """Raised when network request fails."""
 
     pass

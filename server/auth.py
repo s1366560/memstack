@@ -23,7 +23,7 @@ security = HTTPBearer()
 def generate_api_key() -> str:
     """Generate a new API key."""
     random_bytes = secrets.token_bytes(32)
-    key = f"vpm_sk_{random_bytes.hex()}"
+    key = f"ms_sk_{random_bytes.hex()}"
     return key
 
 
@@ -55,10 +55,10 @@ async def get_api_key_from_header(
     else:
         api_key = authorization
 
-    if not api_key.startswith("vpm_sk_"):
+    if not api_key.startswith("ms_sk_"):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key format. API keys should start with 'vpm_sk_'",
+            detail="Invalid API key format. API keys should start with 'ms_sk_'",
         )
 
     return api_key
@@ -192,13 +192,13 @@ async def initialize_default_credentials():
     async with async_session_factory() as db:
         try:
             # Check if default user exists
-            result = await db.execute(select(DBUser).where(DBUser.email == "admin@vipmemory.com"))
+            result = await db.execute(select(DBUser).where(DBUser.email == "admin@memstack.ai"))
             user = result.scalar_one_or_none()
 
             if not user:
                 user = await create_user(
                     db,
-                    email="admin@vipmemory.com",
+                    email="admin@memstack.ai",
                     name="Default Admin",
                     role="admin",
                 )
@@ -215,13 +215,13 @@ async def initialize_default_credentials():
                 print(f"📧 Default Admin Email: {user.email}")
 
             # Check if default regular user exists
-            result = await db.execute(select(DBUser).where(DBUser.email == "user@vipmemory.com"))
+            result = await db.execute(select(DBUser).where(DBUser.email == "user@memstack.ai"))
             normal_user = result.scalar_one_or_none()
 
             if not normal_user:
                 normal_user = await create_user(
                     db,
-                    email="user@vipmemory.com",
+                    email="user@memstack.ai",
                     name="Default User",
                     role="user",
                 )

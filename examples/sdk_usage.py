@@ -1,5 +1,5 @@
 """
-Basic usage example using the VIP Memory SDK.
+Basic usage example using the MemStack SDK.
 """
 
 import asyncio
@@ -11,20 +11,20 @@ from pathlib import Path
 sdk_path = Path(__file__).parent.parent / "sdk" / "python"
 sys.path.insert(0, str(sdk_path))
 
-from vip_memory import VipMemoryAsyncClient
+from memstack import MemStackAsyncClient
 
 
 async def main():
     """Run basic SDK usage example."""
 
     # Get API key from environment or use default for development
-    api_key = os.getenv("VIP_MEMORY_API_KEY", "vpm_sk_default_dev_key")
-    base_url = os.getenv("VIP_MEMORY_BASE_URL", "http://localhost:8000")
+    api_key = os.getenv("MEMSTACK_API_KEY", "ms_sk_default_dev_key")
+    base_url = os.getenv("MEMSTACK_BASE_URL", "http://localhost:8000")
 
-    print("🚀 VIP Memory SDK Basic Usage Example")
+    print("🚀 MemStack SDK Basic Usage Example")
     print("=" * 50)
 
-    async with VipMemoryAsyncClient(api_key=api_key, base_url=base_url) as client:
+    async with MemStackAsyncClient(api_key=api_key, base_url=base_url) as client:
         # Check health
         print("\n1. Checking API health...")
         try:

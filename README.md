@@ -1,4 +1,4 @@
-# VIP Memory - 企业级 AI 记忆云平台
+# MemStack - 企业级 AI 记忆云平台
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-green.svg)](https://fastapi.tiangolo.com/)
@@ -17,12 +17,12 @@
 - 🌐 **Web控制台** - 基于React的可视化管理界面
 - 📝 **备忘录(Memos)** - 类似 Flomo 的轻量级记录，支持标签和隐私控制
 - 🕸️ **图谱可视化** - 交互式知识图谱展示
-- 🧪 **高测试覆盖** - 52%+测试覆盖率，持续集成保障
+- 🧪 **高测试覆盖** - 80%+测试覆盖率，持续集成保障
 - 🤖 **多 LLM 支持** - Google Gemini 和阿里云通义千问 (Qwen)
 
 ## 📋 项目架构
 
-VIP Memory采用三层架构设计：
+MemStack采用三层架构设计：
 
 ### 1. Server (FastAPI后端)
 ```
@@ -48,7 +48,7 @@ server/
 
 ### 2. SDK (Python客户端)
 ```
-sdk/python/vip_memory/
+sdk/python/memstack/
 ├── client.py         # 同步HTTP客户端
 ├── async_client.py   # 异步HTTP客户端
 ├── models.py         # 请求/响应模型
@@ -75,9 +75,9 @@ web/
 
 ### 前置要求
 
-- **Python**: 3.10+ 
+- **Python**: 3.10+
 - **Node.js**: 18+ (仅Web开发)
-- **Neo4j**: 5.26+ 
+- **Neo4j**: 5.26+
 - **PostgreSQL**: 16+ (可选，用于元数据)
 - **Redis**: 7+ (可选，用于缓存)
 - **LLM API**: Google Gemini 或阿里云通义千问
@@ -86,8 +86,8 @@ web/
 
 ```bash
 # 克隆仓库
-git clone https://github.com/yourusername/vip-memory.git
-cd vip-memory
+git clone https://github.com/s1366560/memstack.git
+cd memstack
 
 # 使用 uv 安装（推荐）
 uv sync --extra dev
@@ -145,7 +145,7 @@ open http://localhost:8000/docs
 
 # 获取默认API Key (开发模式)
 # 在服务器启动日志中查找:
-# "Generated default API key: vpm_sk_..."
+# "Generated default API key: ms_sk_..."
 ```
 
 ## 📚 使用指南
@@ -159,11 +159,11 @@ pip install ./sdk/python
 
 #### 同步客户端
 ```python
-from vip_memory import VipMemoryClient
+from memstack import MemStackClient
 
 # 初始化客户端
-client = VipMemoryClient(
-    api_key="vpm_sk_your_api_key",
+client = MemStackClient(
+    api_key="ms_sk_your_api_key",
     base_url="http://localhost:8000/api/v1"
 )
 
@@ -187,11 +187,11 @@ for result in results.results:
 
 #### 异步客户端
 ```python
-from vip_memory import VipMemoryAsyncClient
+from memstack import MemStackAsyncClient
 import asyncio
 
 async def main():
-    async with VipMemoryAsyncClient(api_key="vpm_sk_...") as client:
+    async with MemStackAsyncClient(api_key="ms_sk_...") as client:
         # 创建Episode
         response = await client.create_episode(
             name="异步对话",
@@ -217,7 +217,7 @@ asyncio.run(main())
 
 ```bash
 # 设置API Key
-export API_KEY="vpm_sk_your_api_key"
+export API_KEY="ms_sk_your_api_key"
 
 # 创建Episode
 curl -X POST http://localhost:8000/api/v1/episodes/ \
@@ -255,7 +255,7 @@ make clean          # 清理临时文件
 ```
 
 ### 测试覆盖率
-当前测试覆盖率: **52%** (31个测试，全部通过)
+当前测试覆盖率: **80%+**
 
 详细测试报告: [TEST_REPORT.md](TEST_REPORT.md)
 
@@ -285,18 +285,18 @@ open htmlcov/index.html
 
 ## 🔐 认证机制
 
-VIP Memory使用API Key进行认证：
+MemStack使用API Key进行认证：
 
 ### API Key格式
-- 前缀: `vpm_sk_`
+- 前缀: `ms_sk_`
 - 长度: 71字符 (前缀 + 64位十六进制)
 - 存储: SHA256哈希后存储，不保存明文
 
 ### 开发环境
 服务启动时自动生成默认API Key并打印到日志：
 ```
-INFO:     Generated default API key: vpm_sk_abc123...
-INFO:     Default user created: developer@vip-memory.local
+INFO:     Generated default API key: ms_sk_abc123...
+INFO:     Default user created: developer@memstack.local
 ```
 
 ### 生产环境
@@ -309,7 +309,7 @@ DELETE /api/v1/auth/keys/{id} # 删除Key
 ```
 
 ### 认证流程
-1. 客户端在请求头中添加: `Authorization: Bearer vpm_sk_...`
+1. 客户端在请求头中添加: `Authorization: Bearer ms_sk_...`
 2. 服务器验证API Key是否存在且有效
 3. 检查权限和过期时间
 4. 返回认证结果或401错误
@@ -335,12 +335,12 @@ docker-compose logs -f
 ```bash
 # 构建Web应用镜像
 cd web
-docker build -t vip-memory-web .
+docker build -t memstack-web .
 
 # 运行容器
 docker run -d -p 80:80 \
   -e API_URL=http://api:8000 \
-  vip-memory-web
+  memstack-web
 ```
 
 ## 🤝 贡献指南
@@ -371,7 +371,7 @@ docker run -d -p 80:80 \
 - ✅ Python SDK (同步/异步)
 - ✅ React Web控制台
 - ✅ Docker部署配置
-- ✅ 测试基础设施 (52%覆盖率)
+- ✅ 测试基础设施 (80%+覆盖率)
 - ✅ 完整文档和示例
 
 ## 📄 许可证
@@ -390,9 +390,9 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 
 ## 📞 联系方式
 
-- 项目主页: [https://github.com/yourusername/vip-memory](https://github.com/yourusername/vip-memory)
-- 问题反馈: [GitHub Issues](https://github.com/yourusername/vip-memory/issues)
-- 文档网站: [https://vip-memory.readthedocs.io](https://vip-memory.readthedocs.io)
+- 项目主页: [https://github.com/s1366560/memstack](https://github.com/s1366560/memstack)
+- 问题反馈: [GitHub Issues](https://github.com/s1366560/memstack/issues)
+- 文档网站: [https://memstack.readthedocs.io](https://memstack.readthedocs.io)
 
 ---
 

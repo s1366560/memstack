@@ -1,6 +1,6 @@
-# VIP Memory 快速入门指南
+# MemStack 快速入门指南
 
-本指南将帮助您快速启动和使用 VIP Memory 平台。
+本指南将帮助您快速启动和使用 MemStack 平台。
 
 ## 前置要求
 
@@ -13,8 +13,8 @@
 ### 1. 克隆仓库
 
 ```bash
-git clone https://github.com/yourusername/vip-memory.git
-cd vip-memory
+git clone https://github.com/s1366560/memstack.git
+cd memstack
 ```
 
 ### 2. 配置环境变量
@@ -40,7 +40,7 @@ docker-compose up -d
 - Neo4j（端口 7474, 7687）
 - PostgreSQL（端口 5432）
 - Redis（端口 6379）
-- VIP Memory API（端口 8000）
+- MemStack API（端口 8000）
 
 ### 4. 验证服务
 
@@ -123,26 +123,27 @@ print(response.json())
 # 输出: {"results": [...], "total": 1, "query": "..."}
 ```
 
-### 3. 使用 Python SDK（开发中）
+### 3. 使用 Python SDK
 
 ```python
-from vip_memory import VIPMemoryClient
+from memstack import MemStackClient
 
 # 初始化客户端
-client = VIPMemoryClient(
-    api_url="http://localhost:8000",
-    api_key="your-api-key"
+client = MemStackClient(
+    api_key="your-api-key",
+    base_url="http://localhost:8000"
 )
 
 # 添加 episode
-episode = client.add_episode(
+episode = client.create_episode(
+    name="Test Episode",
     content="Alice is a software engineer at TechCorp.",
     metadata={"department": "Engineering"}
 )
 
 # 搜索记忆
-results = client.search("Who is Alice?")
-for result in results:
+results = client.search_memory("Who is Alice?")
+for result in results.results:
     print(f"Content: {result.content}")
     print(f"Score: {result.score}")
 ```
@@ -180,9 +181,8 @@ pytest --cov=server tests/
 
 ## 下一步
 
-- 查看 [API 文档](api.md)
+- 查看 [API 文档](api-reference.md)
 - 了解 [架构设计](../README.md#架构设计)
-- 阅读[完整设计文档](../.qoder/quests/cloud-product-creation.md)
 
 ## 故障排除
 
@@ -191,7 +191,7 @@ pytest --cov=server tests/
 确保 Neo4j 已启动并且凭据正确：
 
 ```bash
-docker logs vip-memory-neo4j
+docker logs memstack-neo4j
 ```
 
 ### OpenAI API 错误
@@ -208,5 +208,5 @@ echo $OPENAI_API_KEY
 
 ## 获取帮助
 
-- GitHub Issues: https://github.com/yourusername/vip-memory/issues
-- 文档: https://github.com/yourusername/vip-memory/docs
+- GitHub Issues: https://github.com/s1366560/memstack/issues
+- 文档: https://github.com/s1366560/memstack/docs

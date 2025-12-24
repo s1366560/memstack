@@ -1,7 +1,7 @@
 .PHONY: install test format lint clean dev serve help web-install web-dev web-build
 
 help:
-	@echo "vip-memory Development Commands"
+	@echo "MemStack Development Commands"
 	@echo "================================"
 	@echo "install     - Install all dependencies (dev + production)"
 	@echo "test        - Run all tests with coverage"
@@ -24,10 +24,10 @@ install:
 	pip install -e ".[dev,neo4j,evaluation]"
 
 test:
-	uv run pytest tests/ --cov=server --cov=sdk/python/vip_memory --cov-report=html --cov-report=term-missing --cov-fail-under=50
+	uv run pytest tests/ --cov=server --cov=sdk/python/memstack --cov-report=html --cov-report=term-missing --cov-fail-under=50
 
 test-unit:
-	uv run pytest tests/ -m "not integration" --cov=server --cov=sdk/python/vip_memory --cov-report=term-missing
+	uv run pytest tests/ -m "not integration" --cov=server --cov=sdk/python/memstack --cov-report=term-missing
 
 test-integration:
 	uv run pytest tests/ -m "integration" -v
@@ -71,7 +71,7 @@ sdk-install:
 	cd sdk/python && pip install -e ".[dev]"
 
 sdk-test:
-	pytest sdk/python/tests/ --cov=sdk/python/vip_memory --cov-report=term-missing
+	pytest sdk/python/tests/ --cov=sdk/python/memstack --cov-report=term-missing
 
 sdk-build:
 	cd sdk/python && python -m build

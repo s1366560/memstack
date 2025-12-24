@@ -13,6 +13,7 @@ vi.mock('lucide-react', () => ({
     Bell: () => <span>Bell</span>,
     LogOut: () => <span>LogOut</span>,
     Brain: () => <span>Brain</span>,
+    Search: () => <span>Search</span>,
 }));
 
 // Mock useAuthStore
@@ -44,11 +45,11 @@ describe('AppLayout', () => {
         });
     });
 
-    it('should render title and children', () => {
+    it('should render breadcrumbs and children', () => {
         render(
             <BrowserRouter>
                 <AppLayout
-                    title="Test Title"
+                    breadcrumbs={['Home', 'Test Title']}
                     navigationItems={mockNavigationItems}
                 >
                     <div>Test Content</div>
@@ -56,7 +57,7 @@ describe('AppLayout', () => {
             </BrowserRouter>
         );
 
-        expect(screen.getAllByText('Test Title')[0]).toBeInTheDocument();
+        expect(screen.getByText('Test Title')).toBeInTheDocument();
         expect(screen.getByText('Test Content')).toBeInTheDocument();
     });
 
@@ -97,27 +98,7 @@ describe('AppLayout', () => {
         expect(mockNavigationItems[1].onClick).toHaveBeenCalled();
     });
 
-    it('should render context info when provided', () => {
-        const contextInfo = {
-            tenantName: 'Test Tenant',
-            projectName: 'Test Project',
-        };
 
-        render(
-            <BrowserRouter>
-                <AppLayout
-                    title="Test Title"
-                    navigationItems={mockNavigationItems}
-                    contextInfo={contextInfo}
-                >
-                    <div>Content</div>
-                </AppLayout>
-            </BrowserRouter>
-        );
-
-        expect(screen.getAllByText('Test Tenant')[0]).toBeInTheDocument();
-        expect(screen.getAllByText('Test Project')[0]).toBeInTheDocument();
-    });
 
     it('should toggle mobile menu', () => {
         render(

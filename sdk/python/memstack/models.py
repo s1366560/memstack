@@ -1,5 +1,5 @@
 """
-Pydantic models for VIP Memory SDK.
+Pydantic models for MemStack SDK.
 """
 
 from datetime import datetime

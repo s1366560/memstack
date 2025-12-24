@@ -34,7 +34,7 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     # Startup
-    logger.info("Starting VIP Memory application...")
+    logger.info("Starting MemStack application...")
     
     # Create tables
     try:
@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
     yield
     
     # Shutdown
-    logger.info("Shutting down VIP Memory application...")
+    logger.info("Shutting down MemStack application...")
     
     # Close Graphiti service
     try:
@@ -71,7 +71,7 @@ async def lifespan(app: FastAPI):
 def setup_app() -> FastAPI:
     """Setup FastAPI app."""
     app = FastAPI(
-        title="VIP Memory API",
+        title="MemStack API",
         description="Enterprise-grade AI Memory Cloud Platform based on Graphiti",
         version="0.1.0",
         docs_url="/docs",

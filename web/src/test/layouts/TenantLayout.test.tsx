@@ -4,7 +4,14 @@ import { screen, fireEvent, render } from '../utils'
 import { TenantLayout } from '../../layouts/TenantLayout'
 import { useTenantStore } from '../../stores/tenant'
 
-vi.mock('../../stores/tenant')
+vi.mock('../../stores/tenant', () => {
+    const mockStore = vi.fn()
+    // @ts-ignore
+    mockStore.getState = vi.fn(() => ({
+        tenants: [{ id: 't1', name: 'Test Tenant' }]
+    }))
+    return { useTenantStore: mockStore }
+})
 vi.mock('../../components/WorkspaceSwitcher', () => ({
     WorkspaceSwitcher: () => <div>MockSwitcher</div>
 }))
@@ -45,20 +52,22 @@ describe('TenantLayout', () => {
 
         // Should be collapsed (text hidden or styled differently, hard to test strict visibility with just jsdom sometimes, 
         // but we can check if the class changed or if text is gone from accessibility tree if conditional rendering is used)
-        
+
         // In our implementation, we hide text with conditional rendering: {!isSidebarCollapsed && ...}
         expect(screen.queryByText('Overview')).not.toBeInTheDocument()
     })
 
     it('syncs tenant from URL', () => {
         const getTenantMock = vi.fn()
+        const setCurrentTenantMock = vi.fn()
         vi.mocked(useTenantStore).mockReturnValue({
             currentTenant: null,
             getTenant: getTenantMock,
+            setCurrentTenant: setCurrentTenantMock,
         } as any)
 
         render(<TenantLayout />, { route: '/tenant/t123' })
-        
+
         // The component uses useParams which might not work perfectly with MemoryRouter initialEntries directly 
         // unless we render with a Route path.
         // But let's see if we can mock useParams or use a Route wrapper in render.
