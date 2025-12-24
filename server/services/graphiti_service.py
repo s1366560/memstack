@@ -1346,6 +1346,7 @@ class GraphitiService:
     async def delete_episode(self, episode_name: str) -> bool:
         """
         Delete an episode and its relationships.
+        Also cleans up orphaned entities (entities not mentioned by any other episode).
 
         Args:
             episode_name: Episode name
@@ -1354,15 +1355,38 @@ class GraphitiService:
             True if deleted, False if not found
         """
         try:
-            query = """
+            # Step 1: Check existence and get entities
+            check_query = """
             MATCH (e:Episodic {name: $name})
-            DETACH DELETE e
-            RETURN count(e) as deleted
+            OPTIONAL MATCH (e)-[:MENTIONS]->(n:Entity)
+            RETURN e, collect(distinct n) as entities
             """
-            result = await self.client.driver.execute_query(query, name=episode_name)
-            deleted = result.records[0]["deleted"] if result.records else 0
-            logger.info(f"Deleted {deleted} episode(s)")
-            return deleted > 0
+            check_res = await self.client.driver.execute_query(check_query, name=episode_name)
+            if not check_res.records:
+                return False
+                
+            entities = check_res.records[0]["entities"]
+            
+            # Step 2: Delete episode
+            del_ep_query = "MATCH (e:Episodic {name: $name}) DETACH DELETE e"
+            await self.client.driver.execute_query(del_ep_query, name=episode_name)
+            
+            # Step 3: Cleanup entities
+            if entities:
+                # We can't pass Node objects directly back to query easily sometimes, better use UUIDs
+                entity_uuids = [e["uuid"] for e in entities if "uuid" in e]
+                if entity_uuids:
+                    cleanup_query = """
+                    UNWIND $uuids as uuid
+                    MATCH (n:Entity {uuid: uuid})
+                    WHERE NOT (n)<-[:MENTIONS]-(:Episodic)
+                    DETACH DELETE n
+                    """
+                    await self.client.driver.execute_query(cleanup_query, uuids=entity_uuids)
+            
+            logger.info(f"Deleted episode {episode_name} and cleaned up orphans")
+            return True
+            
         except Exception as e:
             logger.error(f"Failed to delete episode: {e}")
             raise

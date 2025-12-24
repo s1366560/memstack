@@ -75,9 +75,11 @@ async def test_short_term_recall():
     service = GraphitiService()
     mock_driver = Mock()
     mock_result = Mock()
-    class Node:
+    class Node(dict):
         def __init__(self, props):
+            super().__init__(props)
             self.properties = props
+            
     mock_result.records = [{"episode": Node({"content": "hello", "name": "ep1"}), "links": []}]
     mock_driver.execute_query = AsyncMock(return_value=mock_result)
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { graphitiService } from '../../services/graphitiService'
+import { DeleteConfirmationModal } from '../../components/DeleteConfirmationModal'
 
 export const MemoryList: React.FC = () => {
     const { projectId } = useParams()
@@ -8,6 +9,8 @@ export const MemoryList: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false)
     const [search, setSearch] = useState('')
     const [deletingId, setDeletingId] = useState<string | null>(null)
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+    const [itemToDelete, setItemToDelete] = useState<string | null>(null)
 
     const fetchMemories = async () => {
         if (projectId) {
@@ -31,15 +34,20 @@ export const MemoryList: React.FC = () => {
         fetchMemories()
     }, [projectId])
 
-    const handleDelete = async (episodeName: string) => {
-        if (!confirm(`Are you sure you want to delete this memory ("${episodeName}")? This action cannot be undone.`)) {
-            return
-        }
+    const confirmDelete = (episodeName: string) => {
+        setItemToDelete(episodeName)
+        setDeleteModalOpen(true)
+    }
 
-        setDeletingId(episodeName)
+    const handleDelete = async () => {
+        if (!itemToDelete) return
+
+        setDeletingId(itemToDelete)
         try {
-            await graphitiService.deleteEpisode(episodeName)
+            await graphitiService.deleteEpisode(itemToDelete)
             await fetchMemories()
+            setDeleteModalOpen(false)
+            setItemToDelete(null)
         } catch (error) {
             console.error('Failed to delete memory:', error)
             alert('Failed to delete memory')
@@ -60,6 +68,19 @@ export const MemoryList: React.FC = () => {
 
     return (
         <div className="max-w-7xl mx-auto flex flex-col gap-8">
+            <DeleteConfirmationModal
+                isOpen={deleteModalOpen}
+                onClose={() => {
+                    if (!deletingId) {
+                        setDeleteModalOpen(false)
+                        setItemToDelete(null)
+                    }
+                }}
+                onConfirm={handleDelete}
+                title="Delete Memory"
+                message={`Are you sure you want to delete this memory ("${itemToDelete}")? This action cannot be undone and will remove all associated graph data.`}
+                isDeleting={!!deletingId}
+            />
             {/* Header Area */}
             <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="flex flex-col gap-1">
@@ -159,7 +180,7 @@ export const MemoryList: React.FC = () => {
                                             <td className="px-6 py-3 text-right">
                                                 <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <button
-                                                        onClick={() => handleDelete(memory.name)}
+                                                        onClick={() => confirmDelete(memory.name)}
                                                         disabled={deletingId === memory.name}
                                                         className="text-slate-400 hover:text-red-500 p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                                                         title="Delete"

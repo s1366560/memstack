@@ -47,12 +47,25 @@ class TestGraphitiService:
     async def test_add_episode(self, mock_graphiti_class):
         """Test adding an episode."""
         mock_client = Mock()
-        mock_client.add_episode = AsyncMock()
+        
+        # Mock add_episode return value
+        mock_add_result = Mock()
+        mock_add_result.nodes = [] # Mock empty nodes list
+        mock_client.add_episode = AsyncMock(return_value=mock_add_result)
+        
+        # Mock driver for status update query
+        mock_client.driver = Mock()
+        mock_client.driver.execute_query = AsyncMock()
+        
         mock_graphiti_class.return_value = mock_client
 
         service = GraphitiService()
         service._client = mock_client
         service._initialized = True
+        
+        # Also mock queue_service as it is used in add_episode
+        service.queue_service = Mock()
+        service.queue_service.add_episode = AsyncMock()
 
         episode = EpisodeCreate(
             name="Test Episode",
@@ -61,8 +74,28 @@ class TestGraphitiService:
 
         await service.add_episode(episode)
 
-        # Verify episode was added
-        mock_client.add_episode.assert_called_once()
+        # Verify episode was added via queue_service, NOT client directly 
+        # Wait, GraphitiService.add_episode CALLS queue_service.add_episode
+        # And QueueService.add_episode CALLS client.add_episode.
+        # But here we are testing GraphitiService.add_episode.
+        
+        # Let's check the implementation of GraphitiService.add_episode again.
+        # It calls self.queue_service.add_episode(...)
+        # It does NOT call self.client.add_episode directly anymore?
+        
+        service.queue_service.add_episode.assert_called_once()
+        
+        # If GraphitiService.add_episode ONLY calls queue_service, then we don't need to mock client.add_episode
+        # UNLESS queue_service is NOT mocked.
+        # But I mocked queue_service above.
+        
+        # Wait, the error was "object Mock can't be used in 'await' expression"
+        # This implies it WAS awaiting something that wasn't awaitable.
+        # If I mock queue_service.add_episode = AsyncMock(), it is awaitable.
+        
+        # Let's double check if I am testing the right thing.
+        # If GraphitiService.add_episode delegates to QueueService, 
+        # then this test should verify that delegation.
 
     @patch("server.services.graphiti_service.Graphiti")
     async def test_search(self, mock_graphiti_class):

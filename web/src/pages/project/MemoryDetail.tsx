@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { graphitiService } from '../../services/graphitiService'
+import { DeleteConfirmationModal } from '../../components/DeleteConfirmationModal'
 
 export const MemoryDetail: React.FC = () => {
     const { projectId, memoryId } = useParams()
@@ -8,6 +9,8 @@ export const MemoryDetail: React.FC = () => {
     const [memory, setMemory] = useState<any>(null)
     const [isLoading, setIsLoading] = useState(false)
     const [activeTab, setActiveTab] = useState<'content' | 'metadata' | 'history' | 'raw'>('content')
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+    const [isDeleting, setIsDeleting] = useState(false)
 
     useEffect(() => {
         const fetchMemory = async () => {
@@ -40,19 +43,29 @@ export const MemoryDetail: React.FC = () => {
 
     const handleDelete = async () => {
         if (!projectId || !memoryId) return
-
-        if (window.confirm('Are you sure you want to delete this memory?')) {
-            try {
-                await graphitiService.deleteEpisode(decodeURIComponent(memoryId))
-                navigate(`/project/${projectId}/memories`)
-            } catch (error) {
-                console.error('Failed to delete memory:', error)
-            }
+        
+        setIsDeleting(true)
+        try {
+            await graphitiService.deleteEpisode(decodeURIComponent(memoryId))
+            navigate(`/project/${projectId}/memories`)
+        } catch (error) {
+            console.error('Failed to delete memory:', error)
+            alert('Failed to delete memory')
+            setIsDeleting(false)
+            setDeleteModalOpen(false)
         }
     }
 
     return (
         <div className="flex h-full overflow-hidden">
+            <DeleteConfirmationModal
+                isOpen={deleteModalOpen}
+                onClose={() => setDeleteModalOpen(false)}
+                onConfirm={handleDelete}
+                title="Delete Memory"
+                message="Are you sure you want to delete this memory? This action cannot be undone and will remove all associated graph data."
+                isDeleting={isDeleting}
+            />
             {/* Main Content Area */}
             <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
                 {/* Top Navigation Bar (Breadcrumbs + Toolbar) */}
@@ -75,7 +88,7 @@ export const MemoryDetail: React.FC = () => {
                         <button className="p-2 text-slate-500 hover:text-primary hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 rounded-lg transition-all" title="Edit">
                             <span className="material-symbols-outlined text-[20px]">edit</span>
                         </button>
-                        <button onClick={handleDelete} className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:text-slate-400 dark:hover:bg-red-900/20 dark:hover:text-red-400 rounded-lg transition-all" title="Delete">
+                        <button onClick={() => setDeleteModalOpen(true)} className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:text-slate-400 dark:hover:bg-red-900/20 dark:hover:text-red-400 rounded-lg transition-all" title="Delete">
                             <span className="material-symbols-outlined text-[20px]">delete</span>
                         </button>
                         <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
