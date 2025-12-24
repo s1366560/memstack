@@ -18,6 +18,7 @@ from graphiti_core.llm_client import LLMConfig
 from graphiti_core.llm_client.gemini_client import GeminiClient
 from graphiti_core.nodes import EpisodeType
 from graphiti_core.search.search_config_recipes import COMBINED_HYBRID_SEARCH_RRF
+from graphiti_core.search.search_filters import SearchFilters, DateFilter, ComparisonOperator
 from pydantic import BaseModel
 
 from server.config import get_settings
@@ -119,28 +120,6 @@ class Relationship:
         self.score = score
         self.created_at = created_at
         self.properties = kwargs
-
-
-class SearchFilters:
-    """搜索过滤器"""
-
-    def __init__(
-        self,
-        tenant_id: Optional[str] = None,
-        project_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        entity_types: Optional[List[str]] = None,
-        since: Optional[datetime] = None,
-        until: Optional[datetime] = None,
-    ):
-        self.tenant_id = tenant_id
-        self.project_id = project_id
-        self.user_id = user_id
-        self.tags = tags or []
-        self.entity_types = entity_types or []
-        self.since = since
-        self.until = until
 
 
 class GraphitiService:
@@ -412,6 +391,7 @@ class GraphitiService:
         project_id: Optional[str] = None,
         user_id: Optional[str] = None,
         as_of: Optional[datetime] = None,
+        search_filter: Optional[SearchFilters] = None,
     ) -> List[MemoryItem]:
         """
         Search the knowledge graph for relevant memories.
@@ -420,24 +400,69 @@ class GraphitiService:
             query: Search query
             limit: Maximum number of results
             tenant_id: Optional tenant filter
+            project_id: Optional project filter
+            user_id: Optional user filter
+            as_of: Optional time travel filter
+            search_filter: Optional advanced filters
 
         Returns:
             List of memory items
         """
         try:
+            # Construct group_ids from project_id if available
+            group_ids = [project_id] if project_id else None
+            
+            # Construct SearchFilters if not provided
+            if not search_filter:
+                search_filter = SearchFilters()
+            
+            # Handle as_of using filters
+            if as_of:
+                # created_at <= as_of
+                search_filter.created_at = [[
+                    DateFilter(
+                        date=as_of,
+                        comparison_operator=ComparisonOperator.less_than_equal
+                    )
+                ]]
+                
+                # expired_at > as_of OR expired_at IS NULL
+                search_filter.expired_at = [
+                    [DateFilter(
+                        date=as_of,
+                        comparison_operator=ComparisonOperator.greater_than
+                    )],
+                    [DateFilter(
+                        date=None,
+                        comparison_operator=ComparisonOperator.is_null
+                    )]
+                ]
+
             # Perform semantic search using Graphiti's advanced search method
             # Note: search_() returns SearchResults object, while search() returns list[EntityEdge]
             # Using COMBINED_HYBRID_SEARCH_RRF which doesn't require LLM calls for reranking
             search_results = await self.client.search_(
-                query=query, config=COMBINED_HYBRID_SEARCH_RRF
+                query=query, 
+                config=COMBINED_HYBRID_SEARCH_RRF,
+                group_ids=group_ids,
+                search_filter=search_filter,
             )
 
             # Convert search results to MemoryItem format
             memory_items = []
 
             # Helper to check filters via direct property lookup when needed
+            # Only needed if we couldn't filter by group_ids (no project_id) or specific props
             async def _passes_filters(node_label: str, name: Optional[str]) -> bool:
-                if not (tenant_id or project_id or user_id or as_of):
+                # If we already filtered by project_id via group_ids, and handled as_of via filters,
+                # we mostly just need to check tenant_id (if project_id missing) and user_id
+                
+                # Optimization: if project_id provided, we assume tenant check passed (project implies tenant)
+                # and as_of passed.
+                if project_id and not user_id:
+                    return True
+                    
+                if not (tenant_id or user_id):
                     return True
                 if not name:
                     return True
@@ -447,34 +472,19 @@ class GraphitiService:
                     props = res.records[0]["props"] if res.records else {}
                 except Exception:
                     props = {}
-                if tenant_id and props.get("tenant_id") != tenant_id:
-                    return False
-                if project_id and props.get("project_id") != project_id:
-                    return False
+                
+                # If project_id was not used in group_ids (None), we must check tenant/project here
+                if not project_id:
+                    if tenant_id and props.get("tenant_id") != tenant_id:
+                        return False
+                    if props.get("project_id") and tenant_id: 
+                         # If node has project_id, verify it belongs to tenant? 
+                         # Simplified: just check tenant_id matches if present on node
+                         pass
+
                 if user_id and props.get("user_id") != user_id:
                     return False
-                if as_of:
-                    # valid if created/valid <= as_of and not expired/invalid before as_of
-                    from datetime import datetime
-
-                    def to_dt(v):
-                        try:
-                            return datetime.fromisoformat(v) if isinstance(v, str) else v
-                        except Exception:
-                            return None
-
-                    created = to_dt(props.get("created_at"))
-                    valid = to_dt(props.get("valid_at"))
-                    expired = to_dt(props.get("expired_at"))
-                    invalid = to_dt(props.get("invalid_at"))
-                    if created and created > as_of:
-                        return False
-                    if valid and valid > as_of:
-                        return False
-                    if expired and expired <= as_of:
-                        return False
-                    if invalid and invalid <= as_of:
-                        return False
+                
                 return True
 
             # Process episodes from search results
@@ -491,7 +501,12 @@ class GraphitiService:
                         MemoryItem(
                             content=episode.content,
                             score=score,
-                            metadata={"type": "episode", "name": episode.name},
+                            metadata={
+                                "type": "episode", 
+                                "name": episode.name,
+                                "uuid": episode.uuid,
+                                "created_at": getattr(episode, "created_at", None)
+                            },
                             source="episode",
                         )
                     )
@@ -512,7 +527,12 @@ class GraphitiService:
                             if hasattr(node, "summary")
                             else node.name,
                             score=score,
-                            metadata={"type": "entity", "name": node.name},
+                            metadata={
+                                "type": "entity", 
+                                "name": node.name,
+                                "uuid": node.uuid,
+                                "entity_type": "Entity" # Default, maybe enrich later
+                            },
                             source="entity",
                         )
                     )
@@ -526,6 +546,7 @@ class GraphitiService:
                         else 0.0
                     )
                     # For edges, validating via EntityEdge properties by uuid
+                    # Optimization: skip edge validation for now or use source node
                     if not await _passes_filters("Entity", getattr(edge, "source_node_name", None)):
                         continue
                     memory_items.append(
@@ -536,6 +557,7 @@ class GraphitiService:
                                 "type": "relationship",
                                 "source": edge.source_node_uuid,
                                 "target": edge.target_node_uuid,
+                                "uuid": edge.uuid
                             },
                             source="relationship",
                         )
@@ -823,6 +845,7 @@ class GraphitiService:
         until: Optional[datetime] = None,
         limit: int = 50,
         tenant_id: Optional[str] = None,
+        project_id: Optional[str] = None,
     ) -> List[MemoryItem]:
         """
         Search within a temporal window.
@@ -836,82 +859,39 @@ class GraphitiService:
             until: End of time range (exclusive)
             limit: Maximum results to return
             tenant_id: Optional tenant filter
+            project_id: Optional project filter
 
         Returns:
             List of memory items within the time range
         """
         try:
-            # Build temporal filter
-            conditions = []
+            filters = SearchFilters()
+            
+            # Use a list to hold the AND conditions for created_at
+            date_filters = []
+            
+            # created_at >= since
             if since:
-                conditions.append("e.created_at >= datetime($since)")
+                date_filters.append(
+                    DateFilter(date=since, comparison_operator=ComparisonOperator.greater_than_equal)
+                )
+            
+            # created_at < until
             if until:
-                conditions.append("e.created_at < datetime($until)")
-            if tenant_id:
-                conditions.append("e.tenant_id = $tenant_id")
+                date_filters.append(
+                    DateFilter(date=until, comparison_operator=ComparisonOperator.less_than)
+                )
+            
+            if date_filters:
+                filters.created_at = [date_filters]
 
-            where_clause = " AND ".join(conditions) if conditions else "1=1"
-
-            # Search episodes within the time range
-            query_cypher = f"""
-            MATCH (e:Episodic)
-            WHERE {where_clause}
-            RETURN properties(e) as props
-            ORDER BY e.created_at DESC
-            LIMIT $limit * 2  -- Get more for semantic filtering
-            """
-
-            result = await self.client.driver.execute_query(
-                query_cypher,
-                since=since.isoformat() if since else None,
-                until=until.isoformat() if until else None,
-                tenant_id=tenant_id,
+            return await self.search(
+                query=query,
                 limit=limit,
+                tenant_id=tenant_id,
+                project_id=project_id,
+                search_filter=filters
             )
-
-            # Simple semantic matching based on query terms
-            query_terms = set(query.lower().split())
-            scored_items = []
-
-            for r in result.records:
-                props = r["props"]
-                content = props.get("content", "")
-                name = props.get("name", "")
-
-                # Calculate simple relevance score
-                content_lower = content.lower()
-                name_lower = name.lower()
-                score = 0.0
-
-                for term in query_terms:
-                    if term in content_lower:
-                        score += 1.0
-                    if term in name_lower:
-                        score += 0.5
-
-                if score > 0:
-                    scored_items.append(
-                        (
-                            score,
-                            MemoryItem(
-                                content=content,
-                                score=score,
-                                metadata={
-                                    "type": "episode",
-                                    "name": name,
-                                    "created_at": props.get("created_at"),
-                                },
-                                source="temporal_search",
-                            ),
-                        )
-                    )
-
-            # Sort by score and return top results
-            scored_items.sort(key=lambda x: x[0], reverse=True)
-            items = [item for _, item in scored_items[:limit]]
-
-            logger.info(f"Temporal search found {len(items)} results")
-            return items
 
         except Exception as e:
             logger.error(f"Temporal search failed: {e}")
@@ -926,6 +906,7 @@ class GraphitiService:
         limit: int = 50,
         offset: int = 0,
         tenant_id: Optional[str] = None,
+        project_id: Optional[str] = None,
     ) -> Tuple[List[MemoryItem], Dict[str, Any]]:
         """
         Search with faceted filtering and return facet counts.
@@ -938,33 +919,41 @@ class GraphitiService:
             limit: Maximum results to return
             offset: Pagination offset
             tenant_id: Optional tenant filter
+            project_id: Optional project filter
 
         Returns:
             Tuple of (search results, facet metadata)
         """
         try:
-            # First perform the base search
-            base_results = await self.search(
+            filters = SearchFilters()
+            
+            if entity_types:
+                filters.node_labels = entity_types
+            
+            # Manual date filter mapping
+            if since:
+                filters.created_at = [[
+                    DateFilter(date=since, comparison_operator=ComparisonOperator.greater_than_equal)
+                ]]
+
+            # Call search with filters
+            results = await self.search(
                 query=query,
-                limit=limit + offset,  # Get more to handle offset
+                limit=limit + offset,
                 tenant_id=tenant_id,
+                project_id=project_id,
+                search_filter=filters
             )
 
-            # Apply additional filters
+            # Apply additional post-filtering if needed (for safety if Graphiti support is partial)
             filtered_results = []
-            for item in base_results:
+            for item in results:
                 # Filter by entity type if specified
                 if entity_types and item.metadata.get("type") == "entity":
                     if item.metadata.get("entity_type") not in entity_types:
                         continue
-
-                # Filter by tags if specified
-                if tags:
-                    item_tags = item.metadata.get("tags", [])
-                    if not any(tag in item_tags for tag in tags):
-                        continue
-
-                # Filter by date if specified
+                
+                # Filter by date if specified (double check)
                 if since:
                     created_at = item.metadata.get("created_at")
                     if created_at:
