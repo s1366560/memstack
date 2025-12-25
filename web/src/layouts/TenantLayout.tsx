@@ -292,6 +292,18 @@ export const TenantLayout: React.FC = () => {
                         <span className="material-symbols-outlined text-[20px]">settings</span>
                         {!isSidebarCollapsed && <span className="text-sm font-medium whitespace-nowrap">Settings</span>}
                     </Link>
+
+                    <Link
+                        to={getLink('/profile')}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white transition-colors group ${isActive('/profile')
+                            ? 'bg-primary/10 text-primary'
+                            : ''
+                            } ${isSidebarCollapsed ? 'justify-center' : ''}`}
+                        title={isSidebarCollapsed ? "Profile" : ""}
+                    >
+                        <span className={`material-symbols-outlined text-[20px] ${isActive('/profile') ? 'icon-filled' : ''}`}>person</span>
+                        {!isSidebarCollapsed && <span className="text-sm font-medium whitespace-nowrap">Profile</span>}
+                    </Link>
                 </nav>
 
                 <div className="p-4 border-t border-slate-100 dark:border-slate-800">
@@ -364,9 +376,11 @@ export const TenantLayout: React.FC = () => {
                             <span className="absolute top-2 right-2 size-2 bg-red-500 rounded-full border-2 border-white dark:border-slate-900"></span>
                         </button>
                         <div className="h-8 w-[1px] bg-slate-200 dark:bg-slate-700"></div>
-                        <button className="flex items-center gap-2">
-                            <div className="size-8 rounded-full bg-cover bg-center border border-slate-200 dark:border-slate-700 bg-slate-200"></div>
-                        </button>
+                        <Link to={getLink('/profile')} className="flex items-center gap-2">
+                            <div className="size-8 rounded-full bg-cover bg-center border border-slate-200 dark:border-slate-700 bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300">
+                                {user?.name?.[0]?.toUpperCase() || 'U'}
+                            </div>
+                        </Link>
                         <div className="w-64">
                             <WorkspaceSwitcher mode="tenant" />
                         </div>

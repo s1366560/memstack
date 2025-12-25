@@ -1,27 +1,38 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { projectAPI } from '../../services/api'
+import { projectAPI, memoryAPI } from '../../services/api'
+import { Project, Memory } from '../../types/memory'
 
 export const ProjectOverview: React.FC = () => {
     const { projectId } = useParams()
     const [stats, setStats] = useState<any>(null)
+    const [project, setProject] = useState<Project | null>(null)
+    const [memories, setMemories] = useState<Memory[]>([])
     const [isLoading, setIsLoading] = useState(false)
 
     useEffect(() => {
-        const fetchStats = async () => {
+        const fetchData = async () => {
             if (projectId) {
                 setIsLoading(true)
                 try {
-                    const data = await projectAPI.getStats(projectId)
-                    setStats(data)
+                    // Pass projectId as tenantId since it's ignored by the API wrapper currently, 
+                    // or we could get the tenantId from context/url if available.
+                    const [statsData, projectData, memoriesData] = await Promise.all([
+                        projectAPI.getStats(projectId),
+                        projectAPI.get(projectId, projectId),
+                        memoryAPI.list(projectId, { page: 1, page_size: 5 })
+                    ])
+                    setStats(statsData)
+                    setProject(projectData)
+                    setMemories(memoriesData.memories)
                 } catch (error) {
-                    console.error('Failed to fetch project stats:', error)
+                    console.error('Failed to fetch project data:', error)
                 } finally {
                     setIsLoading(false)
                 }
             }
         }
-        fetchStats()
+        fetchData()
     }, [projectId])
 
     if (!projectId) {
@@ -36,7 +47,20 @@ export const ProjectOverview: React.FC = () => {
         const gb = bytes / (1024 * 1024 * 1024)
         if (gb >= 1) return `${gb.toFixed(1)} GB`
         const mb = bytes / (1024 * 1024)
-        return `${mb.toFixed(1)} MB`
+        if (mb >= 1) return `${mb.toFixed(1)} MB`
+        const kb = bytes / 1024
+        return `${kb.toFixed(1)} KB`
+    }
+
+    const formatDate = (dateString: string) => {
+        const date = new Date(dateString)
+        const now = new Date()
+        const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+
+        if (diffInSeconds < 60) return 'Just now'
+        if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`
+        if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`
+        return date.toLocaleDateString()
     }
 
     return (
@@ -44,7 +68,7 @@ export const ProjectOverview: React.FC = () => {
             {/* Page Title & Greeting */}
             <div className="flex flex-col gap-1">
                 <h2 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Overview</h2>
-                <p className="text-slate-500 dark:text-slate-400">Welcome back, Administrator. Here's what's happening with Project Alpha.</p>
+                <p className="text-slate-500 dark:text-slate-400">Welcome back. Here's what's happening with {project?.name || 'Project'}.</p>
             </div>
 
             {/* Stats Grid */}
@@ -60,9 +84,8 @@ export const ProjectOverview: React.FC = () => {
                             <span className="material-symbols-outlined">memory</span>
                         </div>
                     </div>
-                    <div className="flex items-center gap-1 text-xs text-green-600 font-medium">
-                        <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>trending_up</span>
-                        <span>+12% from last week</span>
+                    <div className="flex items-center gap-1 text-xs text-slate-500 font-medium">
+                        <span>Stored in database</span>
                     </div>
                 </div>
 
@@ -111,10 +134,8 @@ export const ProjectOverview: React.FC = () => {
                             <span className="material-symbols-outlined">diversity_3</span>
                         </div>
                     </div>
-                    <div className="flex -space-x-2 mt-1">
-                        <div className="w-6 h-6 rounded-full border-2 border-white dark:border-slate-800 bg-slate-200 bg-cover bg-center"></div>
-                        <div className="w-6 h-6 rounded-full border-2 border-white dark:border-slate-800 bg-slate-300 bg-cover bg-center"></div>
-                        <div className="w-6 h-6 rounded-full border-2 border-white dark:border-slate-800 bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-[10px] font-medium text-slate-600 dark:text-slate-300">+5</div>
+                    <div className="flex items-center gap-1 text-xs text-slate-500 font-medium">
+                        <span>Project members</span>
                     </div>
                 </div>
             </div>
@@ -140,33 +161,49 @@ export const ProjectOverview: React.FC = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                    {/* Mock Rows */}
-                                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
-                                        <td className="px-6 py-3">
-                                            <div className="flex items-center gap-3">
-                                                <div className="p-2 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
-                                                    <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>description</span>
-                                                </div>
-                                                <div>
-                                                    <div className="font-medium text-slate-900 dark:text-white">Quarterly Financials Q3</div>
-                                                    <div className="text-xs text-slate-500">Updated 2m ago by Sarah</div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-3 text-slate-600 dark:text-slate-300">Document</td>
-                                        <td className="px-6 py-3">
-                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                                                Synced
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-3 text-slate-600 dark:text-slate-300 text-right font-mono">2.4 MB</td>
-                                        <td className="px-6 py-3 text-right">
-                                            <button className="text-slate-400 hover:text-primary p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700">
-                                                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>more_vert</span>
-                                            </button>
-                                        </td>
-                                    </tr>
+                                    {memories.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
+                                                No memories found. Start by creating one!
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        memories.map((memory) => (
+                                            <tr key={memory.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
+                                                <td className="px-6 py-3">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="p-2 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
+                                                            <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
+                                                                {memory.content_type === 'image' ? 'image' :
+                                                                    memory.content_type === 'video' ? 'movie' : 'description'}
+                                                            </span>
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-medium text-slate-900 dark:text-white">{memory.title}</div>
+                                                            <div className="text-xs text-slate-500">
+                                                                Updated {formatDate(memory.updated_at || memory.created_at)}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-3 text-slate-600 dark:text-slate-300 capitalize">{memory.content_type}</td>
+                                                <td className="px-6 py-3">
+                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                                                        Synced
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-3 text-slate-600 dark:text-slate-300 text-right font-mono">
+                                                    {formatStorage(memory.content?.length || 0)}
+                                                </td>
+                                                <td className="px-6 py-3 text-right">
+                                                    <button className="text-slate-400 hover:text-primary p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700">
+                                                        <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>more_vert</span>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
                                 </tbody>
                             </table>
                         </div>
@@ -183,26 +220,22 @@ export const ProjectOverview: React.FC = () => {
                     {/* Team Card */}
                     <div className="bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm p-5">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wide">Team Online</h3>
+                            <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wide">Project Team</h3>
                             <button className="p-1 text-slate-400 hover:text-primary rounded hover:bg-slate-100 dark:hover:bg-slate-800">
-                                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>person_add</span>
+                                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>group</span>
                             </button>
                         </div>
                         <div className="flex flex-col gap-3">
                             <div className="flex items-center gap-3">
-                                <div className="relative">
-                                    <div className="w-10 h-10 rounded-full bg-slate-200 bg-cover bg-center"></div>
-                                    <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-surface-dark rounded-full"></span>
+                                <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-full">
+                                    <span className="material-symbols-outlined">diversity_3</span>
                                 </div>
                                 <div>
-                                    <p className="text-sm font-medium text-slate-900 dark:text-white">Sarah Jenkins</p>
-                                    <p className="text-xs text-slate-500">Editing "Quarterly..."</p>
+                                    <p className="text-sm font-medium text-slate-900 dark:text-white">{stats?.collaborators || 0} Members</p>
+                                    <p className="text-xs text-slate-500">Collaborating on this project</p>
                                 </div>
                             </div>
                         </div>
-                        <button className="mt-4 w-full py-2 text-xs font-medium text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                            View All Members
-                        </button>
                     </div>
 
                     {/* Quick Actions / Activity */}
@@ -216,15 +249,15 @@ export const ProjectOverview: React.FC = () => {
                                 </div>
                                 <div>
                                     <p className="text-sm font-medium">Auto-Indexing Active</p>
-                                    <p className="text-xs text-blue-100 mt-1">AI is currently processing 3 new files.</p>
+                                    <p className="text-xs text-blue-100 mt-1">System is ready to process new memories.</p>
                                 </div>
                             </div>
                             <div className="w-full bg-blue-900/50 h-1.5 rounded-full overflow-hidden">
-                                <div className="bg-white h-full rounded-full animate-[shimmer_2s_infinite] w-2/3"></div>
+                                <div className="bg-white h-full rounded-full w-full"></div>
                             </div>
                             <div className="flex justify-between text-[10px] mt-1 text-blue-200">
-                                <span>Processing...</span>
-                                <span>76%</span>
+                                <span>Status</span>
+                                <span>Operational</span>
                             </div>
                         </div>
                     </div>

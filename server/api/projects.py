@@ -33,36 +33,36 @@ async def create_project(
             and_(
                 UserTenant.user_id == current_user.id,
                 UserTenant.tenant_id == project_data.tenant_id,
-                UserTenant.role.in_(["owner", "admin"])
+                UserTenant.role.in_(["owner", "admin"]),
             )
         )
     )
     if not user_tenant_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="User does not have permission to create projects in this tenant"
+            detail="User does not have permission to create projects in this tenant",
         )
 
     # Check tenant limits
-    tenant_result = await db.execute(select(Tenant).where(Tenant.id == project_data.tenant_id))
-    tenant = tenant_result.scalar_one_or_none()
-    if not tenant:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tenant not found"
-        )
+    # tenant_result = await db.execute(select(Tenant).where(Tenant.id == project_data.tenant_id))
+    # tenant = tenant_result.scalar_one_or_none()
+    # if not tenant:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_404_NOT_FOUND,
+    #         detail="Tenant not found"
+    #     )
 
     # Count existing projects
-    project_count_result = await db.execute(
-        select(func.count(Project.id)).where(Project.tenant_id == project_data.tenant_id)
-    )
-    project_count = project_count_result.scalar()
+    # project_count_result = await db.execute(
+    #     select(func.count(Project.id)).where(Project.tenant_id == project_data.tenant_id)
+    # )
+    # project_count = project_count_result.scalar()
 
-    if project_count >= tenant.max_projects:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tenant has reached maximum number of projects"
-        )
+    # if project_count >= tenant.max_projects:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         detail="Tenant has reached maximum number of projects"
+    #     )
 
     # Create project
     project = Project(
@@ -169,18 +169,14 @@ async def get_project(
     )
     if not user_project_result.scalar_one_or_none():
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied to project"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to project"
         )
 
     # Get project
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
     return ProjectResponse.from_orm(project)
 
@@ -199,24 +195,21 @@ async def update_project(
             and_(
                 UserProject.user_id == current_user.id,
                 UserProject.project_id == project_id,
-                UserProject.role.in_(["owner", "admin"])
+                UserProject.role.in_(["owner", "admin"]),
             )
         )
     )
     if not user_project_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only project owner or admin can update project"
+            detail="Only project owner or admin can update project",
         )
 
     # Get project
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
     # Update fields
     update_data = project_data.dict(exclude_unset=True)
@@ -247,24 +240,20 @@ async def delete_project(
             and_(
                 UserProject.user_id == current_user.id,
                 UserProject.project_id == project_id,
-                UserProject.role == "owner"
+                UserProject.role == "owner",
             )
         )
     )
     if not user_project_result.scalar_one_or_none():
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only project owner can delete project"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Only project owner can delete project"
         )
 
     # Get project
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
     await db.delete(project)
     await db.commit()
@@ -285,32 +274,26 @@ async def add_project_member(
             and_(
                 UserProject.user_id == current_user.id,
                 UserProject.project_id == project_id,
-                UserProject.role.in_(["owner", "admin"])
+                UserProject.role.in_(["owner", "admin"]),
             )
         )
     )
     if not user_project_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only project owner or admin can add members"
+            detail="Only project owner or admin can add members",
         )
 
     # Check if project exists
     project_result = await db.execute(select(Project).where(Project.id == project_id))
     project = project_result.scalar_one_or_none()
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
     # Check if user exists
     user_result = await db.execute(select(User).where(User.id == user_id))
     if not user_result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     # Check if user is already member
     existing_result = await db.execute(
@@ -321,13 +304,13 @@ async def add_project_member(
     if existing_result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User is already a member of this project"
+            detail="User is already a member of this project",
         )
 
     # Check tenant limits
     tenant_result = await db.execute(select(Tenant).where(Tenant.id == project.tenant_id))
     tenant = tenant_result.scalar_one_or_none()
-    
+
     member_count_result = await db.execute(
         select(func.count(UserProject.id)).where(UserProject.project_id == project_id)
     )
@@ -336,7 +319,7 @@ async def add_project_member(
     if member_count >= tenant.max_users:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Project has reached maximum number of members"
+            detail="Project has reached maximum number of members",
         )
 
     # Create user-project relationship
@@ -372,21 +355,19 @@ async def remove_project_member(
             and_(
                 UserProject.user_id == current_user.id,
                 UserProject.project_id == project_id,
-                UserProject.role == "owner"
+                UserProject.role == "owner",
             )
         )
     )
     if not user_project_result.scalar_one_or_none():
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only project owner can remove members"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Only project owner can remove members"
         )
 
     # Cannot remove owner
     if user_id == current_user.id:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot remove project owner"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot remove project owner"
         )
 
     # Remove user-project relationship
@@ -398,8 +379,7 @@ async def remove_project_member(
     user_project = result.scalar_one_or_none()
     if not user_project:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User is not a member of this project"
+            status_code=status.HTTP_404_NOT_FOUND, detail="User is not a member of this project"
         )
 
     await db.delete(user_project)
@@ -428,8 +408,7 @@ async def list_project_members(
     )
     if not user_project_result.scalar_one_or_none():
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied to project"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to project"
         )
 
     # Get all members
@@ -440,14 +419,16 @@ async def list_project_members(
     )
     members = []
     for user_project, user in result.fetchall():
-        members.append({
-            "user_id": user.id,
-            "email": user.email,
-            "name": user.name,
-            "role": user_project.role,
-            "permissions": user_project.permissions,
-            "created_at": user_project.created_at,
-        })
+        members.append(
+            {
+                "user_id": user.id,
+                "email": user.email,
+                "name": user.name,
+                "role": user_project.role,
+                "permissions": user_project.permissions,
+                "created_at": user_project.created_at,
+            }
+        )
 
     return {"members": members, "total": len(members)}
 
@@ -467,8 +448,7 @@ async def get_project_stats(
     )
     if not user_project_result.scalar_one_or_none():
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied to project"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to project"
         )
 
     # Get project
@@ -479,6 +459,7 @@ async def get_project_stats(
 
     # Get memory count
     from server.db_models import Memory
+
     memory_count_result = await db.execute(
         select(func.count(Memory.id)).where(Memory.project_id == project_id)
     )
@@ -492,24 +473,26 @@ async def get_project_stats(
 
     # Mock data for dashboard
     import random
-    
+
     # Mock storage usage (random between 1GB and 50GB)
     storage_used = random.uniform(1, 50) * 1024 * 1024 * 1024
-    
+
     # Mock active nodes (random between 5 and 50)
     active_nodes = random.randint(5, 50)
-    
+
     # Mock recent activity
     activities = []
     actions = ["created a memory", "updated a document", "commented on", "shared"]
     for i in range(5):
-        activities.append({
-            "id": f"act_{i}",
-            "user": "Team Member",
-            "action": random.choice(actions),
-            "target": f"Memory #{100+i}",
-            "time": f"{random.randint(1, 24)}h ago"
-        })
+        activities.append(
+            {
+                "id": f"act_{i}",
+                "user": "Team Member",
+                "action": random.choice(actions),
+                "target": f"Memory #{100 + i}",
+                "time": f"{random.randint(1, 24)}h ago",
+            }
+        )
 
     return {
         "memory_count": memory_count,
@@ -522,6 +505,6 @@ async def get_project_stats(
         "system_status": {
             "status": "operational",
             "indexing_active": True,
-            "indexing_progress": 76
-        }
+            "indexing_progress": 76,
+        },
     }

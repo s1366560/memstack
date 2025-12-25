@@ -1,31 +1,31 @@
 import React, { useEffect, useState } from 'react'
 import { useTenantStore } from '../../stores/tenant'
-import { projectAPI } from '../../services/api'
+import { useProjectStore } from '../../stores/project'
 import { Link } from 'react-router-dom'
-import { Project } from '../../types/memory'
 
 export const ProjectList: React.FC = () => {
     const { currentTenant } = useTenantStore()
-    const [projects, setProjects] = useState<Project[]>([])
-    const [isLoading, setIsLoading] = useState(false)
+    const { listProjects, deleteProject, projects, isLoading } = useProjectStore()
     const [search, setSearch] = useState('')
+    const [activeMenu, setActiveMenu] = useState<string | null>(null)
 
     useEffect(() => {
-        const fetchProjects = async () => {
-            if (currentTenant) {
-                setIsLoading(true)
-                try {
-                    const data = await projectAPI.list(currentTenant.id, { search })
-                    setProjects(data.projects)
-                } catch (error) {
-                    console.error('Failed to list projects:', error)
-                } finally {
-                    setIsLoading(false)
-                }
+        if (currentTenant) {
+            listProjects(currentTenant.id, { search })
+        }
+    }, [currentTenant, search, listProjects])
+
+    const handleDelete = async (projectId: string) => {
+        if (!currentTenant) return
+        if (window.confirm('Are you sure you want to delete this project?')) {
+            try {
+                await deleteProject(currentTenant.id, projectId)
+                setActiveMenu(null)
+            } catch (error) {
+                console.error('Failed to delete project:', error)
             }
         }
-        fetchProjects()
-    }, [currentTenant, search])
+    }
 
     if (!currentTenant) {
         return <div className="p-8 text-center text-slate-500">Loading tenant...</div>
@@ -134,11 +134,32 @@ export const ProjectList: React.FC = () => {
                                     <div className="w-8 h-8 rounded-full border-2 border-white dark:border-surface-dark bg-slate-300 bg-cover bg-center"></div>
                                     <div className="w-8 h-8 rounded-full border-2 border-white dark:border-surface-dark bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-xs font-medium text-slate-500">+2</div>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 relative">
                                     <span className="text-xs text-slate-500">2h ago</span>
-                                    <button className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors">
+                                    <button
+                                        onClick={(e) => {
+                                            e.preventDefault()
+                                            setActiveMenu(activeMenu === project.id ? null : project.id)
+                                        }}
+                                        className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
+                                    >
                                         <span className="material-symbols-outlined text-lg">more_vert</span>
                                     </button>
+
+                                    {activeMenu === project.id && (
+                                        <div className="absolute right-0 bottom-full mb-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 py-1 z-10">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.preventDefault()
+                                                    handleDelete(project.id)
+                                                }}
+                                                className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+                                            >
+                                                <span className="material-symbols-outlined text-lg">delete</span>
+                                                Delete Project
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

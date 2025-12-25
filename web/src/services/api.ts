@@ -66,6 +66,10 @@ export const authAPI = {
         const response = await api.get('/auth/me');
         return response.data;
     },
+    updateProfile: async (data: any) => {
+        const response = await api.put('/users/me', data);
+        return response.data;
+    },
 };
 
 export const tenantAPI = {
@@ -155,7 +159,7 @@ export const memoryAPI = {
         return response.data;
     },
     getGraphData: async (projectId: string, options = {}) => {
-        const response = await api.get('/memories/graph', { params: { ...options, project_id: projectId } });
+        const response = await api.get('/memory/graph', { params: { ...options, project_id: projectId } });
         return response.data;
     },
     extractEntities: async (projectId: string, text: string) => {

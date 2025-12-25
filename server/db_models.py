@@ -18,6 +18,7 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     tenant_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    profile: Mapped[dict] = mapped_column(JSON, default=dict)
 
     api_keys: Mapped[List["APIKey"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"

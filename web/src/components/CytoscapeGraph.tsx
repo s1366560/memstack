@@ -60,12 +60,7 @@ const cytoscapeStyles = [
     {
         selector: 'node:selected',
         style: {
-            'border-width': 3,
-            'border-color': '#ffffff',
-            'border-opacity': 1,
-            'shadow-blur': 30,
-            'shadow-opacity': 1,
-            'text-outline-color': '#F59E0B',
+
         },
     },
     {
@@ -82,25 +77,17 @@ const cytoscapeStyles = [
                 const label = ele.data('label') || ''
                 return label.length > 15 ? label.substring(0, 15) + '...' : label
             },
-            'font-size': '9px',
+            'font-size': '5px',
             'font-family': 'Inter, "Noto Sans SC", sans-serif',
             'color': '#94A3B8', // slate-400
-            'text-rotation': 'autorotate',
-            'text-background-color': '#0F172A', // slate-900
-            'text-background-opacity': 0.8,
-            'text-background-padding': '3px',
-            'text-background-shape': 'roundrectangle',
         },
     },
     {
         selector: 'edge:selected',
         style: {
-            'width': 3,
-            'line-color': '#F59E0B', // amber-500
-            'target-arrow-color': '#F59E0B',
+            'width': 2,
             'opacity': 1,
             'z-index': 999,
-            'color': '#F59E0B',
         },
     },
 ]
@@ -375,10 +362,6 @@ export const CytoscapeGraph: React.FC<CytoscapeGraphProps> = ({
                 <div
                     ref={containerRef}
                     className="w-full h-full bg-slate-50 dark:bg-[#111521]"
-                    style={{
-                        backgroundImage: 'radial-gradient(#2b324a 1px, transparent 1px)',
-                        backgroundSize: '40px 40px',
-                    }}
                 />
             </div>
 

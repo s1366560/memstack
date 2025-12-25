@@ -3,6 +3,8 @@ import { Login } from './pages/Login'
 import { TenantLayout } from './layouts/TenantLayout'
 import { TenantOverview } from './pages/tenant/TenantOverview'
 import { ProjectList } from './pages/tenant/ProjectList'
+import { UserList } from './pages/tenant/UserList'
+import { UserProfile } from './pages/UserProfile'
 import { NewProject } from './pages/tenant/NewProject'
 import { NewTenant } from './pages/tenant/NewTenant'
 import { TenantSettings } from './pages/tenant/TenantSettings'
@@ -46,7 +48,8 @@ function App() {
                 {/* Generic routes (use currentTenant from store) */}
                 <Route path="projects" element={<ProjectList />} />
                 <Route path="projects/new" element={<NewProject />} />
-                <Route path="users" element={<div className="p-8 text-slate-500">Users Management (Coming Soon)</div>} />
+                <Route path="users" element={<UserList />} />
+                <Route path="profile" element={<UserProfile />} />
                 <Route path="analytics" element={<div className="p-8 text-slate-500">Analytics (Coming Soon)</div>} />
                 <Route path="billing" element={<div className="p-8 text-slate-500">Billing (Coming Soon)</div>} />
                 <Route path="settings" element={<TenantSettings />} />
@@ -55,7 +58,7 @@ function App() {
                 <Route path=":tenantId" element={<TenantOverview />} />
                 <Route path=":tenantId/projects" element={<ProjectList />} />
                 <Route path=":tenantId/projects/new" element={<NewProject />} />
-                <Route path=":tenantId/users" element={<div className="p-8 text-slate-500">Users Management (Coming Soon)</div>} />
+                <Route path=":tenantId/users" element={<UserList />} />
                 <Route path=":tenantId/analytics" element={<div className="p-8 text-slate-500">Analytics (Coming Soon)</div>} />
                 <Route path=":tenantId/billing" element={<div className="p-8 text-slate-500">Billing (Coming Soon)</div>} />
                 <Route path=":tenantId/settings" element={<TenantSettings />} />

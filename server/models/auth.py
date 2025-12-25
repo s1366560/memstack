@@ -45,6 +45,7 @@ class User(BaseModel):
     is_active: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
     tenant_id: Optional[str] = None
+    profile: Optional[dict] = Field(default_factory=dict)
 
     class Config:
         json_schema_extra = {
@@ -85,17 +86,35 @@ class UserCreate(BaseModel):
     tenant_id: Optional[str] = None
 
 
+class UserProfile(BaseModel):
+    job_title: Optional[str] = None
+    department: Optional[str] = None
+    bio: Optional[str] = None
+    phone: Optional[str] = None
+    location: Optional[str] = None
+    language: Optional[str] = None
+    timezone: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    profile: Optional[UserProfile] = None
+
+
 class UserResponse(BaseModel):
-    id: str
+    user_id: str = Field(alias="id")
     email: str
     name: str
     role: str
     is_active: bool
     tenant_id: Optional[str] = None
     created_at: datetime
+    profile: Optional[dict] = Field(default_factory=dict)
 
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 
 class Token(BaseModel):

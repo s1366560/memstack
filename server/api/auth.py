@@ -10,7 +10,7 @@ from server.database import get_db
 from server.db_models import APIKey as DBAPIKey
 from server.db_models import User as DBUser
 from server.logging_config import get_logger
-from server.models.auth import APIKeyCreate, APIKeyResponse, Token
+from server.models.auth import APIKeyCreate, APIKeyResponse, Token, UserUpdate
 from server.models.auth import User as UserSchema
 
 logger = get_logger(__name__)
@@ -135,4 +135,38 @@ async def read_users_me(current_user: DBUser = Depends(get_current_user)):
         is_active=current_user.is_active,
         created_at=current_user.created_at,
         tenant_id=current_user.tenant_id,
+        profile=current_user.profile or {},
+    )
+
+
+@router.put("/users/me", response_model=UserSchema)
+async def update_user_me(
+    user_update: UserUpdate,
+    current_user: DBUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update current user information."""
+    if user_update.name is not None:
+        current_user.name = user_update.name
+
+    if user_update.profile is not None:
+        # Merge existing profile with new profile data
+        current_profile = current_user.profile or {}
+        new_profile_data = user_update.profile.dict(exclude_unset=True)
+        current_profile.update(new_profile_data)
+        current_user.profile = current_profile
+
+    db.add(current_user)
+    await db.commit()
+    await db.refresh(current_user)
+
+    return UserSchema(
+        user_id=current_user.id,
+        email=current_user.email,
+        name=current_user.name,
+        role=current_user.role,
+        is_active=current_user.is_active,
+        created_at=current_user.created_at,
+        tenant_id=current_user.tenant_id,
+        profile=current_user.profile or {},
     )
