@@ -13,8 +13,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from graphiti_core import Graphiti
 from graphiti_core.cross_encoder.gemini_reranker_client import GeminiRerankerClient
+from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
 from graphiti_core.embedder.gemini import GeminiEmbedder, GeminiEmbedderConfig
-from graphiti_core.llm_client import LLMConfig
+from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
+from graphiti_core.llm_client import LLMConfig, OpenAIClient
 from graphiti_core.llm_client.gemini_client import GeminiClient
 from graphiti_core.nodes import EpisodeType
 from graphiti_core.search.search_config_recipes import COMBINED_HYBRID_SEARCH_RRF
@@ -769,7 +771,7 @@ class GraphitiService:
 
             # Get entities in the community
             entities_query = """
-            MATCH (c:Community {uuid: $uuid})<-[:BELONGS_TO]-(e:Entity)
+            MATCH (c:Community {uuid: $uuid})-[:HAS_MEMBER]->(e:Entity)
             RETURN properties(e) as props
             LIMIT $limit
             """
@@ -797,7 +799,7 @@ class GraphitiService:
             # Optionally include episodes related to community entities
             if include_episodes:
                 episodes_query = """
-                MATCH (c:Community {uuid: $uuid})<-[:BELONGS_TO]-(e:Entity)<-[:CONTAINS]-(ep:Episodic)
+                MATCH (c:Community {uuid: $uuid})-[:HAS_MEMBER]->(e:Entity)<-[:CONTAINS]-(ep:Episodic)
                 RETURN properties(ep) as props
                 LIMIT $limit
                 """
@@ -1001,17 +1003,34 @@ class GraphitiService:
 
             # After rebuilding, we should re-apply tenant/project/user IDs to the new communities
             # This is a bit of a hack because Graphiti core doesn't know about our multi-tenancy yet
+
+            # Update tenant_id and project_id based on members
+            # We take the most frequent tenant/project if there are multiple (though there shouldn't be)
             query = """
-            MATCH (c:Community)<-[:BELONGS_TO]-(e:Entity)
-            WITH c, collect(distinct e.tenant_id) as tenants, collect(distinct e.project_id) as projects
-            WHERE size(tenants) = 1
-            SET c.tenant_id = tenants[0], c.project_id = projects[0]
+            MATCH (c:Community)-[:HAS_MEMBER]->(e:Entity)
+            WITH c, e
+            WHERE e.tenant_id IS NOT NULL
+            WITH c, e.tenant_id as tid, count(*) as count
+            ORDER BY count DESC
+            WITH c, collect(tid)[0] as major_tenant
+            SET c.tenant_id = major_tenant
             """
             await self.client.driver.execute_query(query)
 
+            query_proj = """
+            MATCH (c:Community)-[:HAS_MEMBER]->(e:Entity)
+            WITH c, e
+            WHERE e.project_id IS NOT NULL
+            WITH c, e.project_id as pid, count(*) as count
+            ORDER BY count DESC
+            WITH c, collect(pid)[0] as major_project
+            SET c.project_id = major_project
+            """
+            await self.client.driver.execute_query(query_proj)
+
             # Count members for each community
             count_query = """
-            MATCH (c:Community)<-[:BELONGS_TO]-(e:Entity)
+            MATCH (c:Community)-[:HAS_MEMBER]->(e:Entity)
             WITH c, count(e) as member_count
             SET c.member_count = member_count
             """
@@ -1730,8 +1749,9 @@ class GraphitiService:
             List of communities
         """
         try:
-            # Build WHERE clause
-            conditions = ["c.member_count >= $min_members"]
+            # First try to find communities that have explicit project_id/tenant_id
+            # Use coalesce to handle missing member_count (default to 0)
+            conditions = ["coalesce(c.member_count, 0) >= $min_members"]
             if tenant_id:
                 conditions.append("c.tenant_id = $tenant_id")
             if project_id:
@@ -1743,9 +1763,10 @@ class GraphitiService:
             MATCH (c:Community)
             WHERE {where_clause}
             RETURN properties(c) as props
-            ORDER BY c.member_count DESC
+            ORDER BY coalesce(c.member_count, 0) DESC
             LIMIT $limit
             """
+
             result = await self.client.driver.execute_query(
                 query,
                 tenant_id=tenant_id,
@@ -1754,15 +1775,48 @@ class GraphitiService:
                 limit=limit,
             )
 
+            # If no results found but project_id was provided, try to find communities via members
+            # This handles cases where community properties might not be synced yet
+            if not result.records and (project_id or tenant_id):
+                member_conditions = []
+                if tenant_id:
+                    member_conditions.append("e.tenant_id = $tenant_id")
+                if project_id:
+                    member_conditions.append("e.project_id = $project_id")
+
+                member_where = " AND ".join(member_conditions)
+
+                # Calculate member count on the fly for fallback
+                fallback_query = f"""
+                MATCH (c:Community)-[:HAS_MEMBER]->(e:Entity)
+                WHERE {member_where}
+                WITH c, count(e) as calculated_count
+                WHERE calculated_count >= $min_members
+                RETURN properties(c) as props, calculated_count
+                ORDER BY calculated_count DESC
+                LIMIT $limit
+                """
+
+                result = await self.client.driver.execute_query(
+                    fallback_query,
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    min_members=min_members,
+                    limit=limit,
+                )
+
             communities = []
             for r in result.records:
                 props = r["props"]
+                # Use calculated count if available, otherwise prop, otherwise 0
+                member_count = r.get("calculated_count", props.get("member_count", 0))
+
                 communities.append(
                     Community(
                         uuid=props.get("uuid", ""),
                         name=props.get("name", ""),
                         summary=props.get("summary", ""),
-                        member_count=props.get("member_count", 0),
+                        member_count=member_count,
                         tenant_id=props.get("tenant_id"),
                         project_id=props.get("project_id"),
                         formed_at=props.get("formed_at"),
@@ -1792,7 +1846,7 @@ class GraphitiService:
         """
         try:
             query = """
-            MATCH (c:Community {uuid: $uuid})<-[:BELONGS_TO]-(e:Entity)
+            MATCH (c:Community {uuid: $uuid})-[:HAS_MEMBER]->(e:Entity)
             RETURN properties(e) as props
             LIMIT $limit
             """
