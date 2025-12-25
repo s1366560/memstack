@@ -8,8 +8,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class MemoryRulesConfig(BaseModel):
     """Memory rules configuration."""
-    
-    max_episodes: int = Field(default=1000, ge=100, le=10000, description="Maximum number of episodes")
+
+    max_episodes: int = Field(
+        default=1000, ge=100, le=10000, description="Maximum number of episodes"
+    )
     retention_days: int = Field(default=30, ge=1, le=365, description="Retention days")
     auto_refresh: bool = Field(default=True, description="Enable auto refresh")
     refresh_interval: int = Field(default=24, ge=1, le=168, description="Refresh interval in hours")
@@ -17,7 +19,7 @@ class MemoryRulesConfig(BaseModel):
 
 class GraphConfig(BaseModel):
     """Graph visualization configuration."""
-    
+
     layout_algorithm: str = Field(default="force-directed", description="Layout algorithm")
     node_size: int = Field(default=20, ge=10, le=100, description="Default node size")
     edge_width: int = Field(default=2, ge=1, le=10, description="Default edge width")
@@ -25,7 +27,9 @@ class GraphConfig(BaseModel):
     animations: bool = Field(default=True, description="Enable animations")
     max_nodes: int = Field(default=1000, ge=100, le=50000, description="Maximum nodes to display")
     max_edges: int = Field(default=10000, ge=100, le=100000, description="Maximum edges to display")
-    similarity_threshold: float = Field(default=0.7, ge=0.1, le=1.0, description="Similarity threshold")
+    similarity_threshold: float = Field(
+        default=0.7, ge=0.1, le=1.0, description="Similarity threshold"
+    )
     community_detection: bool = Field(default=True, description="Enable community detection")
 
 
@@ -33,10 +37,16 @@ class ProjectCreate(BaseModel):
     """Request model for creating a project."""
 
     name: str = Field(..., description="Project name", min_length=1, max_length=255)
-    description: Optional[str] = Field(default=None, description="Project description", max_length=1000)
+    description: Optional[str] = Field(
+        default=None, description="Project description", max_length=1000
+    )
     tenant_id: str = Field(..., description="Tenant ID")
-    memory_rules: MemoryRulesConfig = Field(default_factory=MemoryRulesConfig, description="Memory rules")
-    graph_config: GraphConfig = Field(default_factory=GraphConfig, description="Graph configuration")
+    memory_rules: MemoryRulesConfig = Field(
+        default_factory=MemoryRulesConfig, description="Memory rules"
+    )
+    graph_config: GraphConfig = Field(
+        default_factory=GraphConfig, description="Graph configuration"
+    )
     is_public: bool = Field(default=False, description="Whether the project is public")
 
     model_config = ConfigDict(
@@ -49,15 +59,15 @@ class ProjectCreate(BaseModel):
                     "max_episodes": 1000,
                     "retention_days": 30,
                     "auto_refresh": True,
-                    "refresh_interval": 24
+                    "refresh_interval": 24,
                 },
                 "graph_config": {
                     "max_nodes": 5000,
                     "max_edges": 10000,
                     "similarity_threshold": 0.7,
-                    "community_detection": True
+                    "community_detection": True,
                 },
-                "is_public": False
+                "is_public": False,
             }
         }
     )
@@ -66,8 +76,12 @@ class ProjectCreate(BaseModel):
 class ProjectUpdate(BaseModel):
     """Request model for updating a project."""
 
-    name: Optional[str] = Field(default=None, description="Project name", min_length=1, max_length=255)
-    description: Optional[str] = Field(default=None, description="Project description", max_length=1000)
+    name: Optional[str] = Field(
+        default=None, description="Project name", min_length=1, max_length=255
+    )
+    description: Optional[str] = Field(
+        default=None, description="Project description", max_length=1000
+    )
     memory_rules: Optional[MemoryRulesConfig] = Field(default=None, description="Memory rules")
     graph_config: Optional[GraphConfig] = Field(default=None, description="Graph configuration")
     is_public: Optional[bool] = Field(default=None, description="Whether the project is public")
@@ -81,15 +95,15 @@ class ProjectUpdate(BaseModel):
                     "max_episodes": 2000,
                     "retention_days": 60,
                     "auto_refresh": True,
-                    "refresh_interval": 12
+                    "refresh_interval": 12,
                 },
                 "graph_config": {
                     "max_nodes": 5000,
                     "max_edges": 10000,
                     "similarity_threshold": 0.8,
-                    "community_detection": True
+                    "community_detection": True,
                 },
-                "is_public": True
+                "is_public": True,
             }
         }
     )
@@ -104,8 +118,12 @@ class ProjectResponse(BaseModel):
     description: Optional[str] = Field(default=None, description="Project description")
     owner_id: str = Field(..., description="Owner user ID")
     member_ids: List[str] = Field(default_factory=list, description="Member user IDs")
-    memory_rules: MemoryRulesConfig = Field(default_factory=MemoryRulesConfig, description="Memory rules")
-    graph_config: GraphConfig = Field(default_factory=GraphConfig, description="Graph configuration")
+    memory_rules: MemoryRulesConfig = Field(
+        default_factory=MemoryRulesConfig, description="Memory rules"
+    )
+    graph_config: GraphConfig = Field(
+        default_factory=GraphConfig, description="Graph configuration"
+    )
     is_public: bool = Field(..., description="Whether the project is public")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: Optional[datetime] = Field(default=None, description="Last update timestamp")
@@ -124,19 +142,19 @@ class ProjectResponse(BaseModel):
                     "max_episodes": 1000,
                     "retention_days": 30,
                     "auto_refresh": True,
-                    "refresh_interval": 24
+                    "refresh_interval": 24,
                 },
                 "graph_config": {
                     "max_nodes": 5000,
                     "max_edges": 10000,
                     "similarity_threshold": 0.7,
-                    "community_detection": True
+                    "community_detection": True,
                 },
                 "is_public": False,
                 "created_at": "2024-01-15T10:30:00Z",
                 "updated_at": "2024-01-15T12:45:00Z",
             }
-        }
+        },
     )
 
 

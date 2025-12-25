@@ -12,6 +12,9 @@ export interface GraphConfig {
     community_detection: boolean;
 }
 
+export type ProcessingStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+export type DataStatus = 'ENABLED' | 'DISABLED';
+
 export interface Entity {
     id: string;
     name: string;
@@ -74,6 +77,8 @@ export interface Memory {
     author_id: string;
     collaborators: string[];
     is_public: boolean;
+    status: DataStatus;
+    processing_status: ProcessingStatus;
     metadata: Record<string, any>;
     created_at: string;
     updated_at?: string;
@@ -130,6 +135,8 @@ export interface MemoryItem {
     author_id: string;
     collaborators: string[];
     is_public: boolean;
+    status: DataStatus;
+    processing_status: ProcessingStatus;
     score: number;
     metadata: Record<string, any>;
     created_at: string;
@@ -220,10 +227,10 @@ export interface User {
     id: string;
     email: string;
     name: string;
-    role: string;
+    roles: string[];
     is_active: boolean;
     created_at: string;
-    tenant_id?: string;
+    tenant_id?: string; // Keep for compatibility if needed, but backend removed it from response? No, backend removed it.
     profile?: UserProfile;
 }
 

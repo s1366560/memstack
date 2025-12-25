@@ -41,10 +41,9 @@ class User(BaseModel):
     user_id: str = Field(default_factory=lambda: str(uuid4()))
     email: str
     name: str
-    role: str = "user"  # user, admin
+    roles: list[str] = Field(default_factory=list)
     is_active: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    tenant_id: Optional[str] = None
     profile: Optional[dict] = Field(default_factory=dict)
 
     class Config:
@@ -53,7 +52,7 @@ class User(BaseModel):
                 "user_id": "user_123",
                 "email": "user@example.com",
                 "name": "John Doe",
-                "role": "user",
+                "roles": ["user"],
                 "is_active": True,
                 "permissions": ["read", "write"],
             }
@@ -82,8 +81,8 @@ class APIKeyResponse(BaseModel):
 class UserCreate(BaseModel):
     email: str
     name: str
-    role: str = "user"
-    tenant_id: Optional[str] = None
+    password: str
+    roles: list[str] = Field(default_factory=lambda: ["user"])
 
 
 class UserProfile(BaseModel):
@@ -106,9 +105,8 @@ class UserResponse(BaseModel):
     user_id: str = Field(alias="id")
     email: str
     name: str
-    role: str
+    roles: list[str]
     is_active: bool
-    tenant_id: Optional[str] = None
     created_at: datetime
     profile: Optional[dict] = Field(default_factory=dict)
 

@@ -50,9 +50,9 @@ async def create_tenant(
     db.add(user_tenant)
 
     # Update user's default tenant if not set
-    if not current_user.tenant_id:
-        current_user.tenant_id = tenant.id
-        db.add(current_user)
+    # if not current_user.tenant_id:
+    #     current_user.tenant_id = tenant.id
+    #     db.add(current_user)
 
     await db.commit()
     await db.refresh(tenant)

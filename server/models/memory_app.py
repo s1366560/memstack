@@ -3,6 +3,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from server.models.enums import DataStatus, ProcessingStatus
+
 
 class MemoryRule(BaseModel):
     name: str = Field(...)
@@ -77,6 +79,8 @@ class MemoryItem(BaseModel):
     author_id: str
     collaborators: List[str] = Field(default_factory=list)
     is_public: bool
+    status: str = DataStatus.ENABLED
+    processing_status: str = ProcessingStatus.PENDING
     score: float
     metadata: Dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
@@ -96,6 +100,8 @@ class MemoryResponse(BaseModel):
     author_id: str
     collaborators: List[str] = Field(default_factory=list)
     is_public: bool
+    status: str = DataStatus.ENABLED
+    processing_status: str = ProcessingStatus.PENDING
     metadata: Dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: Optional[datetime] = None

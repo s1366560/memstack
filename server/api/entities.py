@@ -1,7 +1,7 @@
 """Entity management API routes."""
 
 import logging
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -84,7 +84,7 @@ async def list_entities(
             limit=limit,
             offset=offset,
         )
-        
+
         # Helper to convert Neo4j types to Python types
         def _convert_val(v):
             if hasattr(v, "isoformat"):

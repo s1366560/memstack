@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { projectAPI, memoryAPI } from '../../services/api'
 import { Project, Memory } from '../../types/memory'
 
 export const ProjectOverview: React.FC = () => {
     const { projectId } = useParams()
+    const navigate = useNavigate()
     const [stats, setStats] = useState<any>(null)
     const [project, setProject] = useState<Project | null>(null)
     const [memories, setMemories] = useState<Memory[]>([])
@@ -61,6 +62,13 @@ export const ProjectOverview: React.FC = () => {
         if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`
         if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`
         return date.toLocaleDateString()
+    }
+
+    const getMemoryStatus = (memory: Memory) => {
+        if (memory.status === 'DISABLED') {
+            return { label: 'Unavailable', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', dot: 'bg-red-500' }
+        }
+        return { label: 'Available', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400', dot: 'bg-green-500' }
     }
 
     return (
@@ -168,41 +176,54 @@ export const ProjectOverview: React.FC = () => {
                                             </td>
                                         </tr>
                                     ) : (
-                                        memories.map((memory) => (
-                                            <tr key={memory.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
-                                                <td className="px-6 py-3">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="p-2 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
-                                                            <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
-                                                                {memory.content_type === 'image' ? 'image' :
-                                                                    memory.content_type === 'video' ? 'movie' : 'description'}
-                                                            </span>
-                                                        </div>
-                                                        <div>
-                                                            <div className="font-medium text-slate-900 dark:text-white">{memory.title}</div>
-                                                            <div className="text-xs text-slate-500">
-                                                                Updated {formatDate(memory.updated_at || memory.created_at)}
+                                        memories.map((memory) => {
+                                            const status = getMemoryStatus(memory)
+                                            return (
+                                                <tr
+                                                    key={memory.id}
+                                                    onClick={() => navigate(`/project/${projectId}/memory/${memory.id}`)}
+                                                    className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer"
+                                                >
+                                                    <td className="px-6 py-3">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="p-2 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
+                                                                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
+                                                                    {memory.content_type === 'image' ? 'image' :
+                                                                        memory.content_type === 'video' ? 'movie' : 'description'}
+                                                                </span>
+                                                            </div>
+                                                            <div>
+                                                                <div className="font-medium text-slate-900 dark:text-white">{memory.title}</div>
+                                                                <div className="text-xs text-slate-500">
+                                                                    Updated {formatDate(memory.updated_at || memory.created_at)}
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-3 text-slate-600 dark:text-slate-300 capitalize">{memory.content_type}</td>
-                                                <td className="px-6 py-3">
-                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                                        <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                                                        Synced
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-3 text-slate-600 dark:text-slate-300 text-right font-mono">
-                                                    {formatStorage(memory.content?.length || 0)}
-                                                </td>
-                                                <td className="px-6 py-3 text-right">
-                                                    <button className="text-slate-400 hover:text-primary p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700">
-                                                        <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>more_vert</span>
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))
+                                                    </td>
+                                                    <td className="px-6 py-3 text-slate-600 dark:text-slate-300 capitalize">{memory.content_type}</td>
+                                                    <td className="px-6 py-3">
+                                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${status.color}`}>
+                                                            <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`}></span>
+                                                            {status.label}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-3 text-slate-600 dark:text-slate-300 text-right font-mono">
+                                                        {formatStorage(memory.content?.length || 0)}
+                                                    </td>
+                                                    <td className="px-6 py-3 text-right">
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation()
+                                                                // TODO: Implement menu
+                                                            }}
+                                                            className="text-slate-400 hover:text-primary p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700"
+                                                        >
+                                                            <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>more_vert</span>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            )
+                                        })
                                     )}
                                 </tbody>
                             </table>

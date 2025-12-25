@@ -37,7 +37,7 @@ def client(mock_db_session, mock_graphiti_service):
             id="user_1",
             email="test@example.com",
             name="Test User",
-            role="user",
+            password_hash="hashed_password",
             is_active=True,
         )
 
@@ -184,7 +184,7 @@ def test_list_episodes_with_auth(auth_headers):
         )
 
     async def mock_get_user():
-        return User(id="user_1", email="e@example.com", name="U", role="user", is_active=True)
+        return User(id="user_1", email="e@example.com", name="U", password_hash="h", is_active=True)
 
     app.dependency_overrides[get_graphiti_service] = _mock_service
     app.dependency_overrides[verify_api_key_dependency] = mock_verify_key

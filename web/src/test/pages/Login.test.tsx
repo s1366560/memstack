@@ -93,18 +93,18 @@ describe('Login', () => {
         const passwordInput = screen.getByLabelText('密码')
 
         // Find admin credential button (using text content match)
-        const adminCred = screen.getByText('admin@memstack.ai / admin123')
+        const adminCred = screen.getByText('admin@memstack.ai / adminpassword')
         // Click the parent container (which has the click handler)
         fireEvent.click(adminCred.parentElement!)
 
         expect(emailInput).toHaveValue('admin@memstack.ai')
-        expect(passwordInput).toHaveValue('admin123')
+        expect(passwordInput).toHaveValue('adminpassword')
 
         // Test user credential
-        const userCred = screen.getByText('user@memstack.ai / user123')
+        const userCred = screen.getByText('user@memstack.ai / userpassword')
         fireEvent.click(userCred.parentElement!)
 
         expect(emailInput).toHaveValue('user@memstack.ai')
-        expect(passwordInput).toHaveValue('user123')
+        expect(passwordInput).toHaveValue('userpassword')
     })
 })

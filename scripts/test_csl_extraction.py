@@ -1,4 +1,3 @@
-
 import asyncio
 import os
 import sys
@@ -14,10 +13,11 @@ from server.models.episode import EpisodeCreate
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 async def main():
     service = await get_graphiti_service()
     await service.initialize()
-    
+
     try:
         # Sample from clue/csl
         content = """
@@ -30,20 +30,20 @@ Abstract: 目的探讨常见氧化铁纳米粒子几种神经干细胞标记技�
             content=content,
             source_type="document",
             project_id="test-project-chinese-csl",
-            name="CSL Test Paper"
+            name="CSL Test Paper",
         )
-        
+
         logger.info("Adding CSL test episode...")
         episode = await service.add_episode(episode_data)
         logger.info(f"Episode added: {episode.id}")
-        
+
         # Check if entities were created
         query = """
         MATCH (e:Episodic {name: 'CSL Test Paper'})-[:MENTIONS]->(n:Entity)
         RETURN n.name, n.entity_type
         """
         result = await service.client.driver.execute_query(query)
-        
+
         if result.records:
             logger.info(f"Found {len(result.records)} entities linked to the episode:")
             for r in result.records:
@@ -55,6 +55,7 @@ Abstract: 目的探讨常见氧化铁纳米粒子几种神经干细胞标记技�
         logger.error(f"Error: {e}")
     finally:
         await service.close()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

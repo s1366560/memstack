@@ -2,15 +2,15 @@
 OpenAI Reranker Client for Graphiti
 """
 
+import asyncio
 import logging
 import os
 import re
 import typing
-import asyncio
-from openai import AsyncOpenAI
+
 from graphiti_core.cross_encoder.client import CrossEncoderClient
-from graphiti_core.helpers import semaphore_gather
 from graphiti_core.llm_client import LLMConfig, RateLimitError
+from openai import AsyncOpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +36,7 @@ class OpenAIRerankerClient(CrossEncoderClient):
         base_url = config.base_url or os.environ.get("OPENAI_BASE_URL")
 
         if not api_key:
-            logger.warning(
-                "API key not provided and OPENAI_API_KEY environment variable not set"
-            )
+            logger.warning("API key not provided and OPENAI_API_KEY environment variable not set")
 
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
 
@@ -68,11 +66,11 @@ class OpenAIRerankerClient(CrossEncoderClient):
                     temperature=0.0,
                     max_tokens=10,
                 )
-                
+
                 content = response.choices[0].message.content
                 if not content:
                     return 0.0
-                    
+
                 score_match = re.search(r"\b(\d{1,3})\b", content)
                 if score_match:
                     score = float(score_match.group(1))
@@ -86,10 +84,10 @@ class OpenAIRerankerClient(CrossEncoderClient):
             # Concurrent execution
             tasks = [score_passage(p) for p in passages]
             scores = await asyncio.gather(*tasks)
-            
+
             results = list(zip(passages, scores))
             results.sort(reverse=True, key=lambda x: x[1])
-            
+
             return results
 
         except Exception as e:

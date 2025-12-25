@@ -4,11 +4,10 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 from server.auth import verify_api_key_dependency
 from server.db_models import APIKey
-from server.models.memory import MemoryItem
 from server.services import GraphitiService, get_graphiti_service
 
 logger = logging.getLogger(__name__)
@@ -19,7 +18,9 @@ router = APIRouter(prefix="/search-enhanced", tags=["search-enhanced"])
 async def search_by_graph_traversal(
     start_entity_uuid: str = Body(..., description="Starting entity UUID"),
     max_depth: int = Body(2, ge=1, le=5, description="Maximum traversal depth"),
-    relationship_types: Optional[List[str]] = Body(None, description="Relationship types to follow"),
+    relationship_types: Optional[List[str]] = Body(
+        None, description="Relationship types to follow"
+    ),
     limit: int = Body(50, ge=1, le=200, description="Maximum results"),
     tenant_id: Optional[str] = Body(None, description="Tenant filter"),
     graphiti: GraphitiService = Depends(get_graphiti_service),
@@ -292,12 +293,22 @@ async def get_search_capabilities(
         },
         "filters": {
             "entity_types": [
-                "Person", "Organization", "Product", "Location",
-                "Event", "Concept", "Custom"
+                "Person",
+                "Organization",
+                "Product",
+                "Location",
+                "Event",
+                "Concept",
+                "Custom",
             ],
             "relationship_types": [
-                "RELATES_TO", "MENTIONS", "PART_OF", "CONTAINS",
-                "BELONGS_TO", "OWNS", "LOCATED_AT"
+                "RELATES_TO",
+                "MENTIONS",
+                "PART_OF",
+                "CONTAINS",
+                "BELONGS_TO",
+                "OWNS",
+                "LOCATED_AT",
             ],
         },
     }

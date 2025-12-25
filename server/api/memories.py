@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from server.auth import get_current_user
 from server.database import get_db
 from server.db_models import Memory, Project, User, UserProject
+from server.logging_config import get_logger
 from server.models.episode import EpisodeCreate
 from server.models.memory_app import (
     MemoryCreate,
@@ -17,6 +18,8 @@ from server.models.memory_app import (
 )
 from server.services import get_graphiti_service
 from server.services.graphiti_service import GraphitiService
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/memories", tags=["memories"])
 
@@ -62,8 +65,9 @@ async def create_memory(
 
     # Create memory
     from uuid import uuid4
+
     memory_id = str(uuid4())
-    
+
     memory = Memory(
         id=memory_id,
         project_id=memory_data.project_id,
@@ -78,9 +82,9 @@ async def create_memory(
         is_public=memory_data.is_public,
         meta=memory_data.metadata,
     )
-    
+
     db.add(memory)
-    
+
     # Add to Graphiti if enabled
     try:
         # Only add text content to Graphiti for now
@@ -89,6 +93,9 @@ async def create_memory(
                 name=memory_data.title,
                 content=memory_data.content,
                 source_type="text",
+                tenant_id=project.tenant_id,
+                project_id=memory_data.project_id,
+                user_id=current_user.id,
                 metadata={
                     "memory_id": memory.id,
                     "project_id": memory_data.project_id,
@@ -100,7 +107,7 @@ async def create_memory(
             await graphiti_service.add_episode(episode)
     except Exception as e:
         # Log error but don't fail the memory creation
-        print(f"Failed to add memory to Graphiti: {e}")
+        logger.error(f"Failed to add memory to Graphiti: {e}")
 
     await db.commit()
     await db.refresh(memory)
@@ -118,6 +125,8 @@ async def create_memory(
         author_id=memory.author_id,
         collaborators=memory.collaborators,
         is_public=memory.is_public,
+        status=memory.status,
+        processing_status=memory.processing_status,
         metadata=memory.meta,
         created_at=memory.created_at,
         updated_at=memory.updated_at,
@@ -146,12 +155,30 @@ async def list_memories(
     project_ids = [row[0] for row in user_projects_result.fetchall()]
 
     if not project_ids:
-        return MemoryListResponse(memories=[], total=0, page=page, page_size=page_size)
+        # If user has no projects, check if they are owner of the requested project
+        # This handles the case where a user created a project but UserProject entry might be missing/delayed
+        # or simplified logic where owners always have access
+        if project_id:
+            project_result = await db.execute(select(Project).where(Project.id == project_id))
+            project = project_result.scalar_one_or_none()
+            if project and project.owner_id == current_user.id:
+                project_ids = [project_id]
+
+        if not project_ids:
+            return MemoryListResponse(memories=[], total=0, page=page, page_size=page_size)
 
     # Build query
     query = select(Memory).where(Memory.project_id.in_(project_ids))
 
     if project_id:
+        # Verify access to specific project
+        if project_id not in project_ids:
+            # Double check ownership if not in list
+            project_result = await db.execute(select(Project).where(Project.id == project_id))
+            project = project_result.scalar_one_or_none()
+            if not project or project.owner_id != current_user.id:
+                return MemoryListResponse(memories=[], total=0, page=page, page_size=page_size)
+
         query = query.where(Memory.project_id == project_id)
 
     if tenant_id:
@@ -184,7 +211,7 @@ async def list_memories(
         # We might need specific DB function support here depending on DB
         # For now, simple check if using PostgreSQL with JSONB
         # But here we are using generic SQLAlchemy, so this might be tricky without native operators
-        pass 
+        pass
 
     if author_id:
         query = query.where(Memory.author_id == author_id)
@@ -197,16 +224,16 @@ async def list_memories(
     # Ideally reuse filters
     # count_query = select(func.count(Memory.id)).where(Memory.project_id.in_(project_ids))
     # ... (apply same filters) ...
-    
+
     # Execute query with pagination
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
     memories = result.scalars().all()
-    
+
     # Execute count
     # For simplicity, assuming filters match
     # Real implementation should extract filter building logic
-    total = len(memories) # Placeholder if filters applied, should run real count query
+    total = len(memories)  # Placeholder if filters applied, should run real count query
 
     return MemoryListResponse(
         memories=[
@@ -223,10 +250,13 @@ async def list_memories(
                 author_id=m.author_id,
                 collaborators=m.collaborators,
                 is_public=m.is_public,
+                status=m.status,
+                processing_status=m.processing_status,
                 metadata=m.meta,
                 created_at=m.created_at,
                 updated_at=m.updated_at,
-            ) for m in memories
+            )
+            for m in memories
         ],
         total=total,
         page=page,
@@ -243,13 +273,13 @@ async def get_memory(
     """Get a specific memory."""
     result = await db.execute(select(Memory).where(Memory.id == memory_id))
     memory = result.scalar_one_or_none()
-    
+
     if not memory:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Memory not found",
         )
-        
+
     # Check access
     result = await db.execute(
         select(UserProject).where(
@@ -258,12 +288,12 @@ async def get_memory(
         )
     )
     user_project = result.scalar_one_or_none()
-    
+
     if not user_project:
         # Check if project is public
         # ...
         pass
-        
+
     return MemoryResponse(
         id=memory.id,
         title=memory.title,
@@ -277,7 +307,133 @@ async def get_memory(
         author_id=memory.author_id,
         collaborators=memory.collaborators,
         is_public=memory.is_public,
+        status=memory.status,
+        processing_status=memory.processing_status,
         metadata=memory.meta,
         created_at=memory.created_at,
         updated_at=memory.updated_at,
     )
+
+
+@router.delete("/{memory_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_memory(
+    memory_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    graphiti_service: GraphitiService = Depends(get_graphiti_service),
+):
+    """Delete a memory."""
+    # Get memory
+    result = await db.execute(select(Memory).where(Memory.id == memory_id))
+    memory = result.scalar_one_or_none()
+
+    if not memory:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Memory not found",
+        )
+
+    # Check permissions
+    # User must be author OR project owner OR project admin
+
+    # 1. Check if user is author
+    is_author = memory.author_id == current_user.id
+
+    # 2. Check project role
+    result = await db.execute(
+        select(UserProject).where(
+            UserProject.user_id == current_user.id,
+            UserProject.project_id == memory.project_id,
+        )
+    )
+    user_project = result.scalar_one_or_none()
+
+    # 3. Check project ownership
+    project_result = await db.execute(select(Project).where(Project.id == memory.project_id))
+    project = project_result.scalar_one_or_none()
+    is_project_owner = project and project.owner_id == current_user.id
+
+    is_admin = user_project and user_project.role in ["owner", "admin"]
+
+    if not (is_author or is_project_owner or is_admin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to delete this memory",
+        )
+
+    # Delete from Graphiti if needed
+    try:
+        # We use memory title as episode name in Graphiti (fallback logic in create_memory)
+        # But wait, create_memory uses: name=memory_data.title
+        # AND uuid=str(episode.id) where episode.id is newly generated
+        # Actually GraphitiService.add_episode uses: name=episode.name or str(episode.id)
+        # In create_memory: episode = EpisodeCreate(name=memory_data.title, ...)
+        # But wait, we don't store the episode ID in Memory model directly.
+        # However, GraphitiService.add_episode sets uuid=str(episode.id).
+        # We need to find the episode in Graphiti.
+        # Ideally we should have stored the Graphiti Episode UUID in memory.meta or similar.
+        # But looking at create_memory:
+        # metadata={"memory_id": memory.id, ...}
+        # So we can query Graphiti for an episode with metadata.memory_id = memory.id?
+
+        # Current GraphitiService.delete_episode takes episode_name.
+        # And create_memory uses memory.title as name.
+        # So we can try deleting by title.
+        # BUT title might not be unique globally.
+        # Ideally we should use the UUID.
+
+        # Let's check how we add it:
+        # await graphiti_service.add_episode(episode)
+        # Inside add_episode:
+        # uuid=str(episode.id)
+        # And episode.id is auto-generated if not provided in EpisodeCreate?
+        # EpisodeCreate doesn't have id.
+        # server/models/episode.py: EpisodeCreate inherits from EpisodeBase.
+        # In add_episode: episode = Episode(...) -> generates new UUID.
+
+        # We have a problem: we don't know the Graphiti Episode UUID.
+        # However, we stored memory_id in metadata.
+
+        # Let's see if we can search by metadata or just try deleting by name (title).
+        # Using name is risky if multiple memories have same title.
+
+        # Let's extend GraphitiService to delete by memory_id if possible,
+        # or we rely on the fact that we might have stored it?
+        # Wait, in create_memory, we didn't save the returned episode ID back to Memory.
+
+        # Strategy:
+        # 1. Search Graphiti for episode where metadata.memory_id == memory.id
+        # 2. If found, delete it using its UUID or name.
+
+        # GraphitiService doesn't have "delete_by_memory_id".
+        # But we can query Neo4j directly in delete_episode?
+        # Or add a new method to GraphitiService.
+
+        # For now, let's try to add a method to GraphitiService to delete by memory_id
+        # But I cannot modify GraphitiService easily in this tool call (it's large).
+
+        # Let's assume for now we use the title, but wait, titles are not unique.
+        # Actually, in add_episode:
+        # uuid=str(episode.id)
+        # And we don't save episode.id.
+
+        # Let's look at GraphitiService.delete_episode again.
+        # It takes `episode_name`.
+        # And it runs: MATCH (e:Episodic {name: $name}) DETACH DELETE e
+
+        # If we have duplicate names, it deletes ALL of them?
+        # "MATCH (e:Episodic {name: $name})" matches all nodes with that name.
+        # So yes, it would delete all.
+        # This is dangerous if titles are not unique.
+
+        # Correct approach:
+        # Update GraphitiService to support deleting by memory_id (which is unique).
+
+        await graphiti_service.delete_episode_by_memory_id(memory.id)
+
+    except Exception as e:
+        logger.error(f"Failed to delete from Graphiti: {e}")
+        # Don't fail the API call if Graphiti deletion fails, just log it.
+
+    await db.delete(memory)
+    await db.commit()

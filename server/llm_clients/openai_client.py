@@ -2,15 +2,16 @@
 OpenAI LLM Client for Graphiti
 """
 
-import logging
-import typing
 import json
+import logging
 import os
-from openai import AsyncOpenAI
+import typing
+
 from graphiti_core.llm_client.client import LLMClient
 from graphiti_core.llm_client.config import DEFAULT_MAX_TOKENS, LLMConfig, ModelSize
 from graphiti_core.llm_client.errors import RateLimitError
 from graphiti_core.prompts.models import Message
+from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -39,9 +40,7 @@ class OpenAIClient(LLMClient):
         base_url = config.base_url or os.environ.get("OPENAI_BASE_URL")
 
         if not api_key:
-            logger.warning(
-                "API key not provided and OPENAI_API_KEY environment variable not set"
-            )
+            logger.warning("API key not provided and OPENAI_API_KEY environment variable not set")
 
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
 
@@ -83,7 +82,7 @@ class OpenAIClient(LLMClient):
                 kwargs["response_format"] = {"type": "json_object"}
                 # Ensure system prompt mentions JSON output if not already present
                 # But typically Graphiti prompts already ask for JSON
-                
+
             response = await self.client.chat.completions.create(**kwargs)
 
             content = response.choices[0].message.content
@@ -103,12 +102,12 @@ class OpenAIClient(LLMClient):
                     if json_str.endswith("```"):
                         json_str = json_str[:-3]
                     json_str = json_str.strip()
-                    
+
                     parsed_json = json.loads(json_str)
-                    
+
                     # Basic cleaning similar to Qwen client
                     cleaned_json = self._clean_json(parsed_json)
-                    
+
                     validated = response_model.model_validate(cleaned_json)
                     return validated.model_dump()
                 except Exception as e:

@@ -45,9 +45,7 @@ async def main():
                 print()
 
                 # Get API keys for this user
-                result = await db.execute(
-                    select(APIKey).where(APIKey.user_id == user.id)
-                )
+                result = await db.execute(select(APIKey).where(APIKey.user_id == user.id))
                 keys = result.scalars().all()
 
                 if keys:

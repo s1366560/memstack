@@ -27,16 +27,10 @@ export const Login: React.FC = () => {
     const handleDemoLogin = (type: 'admin' | 'user') => {
         if (type === 'admin') {
             setEmail('admin@memstack.ai');
-            setPassword('admin123'); // Assuming default password logic allows this, though current auth only uses API keys in backend, we simulate form fill. 
-            // Actually backend create_user doesn't set password, it uses API Key or OAuth usually. 
-            // But for this login form which likely calls an auth endpoint that expects password (even if mock), we fill it.
-            // Wait, let's check authAPI.login implementation. It sends email/password.
-            // And backend auth.py initializes user but how about password?
-            // The backend uses API Key for auth, but the login endpoint usually exchanges email/password for token.
-            // Let's assume for demo purposes we just fill these.
+            setPassword('adminpassword');
         } else {
             setEmail('user@memstack.ai');
-            setPassword('user123');
+            setPassword('userpassword');
         }
     };
 
@@ -56,7 +50,7 @@ export const Login: React.FC = () => {
                         <div className="p-2 bg-blue-500/20 rounded-lg backdrop-blur-sm border border-blue-400/20">
                             <Brain className="h-8 w-8 text-blue-400" />
                         </div>
-                        <span className="text-2xl font-bold tracking-tight">VIP Memory</span>
+                        <span className="text-2xl font-bold tracking-tight">Mem Stack</span>
                     </div>
 
                     <div className="space-y-8">
@@ -93,12 +87,12 @@ export const Login: React.FC = () => {
                     </div>
 
                     <div className="text-sm text-slate-400 flex justify-between items-center">
-            <span>© 2024 MemStack. All rights reserved.</span>
-            <div className="flex space-x-4">
-              <a href="#" className="hover:text-white transition-colors">隐私政策</a>
-              <a href="#" className="hover:text-white transition-colors">服务条款</a>
-            </div>
-          </div>
+                        <span>© 2024 MemStack. All rights reserved.</span>
+                        <div className="flex space-x-4">
+                            <a href="#" className="hover:text-white transition-colors">隐私政策</a>
+                            <a href="#" className="hover:text-white transition-colors">服务条款</a>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -234,7 +228,7 @@ export const Login: React.FC = () => {
                                 tabIndex={0}
                             >
                                 <span className="font-medium">管理员</span>
-                                <span className="font-mono text-xs">admin@memstack.ai / admin123</span>
+                                <span className="font-mono text-xs">admin@memstack.ai / adminpassword</span>
                             </div>
                             <div
                                 onClick={() => handleDemoLogin('user')}
@@ -243,7 +237,7 @@ export const Login: React.FC = () => {
                                 tabIndex={0}
                             >
                                 <span className="font-medium">普通用户</span>
-                                <span className="font-mono text-xs">user@memstack.ai / user123</span>
+                                <span className="font-mono text-xs">user@memstack.ai / userpassword</span>
                             </div>
                         </div>
                     </div>

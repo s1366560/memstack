@@ -5,17 +5,17 @@ Qwen (通义千问) LLM Client for Graphiti
 使用 OpenAI SDK 连接到阿里云 DashScope 兼容端点
 """
 
-import asyncio
 import json
 import logging
 import os
 import typing
 
-from openai import AsyncOpenAI, APIError, RateLimitError as OpenAIRateLimitError
 from graphiti_core.llm_client.client import LLMClient
 from graphiti_core.llm_client.config import DEFAULT_MAX_TOKENS, LLMConfig, ModelSize
 from graphiti_core.llm_client.errors import RateLimitError
 from graphiti_core.prompts.models import Message
+from openai import AsyncOpenAI
+from openai import RateLimitError as OpenAIRateLimitError
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -66,7 +66,7 @@ class QwenClient(LLMClient):
             logger.warning(
                 "API key not provided and DASHSCOPE_API_KEY environment variable not set"
             )
-        
+
         base_url = os.environ.get("DASHSCOPE_BASE_URL", DEFAULT_BASE_URL)
 
         # 初始化 OpenAI Client
@@ -124,7 +124,9 @@ class QwenClient(LLMClient):
             elif isinstance(value, list):
                 # Special handling for duplicates list to ensure strings
                 if key == "duplicates":
-                    cleaned_list = [str(item) if isinstance(item, (int, float)) else item for item in value]
+                    cleaned_list = [
+                        str(item) if isinstance(item, (int, float)) else item for item in value
+                    ]
                     cleaned_data[key] = cleaned_list
                 else:
                     # 递归清理列表中的元素
@@ -160,7 +162,9 @@ class QwenClient(LLMClient):
                 ):
                     cleaned_data[key] = None
                 # Ensure ID fields are strings for Graphiti compatibility
-                elif (key.lower() == "id" or key.lower().endswith("_id") or key == "duplicate_idx") and isinstance(value, (int, float)):
+                elif (
+                    key.lower() == "id" or key.lower().endswith("_id") or key == "duplicate_idx"
+                ) and isinstance(value, (int, float)):
                     cleaned_data[key] = str(int(value))
                 else:
                     cleaned_data[key] = value
@@ -191,14 +195,16 @@ class QwenClient(LLMClient):
         current_id = cleaned_data.get("id")
         dup_idx = cleaned_data.get("duplicate_idx")
         duplicates = cleaned_data.get("duplicates", [])
-        
+
         if current_id is not None and dup_idx is not None and duplicates:
             # Ensure types match for comparison (they should be strings now due to cleaning above)
             if str(dup_idx) == str(current_id):
                 other_dups = [d for d in duplicates if str(d) != str(current_id)]
                 if other_dups:
                     cleaned_data["duplicate_idx"] = str(other_dups[0])
-                    logger.info(f"Fixed duplicate_idx from {dup_idx} to {other_dups[0]} based on duplicates list {duplicates}")
+                    logger.info(
+                        f"Fixed duplicate_idx from {dup_idx} to {other_dups[0]} based on duplicates list {duplicates}"
+                    )
 
         return cleaned_data
 
@@ -250,48 +256,48 @@ class QwenClient(LLMClient):
         """
         # 准备 OpenAI 格式的消息
         openai_messages = []
-        
+
         # 如果需要结构化输出，确保 System Prompt 包含 JSON 指令
         # Qwen 的 JSON Mode 要求 System/User Prompt 中必须包含 "json"
         has_system = any(m.role == "system" for m in messages)
         json_instruction = "You must output valid JSON only."
-        
+
         if not has_system and response_model:
             openai_messages.append({"role": "system", "content": json_instruction})
-            
+
         for m in messages:
             content = self._clean_input(m.content)
             if response_model and m.role == "system":
                 content += f" {json_instruction}"
-            
+
             # OpenAI Mode 下，我们可以简化 Prompt，因为 json_object mode 很强
             openai_messages.append({"role": m.role, "content": content})
 
         model = self._get_model_for_size(model_size)
-        
+
         try:
             kwargs = {
                 "model": model,
                 "messages": openai_messages,
                 "max_tokens": max_tokens,
             }
-            
+
             # 启用 JSON Mode
             if response_model:
                 kwargs["response_format"] = {"type": "json_object"}
-            
+
             response = await self.client.chat.completions.create(**kwargs)
-            
+
             if not response.choices:
                 raise ValueError("No choices in response")
-                
+
             raw_output = response.choices[0].message.content
-            
+
             if not raw_output:
                 raise ValueError("Empty response content")
 
             logger.info(f"Qwen raw output: {raw_output}")
-            
+
             if response_model:
                 try:
                     # 尝试解析 JSON
@@ -307,12 +313,14 @@ class QwenClient(LLMClient):
                         if clean_output.endswith("```"):
                             clean_output = clean_output[:-3]
                         parsed_json = json.loads(clean_output.strip())
-                    
+
                     # Check if returned JSON is a Schema (properties, type, etc.)
                     # and try to extract data from description or default fields
                     if isinstance(parsed_json, dict) and "properties" in parsed_json:
-                        logger.warning("Qwen returned JSON Schema instead of data. Attempting heuristic extraction...")
-                        
+                        logger.warning(
+                            "Qwen returned JSON Schema instead of data. Attempting heuristic extraction..."
+                        )
+
                         extracted = {}
                         properties = parsed_json.get("properties", {})
                         for k, v in properties.items():
@@ -322,11 +330,11 @@ class QwenClient(LLMClient):
                                 # Heuristic: if description looks like content (not just "The summary of...")
                                 # But for 'summary' field, description often IS the summary if model is confused
                                 if desc and len(str(desc)) > 10:
-                                     extracted[k] = desc
+                                    extracted[k] = desc
                                 # Check default
                                 if "default" in v:
                                     extracted[k] = v["default"]
-                        
+
                         if extracted:
                             logger.info(f"Heuristically extracted data: {extracted}")
                             # Merge with parsed_json to keep other fields if any
@@ -339,37 +347,37 @@ class QwenClient(LLMClient):
 
                     # 清理数据
                     parsed_json = self._clean_parsed_json(parsed_json, response_model)
-                    
+
                     # 验证
                     validated = response_model.model_validate(parsed_json)
                     return validated.model_dump()
                 except Exception as e:
                     logger.error(f"Failed to parse/validate JSON: {e}")
                     logger.error(f"Raw output: {raw_output}")
-                    
+
                     # Retry logic
                     if retry_count < 2:
-                         logger.info(f"Retrying generation (attempt {retry_count + 1})...")
-                         
-                         # Add error feedback to messages
-                         # We need to construct new messages list carefully
-                         # messages is list[Message]
-                         new_messages = list(messages)
-                         
-                         # Add assistant output (what it generated)
-                         new_messages.append(Message(role="assistant", content=raw_output))
-                         
-                         # Add user correction
-                         correction = "You returned the JSON Schema definition instead of the actual data. Please output the JSON object containing the actual extracted data."
-                         new_messages.append(Message(role="user", content=correction))
-                         
-                         return await self._generate_response(
-                             messages=new_messages,
-                             response_model=response_model,
-                             max_tokens=max_tokens,
-                             model_size=model_size,
-                             retry_count=retry_count + 1
-                         )
+                        logger.info(f"Retrying generation (attempt {retry_count + 1})...")
+
+                        # Add error feedback to messages
+                        # We need to construct new messages list carefully
+                        # messages is list[Message]
+                        new_messages = list(messages)
+
+                        # Add assistant output (what it generated)
+                        new_messages.append(Message(role="assistant", content=raw_output))
+
+                        # Add user correction
+                        correction = "You returned the JSON Schema definition instead of the actual data. Please output the JSON object containing the actual extracted data."
+                        new_messages.append(Message(role="user", content=correction))
+
+                        return await self._generate_response(
+                            messages=new_messages,
+                            response_model=response_model,
+                            max_tokens=max_tokens,
+                            model_size=model_size,
+                            retry_count=retry_count + 1,
+                        )
                     raise
 
             return {"content": raw_output}

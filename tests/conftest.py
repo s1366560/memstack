@@ -31,7 +31,7 @@ async def test_user(mock_db_session):
         mock_db_session,
         email="test@example.com",
         name="Test User",
-        role="user",
+        password="testpassword",
     )
     return user
 

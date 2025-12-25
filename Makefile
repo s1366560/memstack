@@ -1,4 +1,4 @@
-.PHONY: install test format lint clean dev serve help web-install web-dev web-build test-data get-api-key
+.PHONY: install test format lint clean dev serve help web-install web-dev web-build web-preview web-test web-test-coverage web-lint web-e2e test-data get-api-key
 
 help:
 	@echo "MemStack Development Commands"
@@ -26,6 +26,11 @@ help:
 	@echo "web-install - Install web dependencies"
 	@echo "web-dev     - Start web development server"
 	@echo "web-build   - Build web for production"
+	@echo "web-preview - Preview web build"
+	@echo "web-test    - Run web tests"
+	@echo "web-test-coverage - Run web tests with coverage"
+	@echo "web-lint    - Run web linting"
+	@echo "web-e2e     - Run web e2e tests (Playwright)"
 
 install:
 	pip install -e ".[dev,neo4j,evaluation]"
@@ -117,6 +122,9 @@ web-test-coverage:
 
 web-lint:
 	cd web && npm run lint
+
+web-e2e:
+	cd web && npm run test:e2e
 
 # API Key helper
 get-api-key:

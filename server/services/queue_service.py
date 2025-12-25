@@ -8,7 +8,11 @@ from typing import Any, Optional
 
 from graphiti_core import Graphiti
 from graphiti_core.nodes import EpisodeType
-from pydantic import BaseModel
+from sqlalchemy import update
+
+from server.database import async_session_factory
+from server.db_models import Memory
+from server.models.enums import ProcessingStatus
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +28,35 @@ class QueueService:
         self._queue_workers: dict[str, bool] = {}
         # Store the graphiti client after initialization
         self._graphiti_client: Optional[Graphiti] = None
+
+    async def _update_memory_status(self, memory_id: str, status: ProcessingStatus) -> None:
+        """Update memory processing status in database."""
+        if not memory_id:
+            return
+
+        try:
+            logger.info(f"Attempting to update memory {memory_id} status to {status.value}")
+            async with async_session_factory() as session:
+                async with session.begin():
+                    # Check if memory exists
+                    result = await session.execute(
+                        update(Memory)
+                        .where(Memory.id == memory_id)
+                        .values(processing_status=status.value)
+                    )
+                    if result.rowcount == 0:
+                        logger.warning(
+                            f"Memory {memory_id} not found when updating status to {status.value}"
+                        )
+                    else:
+                        logger.info(
+                            f"Successfully updated memory {memory_id} status to {status.value}"
+                        )
+        except Exception as e:
+            logger.error(f"Failed to update memory status {memory_id} to {status}: {e}")
+            import traceback
+
+            logger.error(traceback.format_exc())
 
     async def add_episode_task(
         self, group_id: str, process_func: Callable[[], Awaitable[None]]
@@ -56,7 +89,7 @@ class QueueService:
         This function runs as a long-lived task that processes episodes
         from the queue one at a time.
         """
-        logger.info(f'Starting episode queue worker for group_id: {group_id}')
+        logger.info(f"Starting episode queue worker for group_id: {group_id}")
         self._queue_workers[group_id] = True
 
         try:
@@ -70,18 +103,18 @@ class QueueService:
                     await process_func()
                 except Exception as e:
                     logger.error(
-                        f'Error processing queued episode for group_id {group_id}: {str(e)}'
+                        f"Error processing queued episode for group_id {group_id}: {str(e)}"
                     )
                 finally:
                     # Mark the task as done regardless of success/failure
                     self._episode_queues[group_id].task_done()
         except asyncio.CancelledError:
-            logger.info(f'Episode queue worker for group_id {group_id} was cancelled')
+            logger.info(f"Episode queue worker for group_id {group_id} was cancelled")
         except Exception as e:
-            logger.error(f'Unexpected error in queue worker for group_id {group_id}: {str(e)}')
+            logger.error(f"Unexpected error in queue worker for group_id {group_id}: {str(e)}")
         finally:
             self._queue_workers[group_id] = False
-            logger.info(f'Stopped episode queue worker for group_id: {group_id}')
+            logger.info(f"Stopped episode queue worker for group_id: {group_id}")
 
     def get_queue_size(self, group_id: str) -> int:
         """Get the current queue size for a group_id."""
@@ -100,7 +133,7 @@ class QueueService:
             graphiti_client: The graphiti client instance to use for processing episodes
         """
         self._graphiti_client = graphiti_client
-        logger.info('Queue service initialized with graphiti client')
+        logger.info("Queue service initialized with graphiti client")
 
     async def add_episode(
         self,
@@ -114,6 +147,7 @@ class QueueService:
         tenant_id: Optional[str] = None,
         project_id: Optional[str] = None,
         user_id: Optional[str] = None,
+        memory_id: Optional[str] = None,
     ) -> int:
         """Add an episode for processing.
 
@@ -128,21 +162,27 @@ class QueueService:
             tenant_id: Tenant ID for metadata
             project_id: Project ID for metadata
             user_id: User ID for metadata
+            memory_id: Memory ID for status updates
 
         Returns:
             The position in the queue
         """
         if self._graphiti_client is None:
-            raise RuntimeError('Queue service not initialized. Call initialize() first.')
+            raise RuntimeError("Queue service not initialized. Call initialize() first.")
 
         async def process_episode():
             """Process the episode using the graphiti client."""
             try:
-                logger.info(f'Processing episode {uuid} for group {group_id}')
+                # Use memory_id if provided, otherwise fallback to uuid (for backward compatibility or direct episode usage)
+                status_id = memory_id or uuid
+                if status_id:
+                    await self._update_memory_status(status_id, ProcessingStatus.PROCESSING)
+
+                logger.info(f"Processing episode {uuid} for group {group_id}")
 
                 # Process the episode using the graphiti client
-                from graphiti_core.utils.maintenance.community_operations import update_community
                 from graphiti_core.helpers import semaphore_gather
+                from graphiti_core.utils.maintenance.community_operations import update_community
 
                 add_result = await self._graphiti_client.add_episode(
                     name=name,
@@ -151,7 +191,7 @@ class QueueService:
                     source=episode_type,
                     group_id=group_id,
                     reference_time=datetime.now(timezone.utc),
-                    update_communities=False, 
+                    update_communities=False,
                     entity_types=entity_types,
                     uuid=uuid,
                 )
@@ -176,28 +216,33 @@ class QueueService:
                             uuid=uuid,
                             tenant_id=tenant_id,
                             project_id=project_id,
-                            user_id=user_id
+                            user_id=user_id,
                         )
                         logger.info(f"Metadata propagated to entities for episode {uuid}")
                     except Exception as e:
                         logger.warning(f"Failed to propagate metadata for episode {uuid}: {e}")
                 else:
-                     # If no metadata to propagate, still update status to Synced
-                     try:
+                    # If no metadata to propagate, still update status to Synced
+                    try:
                         query = """
                         MATCH (ep:Episodic {uuid: $uuid})
                         SET ep.status = 'Synced'
                         """
                         await self._graphiti_client.driver.execute_query(query, uuid=uuid)
-                     except Exception as e:
+                    except Exception as e:
                         logger.warning(f"Failed to update status for episode {uuid}: {e}")
-                
+
                 # Manual community update
                 if add_result and add_result.nodes:
                     try:
                         await semaphore_gather(
                             *[
-                                update_community(self._graphiti_client.driver, self._graphiti_client.llm_client, self._graphiti_client.embedder, node)
+                                update_community(
+                                    self._graphiti_client.driver,
+                                    self._graphiti_client.llm_client,
+                                    self._graphiti_client.embedder,
+                                    node,
+                                )
                                 for node in add_result.nodes
                             ],
                             max_coroutines=self._graphiti_client.max_coroutines,
@@ -212,18 +257,22 @@ class QueueService:
                                 c.project_id = $project_id
                             """
                             await self._graphiti_client.driver.execute_query(
-                                query,
-                                uuid=uuid,
-                                tenant_id=tenant_id,
-                                project_id=project_id
+                                query, uuid=uuid, tenant_id=tenant_id, project_id=project_id
                             )
                     except Exception as e:
                         logger.warning(f"Failed to update communities for episode {uuid}: {e}")
 
-                logger.info(f'Successfully processed episode {uuid} for group {group_id}')
+                logger.info(f"Successfully processed episode {uuid} for group {group_id}")
+                if status_id:
+                    logger.info(f"Updating status for memory {status_id} to COMPLETED")
+                    await self._update_memory_status(status_id, ProcessingStatus.COMPLETED)
+                    logger.info(f"Status updated for memory {status_id}")
 
             except Exception as e:
-                logger.error(f'Failed to process episode {uuid} for group {group_id}: {str(e)}')
+                if status_id:
+                    logger.error(f"Updating status for memory {status_id} to FAILED")
+                    await self._update_memory_status(status_id, ProcessingStatus.FAILED)
+                logger.error(f"Failed to process episode {uuid} for group {group_id}: {str(e)}")
                 raise
 
         # Use the existing add_episode_task method to queue the processing

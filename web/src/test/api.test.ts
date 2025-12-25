@@ -231,7 +231,7 @@ describe('API Services', () => {
             const mockResponse = { data: {} }
             mockApiInstance.get.mockResolvedValue(mockResponse)
             await memoryAPI.getGraphData('p1')
-            expect(mockApiInstance.get).toHaveBeenCalledWith('/memories/graph', { params: { project_id: 'p1' } })
+            expect(mockApiInstance.get).toHaveBeenCalledWith('/memory/graph', { params: { project_id: 'p1' } })
         })
 
         it('extractEntities should extract', async () => {

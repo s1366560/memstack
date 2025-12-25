@@ -1,10 +1,9 @@
-from datetime import datetime
-
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from server.auth import create_user
 from server.config import get_settings
 from server.database import get_db
 from server.db_models import User
@@ -35,19 +34,19 @@ async def test_auth_flow(integration_db_override):
 
     # Ensure admin user exists using the override
     async for session in integration_db_override():
+        # Ensure admin user is fresh
         result = await session.execute(select(User).where(User.email == "admin@memstack.ai"))
         user = result.scalar_one_or_none()
-        if not user:
-            user = User(
-                id="admin_user",
-                email="admin@memstack.ai",
-                name="Admin User",
-                role="admin",
-                is_active=True,
-                created_at=datetime.utcnow(),
-            )
-            session.add(user)
+        if user:
+            await session.delete(user)
             await session.commit()
+
+        user = await create_user(
+            session,
+            email="admin@memstack.ai",
+            name="Admin User",
+            password="admin123",
+        )
         break  # Only need one session
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

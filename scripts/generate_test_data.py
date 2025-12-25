@@ -21,8 +21,7 @@ import httpx
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -38,26 +37,22 @@ class TestDataGenerator:
         "{name} mentioned that they like {preference} color scheme better.",
         "The user {name} changed their display preference to {preference}.",
         "{name}'s profile shows preference for {preference} interface.",
-
         # Task and activity episodes
         "{name} completed the task '{task_name}' in the {project} project.",
         "User {name} created a new document called '{document_name}'.",
         "{name} reviewed the pull request for {feature_name}.",
         "Meeting scheduled: {name} to discuss {topic} with {team}.",
         "{name} assigned {assignee} to work on {task_name}.",
-
         # Product usage episodes
         "{name} used the {feature} feature to analyze {data_type}.",
         "The {feature} tool was accessed by {name} for data processing.",
         "{name} exported results using the {feature} module.",
         "User {name} configured {feature} with specific parameters.",
-
         # Support and interaction episodes
         "{name} reported an issue with {component}: {issue_description}.",
         "Support ticket created by {name} regarding {feature}.",
         "{name} requested help with {task} in the {project} workspace.",
         "{name} gave feedback that the {feature} should be improved.",
-
         # Learning and training episodes
         "{name} completed the training module on {topic}.",
         "New user {name} attended the onboarding session for {project}.",
@@ -66,65 +61,140 @@ class TestDataGenerator:
     ]
 
     NAMES = [
-        "Alice Johnson", "Bob Smith", "Carol Williams", "David Brown",
-        "Emma Davis", "Frank Miller", "Grace Wilson", "Henry Taylor",
-        "Ivy Anderson", "Jack Thomas", "Kate Martinez", "Liam Garcia",
-        "Mia Rodriguez", "Noah Lee", "Olivia Clark", "Paul Walker",
-        "Quinn Hall", "Rachel Allen", "Sam Young", "Tina King"
+        "Alice Johnson",
+        "Bob Smith",
+        "Carol Williams",
+        "David Brown",
+        "Emma Davis",
+        "Frank Miller",
+        "Grace Wilson",
+        "Henry Taylor",
+        "Ivy Anderson",
+        "Jack Thomas",
+        "Kate Martinez",
+        "Liam Garcia",
+        "Mia Rodriguez",
+        "Noah Lee",
+        "Olivia Clark",
+        "Paul Walker",
+        "Quinn Hall",
+        "Rachel Allen",
+        "Sam Young",
+        "Tina King",
     ]
 
     PREFERENCES = [
-        "dark", "light", "compact", "expanded", "detailed", "simplified",
-        "grid view", "list view", "sidebar navigation", "top navigation"
+        "dark",
+        "light",
+        "compact",
+        "expanded",
+        "detailed",
+        "simplified",
+        "grid view",
+        "list view",
+        "sidebar navigation",
+        "top navigation",
     ]
 
     TASKS = [
-        "data analysis", "report generation", "code review", "documentation",
-        "bug fixing", "feature development", "testing", "deployment",
-        "database migration", "API integration", "UI design", "performance optimization"
+        "data analysis",
+        "report generation",
+        "code review",
+        "documentation",
+        "bug fixing",
+        "feature development",
+        "testing",
+        "deployment",
+        "database migration",
+        "API integration",
+        "UI design",
+        "performance optimization",
     ]
 
     DOCUMENTS = [
-        "Q4 Financial Report", "Product Roadmap 2024", "User Research Summary",
-        "Technical Architecture Document", "Marketing Strategy Presentation",
-        "Sales Performance Dashboard", "Customer Feedback Analysis",
-        "Security Audit Report", "Compliance Documentation", "Team Handbook"
+        "Q4 Financial Report",
+        "Product Roadmap 2024",
+        "User Research Summary",
+        "Technical Architecture Document",
+        "Marketing Strategy Presentation",
+        "Sales Performance Dashboard",
+        "Customer Feedback Analysis",
+        "Security Audit Report",
+        "Compliance Documentation",
+        "Team Handbook",
     ]
 
     FEATURES = [
-        "knowledge graph", "semantic search", "entity extraction",
-        "relationship analysis", "community detection", "data export",
-        "memory visualization", "natural language query", "auto-tagging",
-        "recommendation engine", "anomaly detection", "trend analysis"
+        "knowledge graph",
+        "semantic search",
+        "entity extraction",
+        "relationship analysis",
+        "community detection",
+        "data export",
+        "memory visualization",
+        "natural language query",
+        "auto-tagging",
+        "recommendation engine",
+        "anomaly detection",
+        "trend analysis",
     ]
 
     PROJECTS = [
-        "Alpha Research", "Beta Development", "Gamma Analytics",
-        "Delta Operations", "Epsilon Services"
+        "Alpha Research",
+        "Beta Development",
+        "Gamma Analytics",
+        "Delta Operations",
+        "Epsilon Services",
     ]
 
     TOPICS = [
-        "machine learning", "data science", "cloud infrastructure",
-        "cybersecurity", "user experience", "product strategy",
-        "customer success", "sales techniques", "marketing automation",
-        "agile methodology", "devops practices", "API design"
+        "machine learning",
+        "data science",
+        "cloud infrastructure",
+        "cybersecurity",
+        "user experience",
+        "product strategy",
+        "customer success",
+        "sales techniques",
+        "marketing automation",
+        "agile methodology",
+        "devops practices",
+        "API design",
     ]
 
     TEAMS = [
-        "engineering team", "product team", "marketing team",
-        "sales team", "support team", "data team", "research team"
+        "engineering team",
+        "product team",
+        "marketing team",
+        "sales team",
+        "support team",
+        "data team",
+        "research team",
     ]
 
     COMPONENTS = [
-        "login page", "dashboard", "search functionality", "export feature",
-        "notification system", "user profile", "settings panel",
-        "report generator", "data visualization", "API endpoint"
+        "login page",
+        "dashboard",
+        "search functionality",
+        "export feature",
+        "notification system",
+        "user profile",
+        "settings panel",
+        "report generator",
+        "data visualization",
+        "API endpoint",
     ]
 
     ISSUES = [
-        "slow loading time", "authentication failure", "data sync issue",
-        "display bug", "error handling problem", "access control issue",
-        "notification delay", "search inaccuracy", "export format error"
+        "slow loading time",
+        "authentication failure",
+        "data sync issue",
+        "display bug",
+        "error handling problem",
+        "access control issue",
+        "notification delay",
+        "search inaccuracy",
+        "export format error",
     ]
 
     def __init__(
@@ -132,7 +202,7 @@ class TestDataGenerator:
         base_url: str = "http://localhost:8000/api/v1",
         api_key: Optional[str] = None,
         tenant_id: Optional[str] = None,
-        project_id: Optional[str] = None
+        project_id: Optional[str] = None,
     ):
         """
         Initialize the test data generator.
@@ -143,7 +213,7 @@ class TestDataGenerator:
             tenant_id: Tenant ID to use (will create if None)
             project_id: Project ID to use (will create if None)
         """
-        self.base_url = base_url.rstrip('/')
+        self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.tenant_id = tenant_id
         self.project_id = project_id
@@ -158,7 +228,7 @@ class TestDataGenerator:
         self.client = httpx.AsyncClient(
             base_url=self.base_url,
             headers=headers,
-            timeout=60.0  # Increased timeout for Graphiti processing
+            timeout=60.0,  # Increased timeout for Graphiti processing
         )
         return self
 
@@ -173,20 +243,22 @@ class TestDataGenerator:
 
         # Build format dict with all possible values
         format_values = {
-            'name': random.choice(self.NAMES),
-            'preference': random.choice(self.PREFERENCES),
-            'task': random.choice(self.TASKS),
-            'task_name': random.choice(self.TASKS),
-            'document_name': random.choice(self.DOCUMENTS),
-            'feature': random.choice(self.FEATURES),
-            'project': random.choice(self.PROJECTS),
-            'topic': random.choice(self.TOPICS),
-            'team': random.choice(self.TEAMS),
-            'component': random.choice(self.COMPONENTS),
-            'issue_description': random.choice(self.ISSUES),
-            'feature_name': random.choice(self.FEATURES),
-            'assignee': random.choice(self.NAMES),
-            'data_type': random.choice(["user data", "sales data", "product data", "analytics data"])
+            "name": random.choice(self.NAMES),
+            "preference": random.choice(self.PREFERENCES),
+            "task": random.choice(self.TASKS),
+            "task_name": random.choice(self.TASKS),
+            "document_name": random.choice(self.DOCUMENTS),
+            "feature": random.choice(self.FEATURES),
+            "project": random.choice(self.PROJECTS),
+            "topic": random.choice(self.TOPICS),
+            "team": random.choice(self.TEAMS),
+            "component": random.choice(self.COMPONENTS),
+            "issue_description": random.choice(self.ISSUES),
+            "feature_name": random.choice(self.FEATURES),
+            "assignee": random.choice(self.NAMES),
+            "data_type": random.choice(
+                ["user data", "sales data", "product data", "analytics data"]
+            ),
         }
 
         # Use safe formatting that only replaces available placeholders
@@ -213,10 +285,7 @@ class TestDataGenerator:
         # Note: This endpoint may not exist, adjust based on your API
         response = await self.client.post(
             "/tenants/",
-            json={
-                "name": name,
-                "description": description or f"Test workspace: {name}"
-            }
+            json={"name": name, "description": description or f"Test workspace: {name}"},
         )
         response.raise_for_status()
         data = response.json()
@@ -243,8 +312,8 @@ class TestDataGenerator:
             json={
                 "tenant_id": tenant_id,
                 "name": name,
-                "description": description or f"Test project: {name}"
-            }
+                "description": description or f"Test project: {name}",
+            },
         )
         response.raise_for_status()
         data = response.json()
@@ -257,7 +326,7 @@ class TestDataGenerator:
         name: Optional[str] = None,
         source_type: str = "text",
         metadata: Optional[dict] = None,
-        valid_at: Optional[datetime] = None
+        valid_at: Optional[datetime] = None,
     ) -> dict:
         """
         Create a new episode.
@@ -288,18 +357,12 @@ class TestDataGenerator:
         if self.project_id:
             episode_data["project_id"] = self.project_id
 
-        response = await self.client.post(
-            "/episodes/",
-            json=episode_data
-        )
+        response = await self.client.post("/episodes/", json=episode_data)
         response.raise_for_status()
         return response.json()
 
     async def generate_episodes(
-        self,
-        count: int,
-        start_date: Optional[datetime] = None,
-        random_dates: bool = False
+        self, count: int, start_date: Optional[datetime] = None, random_dates: bool = False
     ) -> list:
         """
         Generate multiple episodes.
@@ -326,11 +389,7 @@ class TestDataGenerator:
             name = f"Test Episode {i + 1}"
 
             # Create metadata
-            metadata = {
-                "test_data": True,
-                "batch_id": str(uuid.uuid4()),
-                "index": i
-            }
+            metadata = {"test_data": True, "batch_id": str(uuid.uuid4()), "index": i}
 
             # Randomize date if requested
             valid_at = None
@@ -341,10 +400,7 @@ class TestDataGenerator:
 
             try:
                 episode = await self.create_episode(
-                    content=content,
-                    name=name,
-                    metadata=metadata,
-                    valid_at=valid_at
+                    content=content, name=name, metadata=metadata, valid_at=valid_at
                 )
                 episodes.append(episode)
 
@@ -360,10 +416,7 @@ class TestDataGenerator:
         return episodes
 
     async def generate_user_activity_series(
-        self,
-        user_name: str,
-        days: int = 7,
-        episodes_per_day: int = 5
+        self, user_name: str, days: int = 7, episodes_per_day: int = 5
     ) -> list:
         """
         Generate a realistic series of episodes for a specific user.
@@ -386,10 +439,7 @@ class TestDataGenerator:
 
         for day in range(days):
             # Vary the number of episodes per day
-            num_episodes = random.randint(
-                max(1, episodes_per_day - 2),
-                episodes_per_day + 2
-            )
+            num_episodes = random.randint(max(1, episodes_per_day - 2), episodes_per_day + 2)
 
             for episode_num in range(num_episodes):
                 # Create user-specific content
@@ -411,7 +461,7 @@ class TestDataGenerator:
                     "attended virtual meetings",
                     "optimized workflows",
                     "documented findings",
-                    "shared insights with the team"
+                    "shared insights with the team",
                 ]
 
                 template = random.choice(content_templates)
@@ -421,16 +471,14 @@ class TestDataGenerator:
                 hour = random.randint(8, 18)  # Business hours
                 minute = random.randint(0, 59)
                 episode_time = current_date.replace(
-                    hour=hour,
-                    minute=minute,
-                    second=random.randint(0, 59)
+                    hour=hour, minute=minute, second=random.randint(0, 59)
                 )
 
                 metadata = {
                     "test_data": True,
                     "user_series": user_name,
                     "day": day,
-                    "episode_number": episode_num
+                    "episode_number": episode_num,
                 }
 
                 try:
@@ -438,7 +486,7 @@ class TestDataGenerator:
                         content=content,
                         name=f"{user_name} - Day {day + 1} - Activity {episode_num + 1}",
                         metadata=metadata,
-                        valid_at=episode_time
+                        valid_at=episode_time,
                     )
                     all_episodes.append(episode)
                 except httpx.HTTPStatusError as e:
@@ -450,10 +498,7 @@ class TestDataGenerator:
         return all_episodes
 
     async def generate_project_collaboration(
-        self,
-        project_name: str,
-        team_members: list[str],
-        days: int = 14
+        self, project_name: str, team_members: list[str], days: int = 14
     ) -> list:
         """
         Generate realistic team collaboration episodes for a project.
@@ -501,25 +546,20 @@ class TestDataGenerator:
             for event_num in range(events_per_day):
                 member = team_members[event_num % len(team_members)]
                 event_template = random.choice(collaboration_events)
-                content = event_template.format(
-                    member=member,
-                    project=project_name
-                )
+                content = event_template.format(member=member, project=project_name)
 
                 # Realistic business hours timing
                 hour = random.randint(9, 17)
                 minute = random.choice([0, 15, 30, 45])
                 episode_time = current_date.replace(
-                    hour=hour,
-                    minute=minute,
-                    second=random.randint(0, 59)
+                    hour=hour, minute=minute, second=random.randint(0, 59)
                 )
 
                 metadata = {
                     "test_data": True,
                     "project_name": project_name,
                     "team_member": member,
-                    "collaboration_type": "project_work"
+                    "collaboration_type": "project_work",
                 }
 
                 try:
@@ -527,7 +567,7 @@ class TestDataGenerator:
                         content=content,
                         name=f"{project_name} - Day {day + 1} - Event",
                         metadata=metadata,
-                        valid_at=episode_time
+                        valid_at=episode_time,
                     )
                     all_episodes.append(episode)
                 except httpx.HTTPStatusError as e:
@@ -565,52 +605,28 @@ async def get_default_api_key(base_url: str) -> Optional[str]:
 
 async def main():
     """Main entry point for test data generation."""
-    parser = argparse.ArgumentParser(
-        description="Generate test data for MemStack"
-    )
+    parser = argparse.ArgumentParser(description="Generate test data for MemStack")
+    parser.add_argument("--api-url", default="http://localhost:8000/api/v1", help="API base URL")
     parser.add_argument(
-        "--api-url",
-        default="http://localhost:8000/api/v1",
-        help="API base URL"
+        "--api-key", help="API key for authentication (will fetch default if not provided)"
     )
+    parser.add_argument("--tenant-id", help="Tenant ID (will create new if not provided)")
+    parser.add_argument("--project-id", help="Project ID (will create new if not provided)")
     parser.add_argument(
-        "--api-key",
-        help="API key for authentication (will fetch default if not provided)"
-    )
-    parser.add_argument(
-        "--tenant-id",
-        help="Tenant ID (will create new if not provided)"
-    )
-    parser.add_argument(
-        "--project-id",
-        help="Project ID (will create new if not provided)"
-    )
-    parser.add_argument(
-        "--count",
-        type=int,
-        default=50,
-        help="Number of random episodes to generate"
+        "--count", type=int, default=50, help="Number of random episodes to generate"
     )
     parser.add_argument(
         "--mode",
         choices=["random", "user-series", "collaboration"],
         default="random",
-        help="Generation mode"
+        help="Generation mode",
+    )
+    parser.add_argument("--user-name", help="User name for user-series mode")
+    parser.add_argument(
+        "--project-name", default="Test Project", help="Project name for collaboration mode"
     )
     parser.add_argument(
-        "--user-name",
-        help="User name for user-series mode"
-    )
-    parser.add_argument(
-        "--project-name",
-        default="Test Project",
-        help="Project name for collaboration mode"
-    )
-    parser.add_argument(
-        "--days",
-        type=int,
-        default=7,
-        help="Number of days for user-series or collaboration mode"
+        "--days", type=int, default=7, help="Number of days for user-series or collaboration mode"
     )
 
     args = parser.parse_args()
@@ -620,6 +636,7 @@ async def main():
     if not api_key:
         # Try environment variable
         import os
+
         api_key = os.environ.get("API_KEY")
         if not api_key:
             # Try to fetch default from server
@@ -637,17 +654,11 @@ async def main():
                 return
 
     async with TestDataGenerator(
-        base_url=args.api_url,
-        api_key=api_key,
-        tenant_id=args.tenant_id,
-        project_id=args.project_id
+        base_url=args.api_url, api_key=api_key, tenant_id=args.tenant_id, project_id=args.project_id
     ) as generator:
         if args.mode == "random":
             # Generate random episodes
-            episodes = await generator.generate_episodes(
-                count=args.count,
-                random_dates=True
-            )
+            episodes = await generator.generate_episodes(count=args.count, random_dates=True)
             logger.info(f"Generated {len(episodes)} random episodes")
 
         elif args.mode == "user-series":
@@ -656,8 +667,7 @@ async def main():
                 args.user_name = random.choice(TestDataGenerator.NAMES)
 
             episodes = await generator.generate_user_activity_series(
-                user_name=args.user_name,
-                days=args.days
+                user_name=args.user_name, days=args.days
             )
             logger.info(f"Generated {len(episodes)} user activity episodes")
 
@@ -666,9 +676,7 @@ async def main():
             team_members = random.sample(TestDataGenerator.NAMES, k=5)
 
             episodes = await generator.generate_project_collaboration(
-                project_name=args.project_name,
-                team_members=team_members,
-                days=args.days
+                project_name=args.project_name, team_members=team_members, days=args.days
             )
             logger.info(f"Generated {len(episodes)} collaboration episodes")
 

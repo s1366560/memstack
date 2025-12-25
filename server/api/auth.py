@@ -4,11 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from server.auth import create_api_key, get_current_user
+from server.auth import create_api_key, get_current_user, verify_password
 from server.database import get_db
 from server.db_models import APIKey as DBAPIKey
 from server.db_models import User as DBUser
+from server.db_models import UserRole
 from server.logging_config import get_logger
 from server.models.auth import APIKeyCreate, APIKeyResponse, Token, UserUpdate
 from server.models.auth import User as UserSchema
@@ -25,32 +27,49 @@ async def login_for_access_token(
 ):
     """
     Login endpoint to get an access token (API Key).
-    For the demo, we check against hardcoded demo credentials.
-    In a real production app, this should check password hashes.
     """
     logger.info(f"Login attempt for user: {form_data.username}")
-    user = None
-    # Demo credentials check
-    if form_data.username == "admin@memstack.ai" and form_data.password == "admin123":
-        result = await db.execute(select(DBUser).where(DBUser.email == form_data.username))
-        user = result.scalar_one_or_none()
-    elif form_data.username == "user@memstack.ai" and form_data.password == "user123":
-        result = await db.execute(select(DBUser).where(DBUser.email == form_data.username))
-        user = result.scalar_one_or_none()
 
-    if not user:
+    # Query user
+    result = await db.execute(
+        select(DBUser)
+        .where(DBUser.email == form_data.username)
+        .options(selectinload(DBUser.roles).selectinload(UserRole.role))
+    )
+    user = result.scalar_one_or_none()
+
+    if user:
+        logger.debug(f"User found: {user.email}")
+        is_valid = verify_password(form_data.password, user.password_hash)
+        logger.debug(f"Password valid: {is_valid}")
+    else:
+        logger.debug("User not found")
+
+    if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account is inactive",
+        )
+
+    # Check for admin role
+    is_admin = any(r.role.name == "admin" for r in user.roles)
+    permissions = ["read", "write"]
+    if is_admin:
+        permissions.append("admin")
+
     # Generate a temporary session API key
     plain_key, _ = await create_api_key(
         db,
         user_id=user.id,
         name=f"Login Session {form_data.username}",
-        permissions=["read", "write"] + (["admin"] if user.role == "admin" else []),
+        permissions=permissions,
         expires_in_days=1,  # Short lived token
     )
 
@@ -131,10 +150,9 @@ async def read_users_me(current_user: DBUser = Depends(get_current_user)):
         user_id=current_user.id,
         email=current_user.email,
         name=current_user.name,
-        role=current_user.role,
+        roles=[r.role.name for r in current_user.roles],
         is_active=current_user.is_active,
         created_at=current_user.created_at,
-        tenant_id=current_user.tenant_id,
         profile=current_user.profile or {},
     )
 
@@ -164,9 +182,8 @@ async def update_user_me(
         user_id=current_user.id,
         email=current_user.email,
         name=current_user.name,
-        role=current_user.role,
+        roles=[r.role.name for r in current_user.roles],
         is_active=current_user.is_active,
         created_at=current_user.created_at,
-        tenant_id=current_user.tenant_id,
         profile=current_user.profile or {},
     )

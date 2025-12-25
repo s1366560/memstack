@@ -1,7 +1,6 @@
 """API routes for AI tools."""
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -42,7 +41,7 @@ async def optimize_content(
     """
     try:
         llm_client = graphiti.client.llm_client
-        
+
         prompt = f"""
         You are an intelligent writing assistant.
         Please rewrite the following text according to these instructions: {request.instruction}
@@ -52,11 +51,11 @@ async def optimize_content(
         
         Output ONLY the rewritten text. Do not include any explanations or conversational filler.
         """
-        
+
         response = await llm_client.generate_response(
             messages=[{"role": "user", "content": prompt}]
         )
-        
+
         return OptimizeResponse(content=response.strip())
     except Exception as e:
         logger.error(f"Failed to optimize content: {e}")
@@ -74,7 +73,7 @@ async def generate_title(
     """
     try:
         llm_client = graphiti.client.llm_client
-        
+
         prompt = f"""
         Generate a concise and descriptive title (max 10 words) for the following text.
         
@@ -83,14 +82,14 @@ async def generate_title(
         
         Output ONLY the title. Do not use quotes.
         """
-        
+
         response = await llm_client.generate_response(
             messages=[{"role": "user", "content": prompt}]
         )
-        
+
         # Cleanup quotes if present
         title = response.strip().strip('"').strip("'")
-        
+
         return TitleResponse(title=title)
     except Exception as e:
         logger.error(f"Failed to generate title: {e}")

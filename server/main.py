@@ -7,20 +7,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 import server.db_models  # noqa: F401
-from server.api import episodes, episodes_list, memory, recall
+from server.api import (
+    ai_tools,
+    enhanced_episodes,
+    episodes,
+    episodes_list,
+    maintenance,
+    memory,
+    recall,
+    search_enhanced,
+)
 from server.api.auth import router as auth_router
+from server.api.communities import router as communities_router
+from server.api.data_export import router as data_export_router
+from server.api.entities import router as entities_router
 from server.api.health import router as health_router
 from server.api.memories import router as memories_router
 from server.api.memos import router as memos_router
 from server.api.projects import router as projects_router
 from server.api.tenants import router as tenants_router
-from server.api.entities import router as entities_router
-from server.api.communities import router as communities_router
-from server.api.data_export import router as data_export_router
-from server.api import enhanced_episodes
-from server.api import search_enhanced
-from server.api import maintenance
-from server.api import ai_tools
 from server.auth import initialize_default_credentials
 from server.config import get_settings
 from server.database import Base, engine
@@ -42,31 +47,31 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     # Startup
     logger.info("Starting MemStack application...")
-    
+
     # Create tables
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         logger.info("Database tables created successfully")
-        
+
         # Initialize default credentials
         await initialize_default_credentials()
     except Exception as e:
         logger.error(f"Failed to create database tables or initialize credentials: {e}")
         # Don't raise here to allow app to start even if DB is not ready yet (e.g. in tests)
-    
+
     # Initialize Graphiti service
     try:
         await graphiti_service.initialize(provider=settings.llm_provider)
         logger.info("Graphiti service initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize Graphiti service: {e}")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down MemStack application...")
-    
+
     # Close Graphiti service
     try:
         await graphiti_service.close()
@@ -85,7 +90,7 @@ def setup_app() -> FastAPI:
         redoc_url="/redoc",
         lifespan=lifespan,
     )
-    
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.api_allowed_origins,
@@ -93,7 +98,7 @@ def setup_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     # Register routes
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(auth_router, prefix="/api/v1")
@@ -106,13 +111,13 @@ def setup_app() -> FastAPI:
     app.include_router(memos_router, prefix="/api/v1")
     app.include_router(memories_router)  # Already has prefix
     app.include_router(projects_router)  # Already has prefix
-    app.include_router(tenants_router)   # Already has prefix
+    app.include_router(tenants_router)  # Already has prefix
     app.include_router(entities_router, prefix="/api/v1")  # Entity management
     app.include_router(communities_router, prefix="/api/v1")  # Community management
     app.include_router(data_export_router, prefix="/api/v1")  # Data export/cleanup
     app.include_router(maintenance.router, prefix="/api/v1")  # Graph maintenance
     app.include_router(ai_tools.router, prefix="/api/v1")  # AI tools
-    
+
     return app
 
 

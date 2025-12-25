@@ -55,7 +55,7 @@ describe('MemoryGraph', () => {
         expect(screen.getByText('Entity')).toBeInTheDocument()
         expect(screen.getByText('Person')).toBeInTheDocument() // entity_type
         expect(screen.getByText('5 entities')).toBeInTheDocument() // member_count
-        expect(screen.getByText('Tenant ID: t1')).toBeInTheDocument()
+        expect(screen.getByText('Tenant: t1')).toBeInTheDocument()
     })
 
     it('closes details panel', () => {

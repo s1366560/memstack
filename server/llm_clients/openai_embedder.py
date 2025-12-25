@@ -7,8 +7,8 @@ import os
 from collections.abc import Iterable
 from typing import List, Union
 
-from openai import AsyncOpenAI
 from graphiti_core.embedder.client import EmbedderClient, EmbedderConfig
+from openai import AsyncOpenAI
 from pydantic import Field
 
 logger = logging.getLogger(__name__)
@@ -19,6 +19,7 @@ DEFAULT_BATCH_SIZE = 100
 
 class OpenAIEmbedderConfig(EmbedderConfig):
     """OpenAI Embedder Configuration"""
+
     embedding_model: str = Field(default=DEFAULT_EMBEDDING_MODEL)
     api_key: str | None = None
     base_url: str | None = None
@@ -43,9 +44,7 @@ class OpenAIEmbedder(EmbedderClient):
         base_url = config.base_url or os.environ.get("OPENAI_BASE_URL")
 
         if not api_key:
-            logger.warning(
-                "API key not provided and OPENAI_API_KEY environment variable not set"
-            )
+            logger.warning("API key not provided and OPENAI_API_KEY environment variable not set")
 
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         self.batch_size = batch_size or DEFAULT_BATCH_SIZE
@@ -69,17 +68,17 @@ class OpenAIEmbedder(EmbedderClient):
                 model=self.config.embedding_model or DEFAULT_EMBEDDING_MODEL,
                 input=text_input,
             )
-            
+
             if not resp.data:
                 raise ValueError("No embeddings returned from OpenAI")
-                
+
             embedding_values = resp.data[0].embedding
-            
+
             if self.config.embedding_dim and len(embedding_values) > self.config.embedding_dim:
                 return embedding_values[: self.config.embedding_dim]
-                
+
             return embedding_values
-            
+
         except Exception as e:
             logger.error(f"Error calling OpenAI Embeddings API: {e}")
             raise
@@ -94,22 +93,25 @@ class OpenAIEmbedder(EmbedderClient):
 
         for i in range(0, len(input_data_list), batch_size):
             batch = input_data_list[i : i + batch_size]
-            
+
             try:
                 resp = await self.client.embeddings.create(
                     model=self.config.embedding_model or DEFAULT_EMBEDDING_MODEL,
                     input=batch,
                 )
-                
+
                 # Sort by index to ensure order matches input
                 sorted_data = sorted(resp.data, key=lambda x: x.index)
-                
+
                 for item in sorted_data:
                     embedding_values = item.embedding
-                    if self.config.embedding_dim and len(embedding_values) > self.config.embedding_dim:
+                    if (
+                        self.config.embedding_dim
+                        and len(embedding_values) > self.config.embedding_dim
+                    ):
                         embedding_values = embedding_values[: self.config.embedding_dim]
                     all_embeddings.append(embedding_values)
-                    
+
             except Exception as e:
                 logger.error(f"Batch embedding failed for batch {i}: {e}")
                 # Fallback to individual processing
@@ -120,5 +122,5 @@ class OpenAIEmbedder(EmbedderClient):
                     except Exception as inner_e:
                         logger.error(f"Individual embedding failed: {inner_e}")
                         raise inner_e
-                        
+
         return all_embeddings

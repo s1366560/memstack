@@ -8,8 +8,8 @@ from .client import MemStackClient
 from .exceptions import (
     APIError,
     AuthenticationError,
-    RateLimitError,
     MemStackError,
+    RateLimitError,
 )
 from .models import Episode, EpisodeCreate, MemoryQuery, MemoryResult
 

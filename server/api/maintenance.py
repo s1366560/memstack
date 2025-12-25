@@ -3,7 +3,7 @@
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Body, Query
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 from server.auth import verify_api_key_dependency
 from server.db_models import APIKey
@@ -65,7 +65,9 @@ async def deduplicate_entities(
 
 @router.post("/invalidate-edges")
 async def invalidate_stale_edges(
-    days_since_update: int = Body(30, ge=1, description="Days since last update to consider as stale"),
+    days_since_update: int = Body(
+        30, ge=1, description="Days since last update to consider as stale"
+    ),
     dry_run: bool = Body(True, description="If true, only report without deleting"),
     graphiti: GraphitiService = Depends(get_graphiti_service),
     api_key: APIKey = Depends(verify_api_key_dependency),
@@ -136,37 +138,47 @@ async def optimize_graph(
                 result = await graphiti.perform_incremental_refresh(
                     rebuild_communities=False,
                 )
-                results["operations_run"].append({
-                    "operation": "incremental_refresh",
-                    "result": result,
-                })
+                results["operations_run"].append(
+                    {
+                        "operation": "incremental_refresh",
+                        "result": result,
+                    }
+                )
 
             elif operation == "deduplicate":
                 result = await graphiti.deduplicate_entities(dry_run=dry_run)
-                results["operations_run"].append({
-                    "operation": "deduplicate",
-                    "result": result,
-                })
+                results["operations_run"].append(
+                    {
+                        "operation": "deduplicate",
+                        "result": result,
+                    }
+                )
 
             elif operation == "invalidate_edges":
                 result = await graphiti.invalidate_stale_edges(dry_run=dry_run)
-                results["operations_run"].append({
-                    "operation": "invalidate_edges",
-                    "result": result,
-                })
+                results["operations_run"].append(
+                    {
+                        "operation": "invalidate_edges",
+                        "result": result,
+                    }
+                )
 
             elif operation == "rebuild_communities":
                 if not dry_run:
                     await graphiti.rebuild_communities()
-                    results["operations_run"].append({
-                        "operation": "rebuild_communities",
-                        "result": {"status": "success", "message": "Communities rebuilt"},
-                    })
+                    results["operations_run"].append(
+                        {
+                            "operation": "rebuild_communities",
+                            "result": {"status": "success", "message": "Communities rebuilt"},
+                        }
+                    )
                 else:
-                    results["operations_run"].append({
-                        "operation": "rebuild_communities",
-                        "result": {"status": "skipped", "message": "Skipped in dry_run mode"},
-                    })
+                    results["operations_run"].append(
+                        {
+                            "operation": "rebuild_communities",
+                            "result": {"status": "skipped", "message": "Skipped in dry_run mode"},
+                        }
+                    )
 
             else:
                 logger.warning(f"Unknown operation: {operation}")

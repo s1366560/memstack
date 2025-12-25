@@ -35,7 +35,9 @@ async def list_episodes(
 
         # Reuse short-term recall pipeline for listing episodes
         resp = await graphiti.short_term_recall(
-            window_minutes=10_000_000 if not parsed_since else 30,  # large window when since not set
+            window_minutes=10_000_000
+            if not parsed_since
+            else 30,  # large window when since not set
             limit=limit,
             tenant_id=tenant_id,
         )
@@ -56,4 +58,3 @@ async def list_episodes(
     except Exception as e:
         logger.error(f"List episodes failed: {e}")
         raise HTTPException(status_code=500, detail=f"List episodes failed: {str(e)}")
-

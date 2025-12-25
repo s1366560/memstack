@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { graphitiService } from '../../services/graphitiService'
+import { memoryAPI } from '../../services/api'
 
 export const NewMemory: React.FC = () => {
     const { projectId } = useParams()
@@ -37,7 +38,7 @@ export const NewMemory: React.FC = () => {
 
         const newText = before + prefix + selection + suffix + after
         setContent(newText)
-        
+
         setTimeout(() => {
             textarea.focus()
             textarea.setSelectionRange(start + prefix.length, end + prefix.length)
@@ -62,11 +63,12 @@ export const NewMemory: React.FC = () => {
 
         setIsSaving(true)
         try {
-            await graphitiService.addEpisode({
-                name: title, // Backend will auto-generate if empty
-                content: content,
+            await memoryAPI.create(projectId, {
+                title,
+                content,
                 project_id: projectId,
-                source_type: 'text',
+                tags,
+                content_type: 'text',
                 metadata: {
                     tags: tags,
                     source: 'web_console'

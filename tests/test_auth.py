@@ -49,13 +49,12 @@ async def test_create_user(mock_db_session):
         mock_db_session,
         email="test@example.com",
         name="Test User",
-        role="user",
+        password="testpassword",
     )
 
     assert isinstance(user, User)
     assert user.email == "test@example.com"
     assert user.name == "Test User"
-    assert user.role == "user"
     assert user.is_active is True
 
 
@@ -66,6 +65,7 @@ async def test_create_api_key(mock_db_session):
         mock_db_session,
         email="test@example.com",
         name="Test User",
+        password="testpassword",
     )
 
     plain_key, api_key_obj = await create_api_key(
@@ -88,7 +88,9 @@ async def test_create_api_key(mock_db_session):
 @pytest.mark.asyncio
 async def test_api_key_expiration(mock_db_session):
     """Test API key expiration logic."""
-    user = await create_user(mock_db_session, email="test@example.com", name="Test")
+    user = await create_user(
+        mock_db_session, email="test@example.com", name="Test", password="testpassword"
+    )
 
     # Create expired key
     _, api_key_obj = await create_api_key(

@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { graphitiService } from '../../services/graphitiService'
+import { memoryAPI } from '../../services/api'
+import { Memory } from '../../types/memory'
 import { DeleteConfirmationModal } from '../../components/DeleteConfirmationModal'
 
 export const MemoryList: React.FC = () => {
     const { projectId } = useParams()
-    const [memories, setMemories] = useState<any[]>([])
+    const [memories, setMemories] = useState<Memory[]>([])
     const [isLoading, setIsLoading] = useState(false)
     const [search, setSearch] = useState('')
     const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -16,12 +17,10 @@ export const MemoryList: React.FC = () => {
         if (projectId) {
             setIsLoading(true)
             try {
-                // Using enhanced episodes API via graphitiService
-                const data = await graphitiService.listEpisodes({
-                    project_id: projectId,
-                    limit: 100
+                const data = await memoryAPI.list(projectId, {
+                    page_size: 100
                 })
-                setMemories(data.items || [])
+                setMemories(data.memories || [])
             } catch (error) {
                 console.error('Failed to list memories:', error)
             } finally {
@@ -30,21 +29,50 @@ export const MemoryList: React.FC = () => {
         }
     }
 
+    // Polling for processing status
+    useEffect(() => {
+        let interval: NodeJS.Timeout
+
+        // Check if any memories are processing or pending
+        const hasProcessingMemories = memories.some(m =>
+            m.processing_status === 'PROCESSING' || m.processing_status === 'PENDING'
+        )
+
+        if (hasProcessingMemories && projectId) {
+            interval = setInterval(async () => {
+                try {
+                    const data = await memoryAPI.list(projectId, {
+                        page_size: 100
+                    })
+                    // Only update if statuses changed to avoid re-renders?
+                    // For simplicity, just update the list
+                    setMemories(data.memories || [])
+                } catch (error) {
+                    console.error('Failed to poll memories:', error)
+                }
+            }, 5000) // Poll every 5 seconds
+        }
+
+        return () => {
+            if (interval) clearInterval(interval)
+        }
+    }, [memories, projectId])
+
     useEffect(() => {
         fetchMemories()
     }, [projectId])
 
-    const confirmDelete = (episodeName: string) => {
-        setItemToDelete(episodeName)
+    const confirmDelete = (memoryId: string) => {
+        setItemToDelete(memoryId)
         setDeleteModalOpen(true)
     }
 
     const handleDelete = async () => {
-        if (!itemToDelete) return
+        if (!itemToDelete || !projectId) return
 
         setDeletingId(itemToDelete)
         try {
-            await graphitiService.deleteEpisode(itemToDelete)
+            await memoryAPI.delete(projectId, itemToDelete)
             await fetchMemories()
             setDeleteModalOpen(false)
             setItemToDelete(null)
@@ -62,8 +90,8 @@ export const MemoryList: React.FC = () => {
 
     // Filter memories client-side for search (until backend supports text search on list)
     const filteredMemories = memories.filter(m =>
-        m.name?.toLowerCase().includes(search.toLowerCase()) ||
-        m.source_type?.toLowerCase().includes(search.toLowerCase())
+        m.title?.toLowerCase().includes(search.toLowerCase()) ||
+        m.content_type?.toLowerCase().includes(search.toLowerCase())
     )
 
     return (
@@ -78,7 +106,7 @@ export const MemoryList: React.FC = () => {
                 }}
                 onConfirm={handleDelete}
                 title="Delete Memory"
-                message={`Are you sure you want to delete this memory ("${itemToDelete}")? This action cannot be undone and will remove all associated graph data.`}
+                message={`Are you sure you want to delete this memory? This action cannot be undone and will remove all associated graph data.`}
                 isDeleting={!!deletingId}
             />
             {/* Header Area */}
@@ -131,7 +159,8 @@ export const MemoryList: React.FC = () => {
                                 <tr>
                                     <th className="px-6 py-3 font-semibold text-slate-500 dark:text-slate-400">Name</th>
                                     <th className="px-6 py-3 font-semibold text-slate-500 dark:text-slate-400">Type</th>
-                                    <th className="px-6 py-3 font-semibold text-slate-500 dark:text-slate-400">Status</th>
+                                    <th className="px-6 py-3 font-semibold text-slate-500 dark:text-slate-400">Data Status</th>
+                                    <th className="px-6 py-3 font-semibold text-slate-500 dark:text-slate-400">Processing</th>
                                     <th className="px-6 py-3 font-semibold text-slate-500 dark:text-slate-400 text-right">Created</th>
                                     <th className="px-6 py-3 font-semibold text-slate-500 dark:text-slate-400"></th>
                                 </tr>
@@ -139,39 +168,51 @@ export const MemoryList: React.FC = () => {
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                                 {filteredMemories.length === 0 ? (
                                     <tr>
-                                        <td colSpan={5} className="p-8 text-center text-slate-500">
+                                        <td colSpan={6} className="p-8 text-center text-slate-500">
                                             No memories found. Create one to get started.
                                         </td>
                                     </tr>
                                 ) : (
                                     filteredMemories.map((memory) => (
-                                        <tr key={memory.uuid || memory.name} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
+                                        <tr key={memory.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
                                             <td className="px-6 py-3">
                                                 <div className="flex items-center gap-3">
                                                     <div className="p-2 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
                                                         <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>description</span>
                                                     </div>
                                                     <div>
-                                                        <Link to={`/project/${projectId}/memory/${encodeURIComponent(memory.name)}`} className="font-medium text-slate-900 dark:text-white hover:text-primary transition-colors">
-                                                            {memory.name || 'Untitled'}
+                                                        <Link to={`/project/${projectId}/memory/${memory.id}`} className="font-medium text-slate-900 dark:text-white hover:text-primary transition-colors">
+                                                            {memory.title || 'Untitled'}
                                                         </Link>
                                                         <div className="text-xs text-slate-500">
-                                                            {memory.uuid && <span className="font-mono opacity-70">{memory.uuid.substring(0, 8)}...</span>}
+                                                            <span className="font-mono opacity-70">{memory.id.substring(0, 8)}...</span>
                                                         </div>
                                                     </div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-3 text-slate-600 dark:text-slate-300 capitalize">
-                                                {memory.source_type || 'Unknown'}
+                                                {memory.content_type || 'Unknown'}
                                             </td>
                                             <td className="px-6 py-3">
-                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${memory.status === 'processing'
-                                                        ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                                                        : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${memory.status === 'DISABLED'
+                                                    ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                                    : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                                                     }`}>
-                                                    <span className={`w-1.5 h-1.5 rounded-full ${memory.status === 'processing' ? 'bg-yellow-500' : 'bg-green-500'
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${memory.status === 'DISABLED' ? 'bg-red-500' : 'bg-green-500'
                                                         }`}></span>
-                                                    {memory.status || 'Synced'}
+                                                    {memory.status || 'ENABLED'}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-3">
+                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${memory.processing_status === 'FAILED' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                                    memory.processing_status === 'COMPLETED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                                                        'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                                    }`}>
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${memory.processing_status === 'FAILED' ? 'bg-red-500' :
+                                                        memory.processing_status === 'COMPLETED' ? 'bg-green-500' :
+                                                            'bg-yellow-500'
+                                                        }`}></span>
+                                                    {memory.processing_status || 'PENDING'}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-3 text-slate-600 dark:text-slate-300 text-right">
@@ -180,12 +221,12 @@ export const MemoryList: React.FC = () => {
                                             <td className="px-6 py-3 text-right">
                                                 <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <button
-                                                        onClick={() => confirmDelete(memory.name)}
-                                                        disabled={deletingId === memory.name}
+                                                        onClick={() => confirmDelete(memory.id)}
+                                                        disabled={deletingId === memory.id}
                                                         className="text-slate-400 hover:text-red-500 p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                                                         title="Delete"
                                                     >
-                                                        {deletingId === memory.name ? (
+                                                        {deletingId === memory.id ? (
                                                             <span className="material-symbols-outlined animate-spin" style={{ fontSize: '20px' }}>progress_activity</span>
                                                         ) : (
                                                             <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>delete</span>

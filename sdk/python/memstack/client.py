@@ -54,9 +54,7 @@ class MemStackClient:
             retry_delay: Initial delay between retries (exponential backoff)
         """
         if not api_key or not api_key.startswith("ms_sk_"):
-            raise AuthenticationError(
-                "Invalid API key format. API keys should start with 'ms_sk_'"
-            )
+            raise AuthenticationError("Invalid API key format. API keys should start with 'ms_sk_'")
 
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")

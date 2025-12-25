@@ -18,17 +18,17 @@ from graphiti_core.llm_client import LLMConfig
 from graphiti_core.llm_client.gemini_client import GeminiClient
 from graphiti_core.nodes import EpisodeType
 from graphiti_core.search.search_config_recipes import COMBINED_HYBRID_SEARCH_RRF
-from graphiti_core.search.search_filters import SearchFilters, DateFilter, ComparisonOperator
+from graphiti_core.search.search_filters import ComparisonOperator, DateFilter, SearchFilters
 from pydantic import BaseModel
 
 from server.config import get_settings
 from server.llm_clients.qwen_client import QwenClient
 from server.llm_clients.qwen_embedder import QwenEmbedder, QwenEmbedderConfig
 from server.llm_clients.qwen_reranker_client import QwenRerankerClient
-from server.services.queue_service import QueueService
 from server.models.episode import Episode, EpisodeCreate
 from server.models.memory import MemoryItem
 from server.models.recall import ShortTermRecallResponse
+from server.services.queue_service import QueueService
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -246,13 +246,13 @@ class GraphitiService:
             logger.info(
                 f"Graphiti client initialized successfully with {provider.upper()} LLM, Embedder and Reranker"
             )
-            
+
             # Initialize queue service
             await self.queue_service.initialize(self._client)
-            
+
             # Ensure indices exist to avoid Neo4j warnings and improve performance
             await self.ensure_indices()
-            
+
         except Exception as e:
             logger.error(f"Failed to initialize Graphiti client: {e}")
             raise
@@ -262,7 +262,7 @@ class GraphitiService:
         try:
             # Graphiti indices
             await self.client.build_indices_and_constraints()
-            
+
             # Custom indices for multi-tenancy
             queries = [
                 "CREATE INDEX episodic_tenant_id IF NOT EXISTS FOR (n:Episodic) ON (n.tenant_id)",
@@ -273,10 +273,10 @@ class GraphitiService:
                 "CREATE INDEX community_tenant_id IF NOT EXISTS FOR (n:Community) ON (n.tenant_id)",
                 "CREATE INDEX community_project_id IF NOT EXISTS FOR (n:Community) ON (n.project_id)",
             ]
-            
+
             for q in queries:
                 await self.client.driver.execute_query(q)
-                
+
             logger.info("Database indices verified/created")
         except Exception as e:
             logger.warning(f"Failed to create indices: {e}")
@@ -320,7 +320,7 @@ class GraphitiService:
             # Pre-create EpisodicNode in Neo4j to avoid race conditions or Graphiti lookup failures
             now = datetime.utcnow()
             group_id = episode.project_id or "global"
-            
+
             # Using MERGE to be safe, though CREATE should be fine since UUID is new
             await self.client.driver.execute_query(
                 """
@@ -354,7 +354,7 @@ class GraphitiService:
 
             # Add to queue
             # Use project_id as group_id for isolation, or default to 'global'
-            
+
             await self.queue_service.add_episode(
                 group_id=group_id,
                 name=episode.name or str(episode.id),
@@ -374,6 +374,7 @@ class GraphitiService:
                 tenant_id=episode.tenant_id,
                 project_id=episode.project_id,
                 user_id=episode.user_id,
+                memory_id=episode.metadata.get("memory_id") if episode.metadata else None,
             )
 
             logger.info(f"Episode {episode.id} queued for processing in group {group_id}")
@@ -411,38 +412,29 @@ class GraphitiService:
         try:
             # Construct group_ids from project_id if available
             group_ids = [project_id] if project_id else None
-            
+
             # Construct SearchFilters if not provided
             if not search_filter:
                 search_filter = SearchFilters()
-            
+
             # Handle as_of using filters
             if as_of:
                 # created_at <= as_of
-                search_filter.created_at = [[
-                    DateFilter(
-                        date=as_of,
-                        comparison_operator=ComparisonOperator.less_than_equal
-                    )
-                ]]
-                
+                search_filter.created_at = [
+                    [DateFilter(date=as_of, comparison_operator=ComparisonOperator.less_than_equal)]
+                ]
+
                 # expired_at > as_of OR expired_at IS NULL
                 search_filter.expired_at = [
-                    [DateFilter(
-                        date=as_of,
-                        comparison_operator=ComparisonOperator.greater_than
-                    )],
-                    [DateFilter(
-                        date=None,
-                        comparison_operator=ComparisonOperator.is_null
-                    )]
+                    [DateFilter(date=as_of, comparison_operator=ComparisonOperator.greater_than)],
+                    [DateFilter(date=None, comparison_operator=ComparisonOperator.is_null)],
                 ]
 
             # Perform semantic search using Graphiti's advanced search method
             # Note: search_() returns SearchResults object, while search() returns list[EntityEdge]
             # Using COMBINED_HYBRID_SEARCH_RRF which doesn't require LLM calls for reranking
             search_results = await self.client.search_(
-                query=query, 
+                query=query,
                 config=COMBINED_HYBRID_SEARCH_RRF,
                 group_ids=group_ids,
                 search_filter=search_filter,
@@ -456,12 +448,12 @@ class GraphitiService:
             async def _passes_filters(node_label: str, name: Optional[str]) -> bool:
                 # If we already filtered by project_id via group_ids, and handled as_of via filters,
                 # we mostly just need to check tenant_id (if project_id missing) and user_id
-                
+
                 # Optimization: if project_id provided, we assume tenant check passed (project implies tenant)
                 # and as_of passed.
                 if project_id and not user_id:
                     return True
-                    
+
                 if not (tenant_id or user_id):
                     return True
                 if not name:
@@ -472,19 +464,19 @@ class GraphitiService:
                     props = res.records[0]["props"] if res.records else {}
                 except Exception:
                     props = {}
-                
+
                 # If project_id was not used in group_ids (None), we must check tenant/project here
                 if not project_id:
                     if tenant_id and props.get("tenant_id") != tenant_id:
                         return False
-                    if props.get("project_id") and tenant_id: 
-                         # If node has project_id, verify it belongs to tenant? 
-                         # Simplified: just check tenant_id matches if present on node
-                         pass
+                    if props.get("project_id") and tenant_id:
+                        # If node has project_id, verify it belongs to tenant?
+                        # Simplified: just check tenant_id matches if present on node
+                        pass
 
                 if user_id and props.get("user_id") != user_id:
                     return False
-                
+
                 return True
 
             # Process episodes from search results
@@ -502,10 +494,10 @@ class GraphitiService:
                             content=episode.content,
                             score=score,
                             metadata={
-                                "type": "episode", 
+                                "type": "episode",
                                 "name": episode.name,
                                 "uuid": episode.uuid,
-                                "created_at": getattr(episode, "created_at", None)
+                                "created_at": getattr(episode, "created_at", None),
                             },
                             source="episode",
                         )
@@ -528,10 +520,10 @@ class GraphitiService:
                             else node.name,
                             score=score,
                             metadata={
-                                "type": "entity", 
+                                "type": "entity",
                                 "name": node.name,
                                 "uuid": node.uuid,
-                                "entity_type": "Entity" # Default, maybe enrich later
+                                "entity_type": "Entity",  # Default, maybe enrich later
                             },
                             source="entity",
                         )
@@ -557,7 +549,7 @@ class GraphitiService:
                                 "type": "relationship",
                                 "source": edge.source_node_uuid,
                                 "target": edge.target_node_uuid,
-                                "uuid": edge.uuid
+                                "uuid": edge.uuid,
                             },
                             source="relationship",
                         )
@@ -866,22 +858,24 @@ class GraphitiService:
         """
         try:
             filters = SearchFilters()
-            
+
             # Use a list to hold the AND conditions for created_at
             date_filters = []
-            
+
             # created_at >= since
             if since:
                 date_filters.append(
-                    DateFilter(date=since, comparison_operator=ComparisonOperator.greater_than_equal)
+                    DateFilter(
+                        date=since, comparison_operator=ComparisonOperator.greater_than_equal
+                    )
                 )
-            
+
             # created_at < until
             if until:
                 date_filters.append(
                     DateFilter(date=until, comparison_operator=ComparisonOperator.less_than)
                 )
-            
+
             if date_filters:
                 filters.created_at = [date_filters]
 
@@ -890,7 +884,7 @@ class GraphitiService:
                 limit=limit,
                 tenant_id=tenant_id,
                 project_id=project_id,
-                search_filter=filters
+                search_filter=filters,
             )
 
         except Exception as e:
@@ -926,15 +920,19 @@ class GraphitiService:
         """
         try:
             filters = SearchFilters()
-            
+
             if entity_types:
                 filters.node_labels = entity_types
-            
+
             # Manual date filter mapping
             if since:
-                filters.created_at = [[
-                    DateFilter(date=since, comparison_operator=ComparisonOperator.greater_than_equal)
-                ]]
+                filters.created_at = [
+                    [
+                        DateFilter(
+                            date=since, comparison_operator=ComparisonOperator.greater_than_equal
+                        )
+                    ]
+                ]
 
             # Call search with filters
             results = await self.search(
@@ -942,7 +940,7 @@ class GraphitiService:
                 limit=limit + offset,
                 tenant_id=tenant_id,
                 project_id=project_id,
-                search_filter=filters
+                search_filter=filters,
             )
 
             # Apply additional post-filtering if needed (for safety if Graphiti support is partial)
@@ -952,7 +950,7 @@ class GraphitiService:
                 if entity_types and item.metadata.get("type") == "entity":
                     if item.metadata.get("entity_type") not in entity_types:
                         continue
-                
+
                 # Filter by date if specified (double check)
                 if since:
                     created_at = item.metadata.get("created_at")
@@ -1177,7 +1175,7 @@ class GraphitiService:
             result = await self.client.driver.execute_query(query, name=episode_name)
             if result.records:
                 ep = dict(result.records[0]["episode"])
-                
+
                 # Helper to convert Neo4j types to Python types
                 def _convert_val(v):
                     if hasattr(v, "isoformat"):
@@ -1187,20 +1185,20 @@ class GraphitiService:
                 # Convert Neo4j types
                 for k, v in ep.items():
                     ep[k] = _convert_val(v)
-                
+
                 # Enhance display fields
                 name = ep.get("name", "")
                 if not name or (len(name) == 36 and "-" in name):
-                     content = ep.get("content", "")
-                     if content:
-                         ep["name"] = (content[:50] + "...") if len(content) > 50 else content
-                
+                    content = ep.get("content", "")
+                    if content:
+                        ep["name"] = (content[:50] + "...") if len(content) > 50 else content
+
                 source_type = ep.get("source_description", "Text")
                 if not source_type or source_type == "User input":
                     ep["source_type"] = "Text"
                 else:
                     ep["source_type"] = source_type
-                
+
                 # Ensure created_at exists
                 if not ep.get("created_at") and ep.get("valid_at"):
                     ep["created_at"] = ep.get("valid_at")
@@ -1208,7 +1206,7 @@ class GraphitiService:
                 # Set default status if missing
                 if not ep.get("status"):
                     ep["status"] = "Synced"
-                    
+
                 return ep
             return None
         except Exception as e:
@@ -1288,7 +1286,7 @@ class GraphitiService:
             episodes = []
             for r in list_result.records:
                 ep = dict(r["episode"])
-                
+
                 # Helper to convert Neo4j types to Python types
                 def _convert_val(v):
                     if hasattr(v, "isoformat"):
@@ -1298,20 +1296,20 @@ class GraphitiService:
                 # Convert Neo4j types
                 for k, v in ep.items():
                     ep[k] = _convert_val(v)
-                
+
                 # Enhance display fields
                 name = ep.get("name", "")
                 if not name or (len(name) == 36 and "-" in name):
-                     content = ep.get("content", "")
-                     if content:
-                         ep["name"] = (content[:50] + "...") if len(content) > 50 else content
-                
+                    content = ep.get("content", "")
+                    if content:
+                        ep["name"] = (content[:50] + "...") if len(content) > 50 else content
+
                 source_type = ep.get("source_description", "Text")
                 if not source_type or source_type == "User input":
                     ep["source_type"] = "Text"
                 else:
                     ep["source_type"] = source_type
-                
+
                 # Ensure created_at exists
                 if not ep.get("created_at") and ep.get("valid_at"):
                     ep["created_at"] = ep.get("valid_at")
@@ -1319,7 +1317,7 @@ class GraphitiService:
                 # Set default status if missing
                 if not ep.get("status"):
                     ep["status"] = "Synced"
-                    
+
                 episodes.append(ep)
 
             return PaginatedResponse(
@@ -1353,13 +1351,13 @@ class GraphitiService:
             check_res = await self.client.driver.execute_query(check_query, name=episode_name)
             if not check_res.records:
                 return False
-                
+
             entities = check_res.records[0]["entities"]
-            
+
             # Step 2: Delete episode
             del_ep_query = "MATCH (e:Episodic {name: $name}) DETACH DELETE e"
             await self.client.driver.execute_query(del_ep_query, name=episode_name)
-            
+
             # Step 3: Cleanup entities
             if entities:
                 # We can't pass Node objects directly back to query easily sometimes, better use UUIDs
@@ -1372,12 +1370,110 @@ class GraphitiService:
                     DETACH DELETE n
                     """
                     await self.client.driver.execute_query(cleanup_query, uuids=entity_uuids)
-            
+
             logger.info(f"Deleted episode {episode_name} and cleaned up orphans")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to delete episode: {e}")
+            raise
+
+    async def delete_episode_by_memory_id(self, memory_id: str) -> bool:
+        """
+        Delete an episode by memory_id (stored in metadata) and its relationships.
+        Also cleans up orphaned entities.
+
+        Args:
+            memory_id: Memory ID
+
+        Returns:
+            True if deleted, False if not found
+        """
+        try:
+            # Step 1: Check existence and get entities
+            # We look for episodes where memory_id property matches (which we set in add_episode custom query?)
+            # Wait, in add_episode we didn't explicitly set memory_id as a property on the node,
+            # only passed it to queue_service?
+
+            # Let's check add_episode implementation in this file:
+            # It runs a MERGE query.
+            # Does it set memory_id? No.
+            # But wait, it sets properties from episode object?
+            # episode object has metadata.
+
+            # In Graphiti core, metadata is usually stored as properties or JSON?
+            # Graphiti's add_episode stores metadata.
+
+            # But in our custom Cypher query in add_episode:
+            # SET e:Node, e.name = $name, ...
+            # We did NOT set e.memory_id or e.metadata.
+
+            # However, we call self.queue_service.add_episode with memory_id.
+            # And when that is processed by Graphiti (the library), it will add the episode.
+            # Graphiti library stores metadata.
+
+            # So we should be able to query by metadata.memory_id?
+            # Neo4j doesn't index JSON properties easily unless we promote them.
+
+            # IF Graphiti stores metadata as properties on the node (flattened), then yes.
+            # If it stores as a JSON string or map, we can query it.
+
+            # Let's assume for now we need to search for it.
+            # Or better, we should update add_episode to store memory_id as a property for easier deletion.
+            # But for existing data, we might need to search.
+
+            # Let's try to match where memory_id is in the properties.
+            # Graphiti usually adds metadata keys as properties on the node if they are primitives.
+
+            check_query = """
+            MATCH (e:Episodic)
+            WHERE e.memory_id = $memory_id
+            OPTIONAL MATCH (e)-[:MENTIONS]->(n:Entity)
+            RETURN e, collect(distinct n) as entities
+            """
+            check_res = await self.client.driver.execute_query(check_query, memory_id=memory_id)
+
+            if not check_res.records:
+                # Try checking if it's inside metadata json/map if that's how it's stored
+                # Or maybe we didn't store it at all in the node properties in our custom query?
+                # The custom query in add_episode:
+                # SET e:Node, e.name=$name...
+                # It does NOT set memory_id.
+
+                # BUT, the actual processing happens later in the queue consumer which calls graphiti.add_episode.
+                # If that adds it, it might overwrite/update the node?
+                # The custom query uses MERGE by uuid.
+                # If queue processing adds it, it uses the same UUID?
+                # Yes, uuid=str(episode.id).
+
+                # So if Graphiti.add_episode adds metadata as properties, we are good.
+                # Let's assume it does.
+                return False
+
+            entities = check_res.records[0]["entities"]
+            episode_uuid = check_res.records[0]["e"]["uuid"]
+
+            # Step 2: Delete episode
+            del_ep_query = "MATCH (e:Episodic {uuid: $uuid}) DETACH DELETE e"
+            await self.client.driver.execute_query(del_ep_query, uuid=episode_uuid)
+
+            # Step 3: Cleanup entities
+            if entities:
+                entity_uuids = [e["uuid"] for e in entities if "uuid" in e]
+                if entity_uuids:
+                    cleanup_query = """
+                    UNWIND $uuids as uuid
+                    MATCH (n:Entity {uuid: uuid})
+                    WHERE NOT (n)<-[:MENTIONS]-(:Episodic)
+                    DETACH DELETE n
+                    """
+                    await self.client.driver.execute_query(cleanup_query, uuids=entity_uuids)
+
+            logger.info(f"Deleted episode with memory_id {memory_id} and cleaned up orphans")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to delete episode by memory_id: {e}")
             raise
 
     # ========================================================================

@@ -93,10 +93,10 @@ def pretty_print_json(data: Any, indent: int = 2) -> None:
     try:
         if isinstance(data, str):
             data = json.loads(data)
-        print(json.dumps(data, indent=indent, ensure_ascii=False))
+        logger.debug(json.dumps(data, indent=indent, ensure_ascii=False))
     except Exception as e:
         logger.error(f"JSON 打印失败: {e}")
-        print(data)
+        logger.debug(data)
 
 
 class DebugContext:

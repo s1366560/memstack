@@ -118,10 +118,7 @@ async def delete_episode(
         deleted = await graphiti.delete_episode(episode_name)
         if not deleted:
             raise HTTPException(status_code=404, detail="Episode not found")
-        return {
-            "status": "success",
-            "message": f"Episode '{episode_name}' deleted successfully"
-        }
+        return {"status": "success", "message": f"Episode '{episode_name}' deleted successfully"}
     except HTTPException:
         raise
     except Exception as e:

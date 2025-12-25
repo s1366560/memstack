@@ -15,7 +15,11 @@ async def test_get_graph_data_filters():
         {
             "source_id": "n1",
             "source_labels": ["Episodic"],
-            "source_props": {"name": "ep1", "tenant_id": "t1", "created_at": "2025-01-01T00:00:00Z"},
+            "source_props": {
+                "name": "ep1",
+                "tenant_id": "t1",
+                "created_at": "2025-01-01T00:00:00Z",
+            },
             "edge_id": "e1",
             "edge_type": "RELATES_TO",
             "edge_props": {"created_at": "2025-01-01T00:00:00Z"},
@@ -59,13 +63,13 @@ async def test_get_graph_data_with_project_filter():
     service._client.driver = mock_driver
 
     data = await service.get_graph_data(limit=10, project_id="p1")
-    
+
     # Verify that project_id was passed to execute_query
     call_args = mock_driver.execute_query.call_args
     assert call_args is not None
     _, kwargs = call_args
     assert kwargs.get("project_id") == "p1"
-    
+
     assert "elements" in data
     assert len(data["elements"]["nodes"]) == 1
 
@@ -75,11 +79,12 @@ async def test_short_term_recall():
     service = GraphitiService()
     mock_driver = Mock()
     mock_result = Mock()
+
     class Node(dict):
         def __init__(self, props):
             super().__init__(props)
             self.properties = props
-            
+
     mock_result.records = [{"episode": Node({"content": "hello", "name": "ep1"}), "links": []}]
     mock_driver.execute_query = AsyncMock(return_value=mock_result)
 

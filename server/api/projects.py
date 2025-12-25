@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from server.auth import get_current_user
 from server.database import get_db
 from server.db_models import Project, Tenant, User, UserProject, UserTenant
+from server.logging_config import get_logger
 from server.models import (
     ProjectCreate,
     ProjectListResponse,
@@ -18,6 +19,7 @@ from server.models import (
 )
 
 router = APIRouter(prefix="/api/v1/projects", tags=["projects"])
+logger = get_logger(__name__)
 
 
 @router.post("/", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
@@ -27,6 +29,10 @@ async def create_project(
     db: AsyncSession = Depends(get_db),
 ) -> ProjectResponse:
     """Create a new project."""
+    logger.info(
+        f"Creating project '{project_data.name}' for user {current_user.id} in tenant {project_data.tenant_id}"
+    )
+
     # Check if user has access to tenant
     user_tenant_result = await db.execute(
         select(UserTenant).where(
@@ -38,6 +44,9 @@ async def create_project(
         )
     )
     if not user_tenant_result.scalar_one_or_none():
+        logger.warning(
+            f"User {current_user.id} denied permission to create project in tenant {project_data.tenant_id}"
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User does not have permission to create projects in this tenant",
@@ -77,7 +86,6 @@ async def create_project(
         is_public=project_data.is_public,
     )
     db.add(project)
-    await db.flush()
 
     # Create user-project relationship
     user_project = UserProject(
@@ -88,6 +96,7 @@ async def create_project(
         permissions={"admin": True, "read": True, "write": True, "delete": True},
     )
     db.add(user_project)
+
     await db.commit()
     await db.refresh(project)
 

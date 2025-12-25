@@ -67,8 +67,8 @@ describe('MemoryManager', () => {
 
     it('renders list of memories', () => {
         const memories = [
-            { id: '1', title: 'Memory 1', content: 'Content 1', content_type: 'text', created_at: '2024-01-01' },
-            { id: '2', title: 'Memory 2', content: 'Content 2', content_type: 'document', created_at: '2024-01-02' }
+            { id: '1', title: 'Memory 1', content: 'Content 1', content_type: 'text', status: 'ENABLED', processing_status: 'COMPLETED', created_at: '2024-01-01' },
+            { id: '2', title: 'Memory 2', content: 'Content 2', content_type: 'document', status: 'ENABLED', processing_status: 'PENDING', created_at: '2024-01-02' }
         ]
             ; (useMemoryStore as any).mockReturnValue({
                 memories,

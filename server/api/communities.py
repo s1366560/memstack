@@ -1,7 +1,7 @@
 """Community management API routes."""
 
 import logging
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -169,10 +169,7 @@ async def rebuild_communities(
     """
     try:
         await graphiti.rebuild_communities()
-        return {
-            "status": "success",
-            "message": "Community rebuild triggered successfully"
-        }
+        return {"status": "success", "message": "Community rebuild triggered successfully"}
     except Exception as e:
         logger.error(f"Failed to rebuild communities: {e}")
         raise HTTPException(status_code=500, detail=str(e))

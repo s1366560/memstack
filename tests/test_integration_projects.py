@@ -5,11 +5,12 @@ from fastapi import Depends
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import selectinload
 
 from server.auth import get_current_user
 from server.config import get_settings
 from server.database import get_db
-from server.db_models import User
+from server.db_models import User, UserRole
 from server.main import app
 
 
@@ -30,7 +31,11 @@ async def integration_db_override():
 
 # Mock authentication
 async def mock_get_current_user(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == "test@example.com"))
+    result = await db.execute(
+        select(User)
+        .where(User.email == "test@example.com")
+        .options(selectinload(User.roles).selectinload(UserRole.role))
+    )
     user = result.scalar_one_or_none()
     if not user:
         # Create test user if not exists
@@ -38,13 +43,19 @@ async def mock_get_current_user(db: AsyncSession = Depends(get_db)):
             id="user_test_123",
             email="test@example.com",
             name="Test User",
-            role="user",
+            password_hash="hashed_password",
             is_active=True,
             created_at=datetime.utcnow(),
         )
         db.add(user)
         await db.commit()
-        await db.refresh(user)
+        # Re-query to load relationships
+        result = await db.execute(
+            select(User)
+            .where(User.email == "test@example.com")
+            .options(selectinload(User.roles).selectinload(UserRole.role))
+        )
+        user = result.scalar_one_or_none()
     return user
 
 

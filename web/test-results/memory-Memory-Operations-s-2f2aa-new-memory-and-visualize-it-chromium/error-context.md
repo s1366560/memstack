@@ -1,0 +1,134 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - generic [ref=e7]:
+          - generic [ref=e9]: memory
+          - heading "MemStack.ai" [level=1] [ref=e10]
+        - navigation [ref=e11]:
+          - link "dashboard Overview" [ref=e12] [cursor=pointer]:
+            - /url: /project/1da4576a-9694-4543-b9e0-3d5915432652
+            - generic [ref=e13]: dashboard
+            - generic [ref=e14]: Overview
+          - link "database Memories" [ref=e15] [cursor=pointer]:
+            - /url: /project/1da4576a-9694-4543-b9e0-3d5915432652/memories
+            - generic [ref=e16]: database
+            - generic [ref=e17]: Memories
+          - link "hub Graph" [ref=e18] [cursor=pointer]:
+            - /url: /project/1da4576a-9694-4543-b9e0-3d5915432652/graph
+            - generic [ref=e19]: hub
+            - generic [ref=e20]: Graph
+          - link "search Search" [ref=e21] [cursor=pointer]:
+            - /url: /project/1da4576a-9694-4543-b9e0-3d5915432652/search
+            - generic [ref=e22]: search
+            - generic [ref=e23]: Search
+          - link "category Entities" [ref=e24] [cursor=pointer]:
+            - /url: /project/1da4576a-9694-4543-b9e0-3d5915432652/entities
+            - generic [ref=e25]: category
+            - generic [ref=e26]: Entities
+          - link "groups Communities" [ref=e27] [cursor=pointer]:
+            - /url: /project/1da4576a-9694-4543-b9e0-3d5915432652/communities
+            - generic [ref=e28]: groups
+            - generic [ref=e29]: Communities
+          - link "travel_explore Advanced Search" [ref=e30] [cursor=pointer]:
+            - /url: /project/1da4576a-9694-4543-b9e0-3d5915432652/advanced-search
+            - generic [ref=e31]: travel_explore
+            - generic [ref=e32]: Advanced Search
+          - link "build Maintenance" [ref=e33] [cursor=pointer]:
+            - /url: /project/1da4576a-9694-4543-b9e0-3d5915432652/maintenance
+            - generic [ref=e34]: build
+            - generic [ref=e35]: Maintenance
+          - link "group Team 4" [ref=e36] [cursor=pointer]:
+            - /url: /project/1da4576a-9694-4543-b9e0-3d5915432652/team
+            - generic [ref=e37]: group
+            - generic [ref=e38]: Team
+            - generic [ref=e39]: "4"
+          - link "settings Settings" [ref=e40] [cursor=pointer]:
+            - /url: /project/1da4576a-9694-4543-b9e0-3d5915432652/settings
+            - generic [ref=e41]: settings
+            - generic [ref=e42]: Settings
+          - link "help Support" [ref=e44] [cursor=pointer]:
+            - /url: /project/1da4576a-9694-4543-b9e0-3d5915432652/support
+            - generic [ref=e45]: help
+            - generic [ref=e46]: Support
+      - generic [ref=e48]:
+        - generic [ref=e49]:
+          - generic [ref=e50]: U
+          - generic [ref=e51]:
+            - generic [ref=e52]: User
+            - generic [ref=e53]: user@example.com
+        - button "Sign out" [ref=e54]:
+          - img [ref=e55]
+  - main [ref=e58]:
+    - generic [ref=e59]:
+      - navigation [ref=e60]:
+        - link "Home" [ref=e61] [cursor=pointer]:
+          - /url: /tenant
+        - generic [ref=e62]: /
+        - link "Projects" [ref=e63] [cursor=pointer]:
+          - /url: /tenant/projects
+        - generic [ref=e64]: /
+        - link "Test Project 1766641604607" [ref=e65] [cursor=pointer]:
+          - /url: /project/1da4576a-9694-4543-b9e0-3d5915432652
+        - generic [ref=e66]: /
+        - generic [ref=e67]: Memories
+      - generic [ref=e68]:
+        - generic [ref=e69]:
+          - generic [ref=e71]: search
+          - textbox "Search memories or files..." [ref=e72]
+        - generic [ref=e73]:
+          - button "Light Mode" [ref=e74]:
+            - img [ref=e75]
+          - button "System Mode" [ref=e81]:
+            - img [ref=e82]
+          - button "Dark Mode" [ref=e84]:
+            - img [ref=e85]
+        - button "notifications" [ref=e87]:
+          - generic [ref=e88]: notifications
+        - link "add Add Memory" [ref=e90] [cursor=pointer]:
+          - /url: /project/1da4576a-9694-4543-b9e0-3d5915432652/memories/new
+          - button "add Add Memory" [ref=e91]:
+            - generic [ref=e92]: add
+            - generic [ref=e93]: Add Memory
+        - button "dataset Test Project 1766641604607 Admin User's Workspace unfold_more" [ref=e97]:
+          - generic [ref=e99]: dataset
+          - generic [ref=e100]:
+            - heading "Test Project 1766641604607" [level=1] [ref=e101]
+            - paragraph [ref=e102]: Admin User's Workspace
+          - generic [ref=e103]: unfold_more
+    - generic [ref=e105]:
+      - generic [ref=e106]:
+        - generic [ref=e107]:
+          - heading "Memories" [level=1] [ref=e108]
+          - paragraph [ref=e109]: Manage and organize your project's knowledge base.
+        - link "add Add Memory" [ref=e110] [cursor=pointer]:
+          - /url: /project/1da4576a-9694-4543-b9e0-3d5915432652/memories/new
+          - button "add Add Memory" [ref=e111]:
+            - generic [ref=e112]: add
+            - text: Add Memory
+      - generic [ref=e113]:
+        - generic [ref=e114]:
+          - generic:
+            - generic: search
+          - textbox "Search memories..." [ref=e115]
+        - generic [ref=e116]:
+          - generic [ref=e117]: "Filter:"
+          - button "All Types arrow_drop_down" [ref=e118]:
+            - text: All Types
+            - generic [ref=e119]: arrow_drop_down
+      - table [ref=e122]:
+        - rowgroup [ref=e123]:
+          - row "Name Type Data Status Processing Created" [ref=e124]:
+            - columnheader "Name" [ref=e125]
+            - columnheader "Type" [ref=e126]
+            - columnheader "Data Status" [ref=e127]
+            - columnheader "Processing" [ref=e128]
+            - columnheader "Created" [ref=e129]
+            - columnheader [ref=e130]
+        - rowgroup [ref=e131]:
+          - row "No memories found. Create one to get started." [ref=e132]:
+            - cell "No memories found. Create one to get started." [ref=e133]
+```

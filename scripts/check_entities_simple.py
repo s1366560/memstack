@@ -1,4 +1,3 @@
-
 import asyncio
 import os
 import sys
@@ -8,10 +7,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from server.services.graphiti_service import get_graphiti_service
 
+
 async def main():
     service = await get_graphiti_service()
     await service.initialize()
-    
+
     try:
         print("Checking entities...")
         query = """
@@ -21,7 +21,7 @@ async def main():
         result = await service.client.driver.execute_query(query)
         count = result.records[0]["count"]
         print(f"Total Entities: {count}")
-        
+
         if count > 0:
             query_sample = """
             MATCH (e:Entity)
@@ -32,11 +32,12 @@ async def main():
             print("Sample Entities:")
             for r in result_sample.records:
                 print(f" - {r['e.name']} ({r['e.entity_type']}) Project: {r['e.project_id']}")
-                
+
     except Exception as e:
         print(f"Error: {e}")
     finally:
         await service.close()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

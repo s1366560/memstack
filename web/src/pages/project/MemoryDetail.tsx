@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { graphitiService } from '../../services/graphitiService'
+import { memoryAPI } from '../../services/api'
+import { Memory } from '../../types/memory'
 import { DeleteConfirmationModal } from '../../components/DeleteConfirmationModal'
 
 export const MemoryDetail: React.FC = () => {
     const { projectId, memoryId } = useParams()
     const navigate = useNavigate()
-    const [memory, setMemory] = useState<any>(null)
+    const [memory, setMemory] = useState<Memory | null>(null)
     const [isLoading, setIsLoading] = useState(false)
     const [activeTab, setActiveTab] = useState<'content' | 'metadata' | 'history' | 'raw'>('content')
     const [deleteModalOpen, setDeleteModalOpen] = useState(false)
@@ -17,7 +18,7 @@ export const MemoryDetail: React.FC = () => {
             if (projectId && memoryId) {
                 setIsLoading(true)
                 try {
-                    const data = await graphitiService.getEpisode(decodeURIComponent(memoryId))
+                    const data = await memoryAPI.get(projectId, memoryId)
                     setMemory(data)
                 } catch (error) {
                     console.error('Failed to fetch memory:', error)
@@ -43,10 +44,10 @@ export const MemoryDetail: React.FC = () => {
 
     const handleDelete = async () => {
         if (!projectId || !memoryId) return
-        
+
         setIsDeleting(true)
         try {
-            await graphitiService.deleteEpisode(decodeURIComponent(memoryId))
+            await memoryAPI.delete(projectId, memoryId)
             navigate(`/project/${projectId}/memories`)
         } catch (error) {
             console.error('Failed to delete memory:', error)
@@ -77,9 +78,12 @@ export const MemoryDetail: React.FC = () => {
                         <Link to={`/project/${projectId}/memories`} className="text-slate-500 hover:text-primary text-sm font-medium transition-colors">Memories</Link>
                         <span className="text-slate-400 text-sm">/</span>
                         <div className="flex items-center gap-2">
-                            <span className="text-slate-900 dark:text-white text-sm font-medium truncate max-w-[200px]">{memory.name || 'Untitled'}</span>
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                                Synced
+                            <span className="text-slate-900 dark:text-white text-sm font-medium truncate max-w-[200px]">{memory.title || 'Untitled'}</span>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${memory.processing_status === 'FAILED' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                                    memory.processing_status === 'COMPLETED' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                                        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                }`}>
+                                {memory.processing_status || 'PENDING'}
                             </span>
                         </div>
                     </div>
@@ -115,13 +119,13 @@ export const MemoryDetail: React.FC = () => {
                                                 <span className="material-symbols-outlined text-3xl">description</span>
                                             </div>
                                             <div className="absolute -bottom-1 -right-1 bg-white dark:bg-slate-900 rounded-full p-1 shadow-sm border border-slate-100 dark:border-slate-700">
-                                                <div className="bg-blue-500 rounded-full h-3 w-3" title="Online"></div>
+                                                <div className={`rounded-full h-3 w-3 ${memory.status === 'DISABLED' ? 'bg-red-500' : 'bg-green-500'}`} title={memory.status === 'DISABLED' ? 'Unavailable' : 'Available'}></div>
                                             </div>
                                         </div>
                                         <div className="flex flex-col justify-center gap-1">
-                                            <h1 className="text-slate-900 dark:text-white text-2xl md:text-3xl font-bold leading-tight tracking-tight">{memory.name || 'Untitled'}</h1>
+                                            <h1 className="text-slate-900 dark:text-white text-2xl md:text-3xl font-bold leading-tight tracking-tight">{memory.title || 'Untitled'}</h1>
                                             <p className="text-slate-500 dark:text-slate-400 text-sm md:text-base font-normal flex items-center gap-2 flex-wrap">
-                                                <span>Type: <span className="text-slate-900 dark:text-slate-200 font-medium capitalize">{memory.source_type || 'Unknown'}</span></span>
+                                                <span>Type: <span className="text-slate-900 dark:text-slate-200 font-medium capitalize">{memory.content_type || 'Unknown'}</span></span>
                                                 <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
                                                 <span>{new Date(memory.created_at).toLocaleDateString()}</span>
                                             </p>
@@ -176,11 +180,11 @@ export const MemoryDetail: React.FC = () => {
                                     <div className="grid grid-cols-2 gap-4 text-sm">
                                         <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
                                             <span className="block text-xs font-bold text-slate-500 uppercase mb-1">ID (UUID)</span>
-                                            <span className="font-mono break-all">{memory.uuid}</span>
+                                            <span className="font-mono break-all">{memory.id}</span>
                                         </div>
                                         <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
                                             <span className="block text-xs font-bold text-slate-500 uppercase mb-1">Type</span>
-                                            <span className="capitalize">{memory.source_type}</span>
+                                            <span className="capitalize">{memory.content_type}</span>
                                         </div>
                                         <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg col-span-2">
                                             <span className="block text-xs font-bold text-slate-500 uppercase mb-1">Custom Metadata</span>
@@ -201,7 +205,7 @@ export const MemoryDetail: React.FC = () => {
                                     Created {new Date(memory.created_at).toLocaleString()}
                                 </div>
                                 <div>
-                                    ID: {memory.uuid ? memory.uuid.slice(0, 12) : 'N/A'}...
+                                    ID: {memory.id ? memory.id.slice(0, 12) : 'N/A'}...
                                 </div>
                             </div>
                         </div>

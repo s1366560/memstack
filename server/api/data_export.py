@@ -3,7 +3,7 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from server.auth import verify_api_key_dependency
 from server.db_models import APIKey
@@ -114,7 +114,7 @@ async def cleanup_data(
         cutoff_date = datetime.utcnow() - timedelta(days=older_than_days)
 
         # Count episodes that would be deleted
-        tenant_filter = f"{{tenant_id: $tenant_id}}" if tenant_id else ""
+        tenant_filter = "{tenant_id: $tenant_id}" if tenant_id else ""
         count_query = f"""
         MATCH (e:Episodic {tenant_filter})
         WHERE e.created_at < datetime($cutoff_date)
@@ -132,7 +132,7 @@ async def cleanup_data(
                 "dry_run": True,
                 "would_delete": count,
                 "cutoff_date": cutoff_date.isoformat(),
-                "message": f"Would delete {count} episodes older than {older_than_days} days"
+                "message": f"Would delete {count} episodes older than {older_than_days} days",
             }
         else:
             # Actually delete (DETACH DELETE removes nodes and their relationships)
@@ -149,13 +149,15 @@ async def cleanup_data(
             )
             deleted = result.records[0]["deleted"] if result.records else 0
 
-            logger.warning(f"Deleted {deleted} episodes older than {older_than_days} days for tenant: {tenant_id}")
+            logger.warning(
+                f"Deleted {deleted} episodes older than {older_than_days} days for tenant: {tenant_id}"
+            )
 
             return {
                 "dry_run": False,
                 "deleted": deleted,
                 "cutoff_date": cutoff_date.isoformat(),
-                "message": f"Deleted {deleted} episodes older than {older_than_days} days"
+                "message": f"Deleted {deleted} episodes older than {older_than_days} days",
             }
     except Exception as e:
         logger.error(f"Failed to cleanup data: {e}")
