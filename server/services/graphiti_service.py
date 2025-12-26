@@ -291,6 +291,7 @@ class GraphitiService:
                 "CREATE INDEX episodic_tenant_id IF NOT EXISTS FOR (n:Episodic) ON (n.tenant_id)",
                 "CREATE INDEX episodic_project_id IF NOT EXISTS FOR (n:Episodic) ON (n.project_id)",
                 "CREATE INDEX episodic_user_id IF NOT EXISTS FOR (n:Episodic) ON (n.user_id)",
+                "CREATE INDEX episodic_memory_id IF NOT EXISTS FOR (n:Episodic) ON (n.memory_id)",
                 "CREATE INDEX entity_tenant_id IF NOT EXISTS FOR (n:Entity) ON (n.tenant_id)",
                 "CREATE INDEX entity_project_id IF NOT EXISTS FOR (n:Entity) ON (n.project_id)",
                 "CREATE INDEX community_tenant_id IF NOT EXISTS FOR (n:Community) ON (n.tenant_id)",
@@ -456,6 +457,7 @@ class GraphitiService:
                     e.tenant_id = $tenant_id,
                     e.project_id = $project_id,
                     e.user_id = $user_id,
+                    e.memory_id = $memory_id,
                     e.status = 'Processing',
                     e.entity_edges = []
                 """,
@@ -470,6 +472,7 @@ class GraphitiService:
                 tenant_id=episode.tenant_id,
                 project_id=episode.project_id,
                 user_id=episode.user_id,
+                memory_id=episode.metadata.get("memory_id") if episode.metadata else None,
             )
 
             # Add to queue
@@ -693,7 +696,10 @@ class GraphitiService:
                                 "type": "entity",
                                 "name": node.name,
                                 "uuid": node.uuid,
-                                "entity_type": "Entity",
+                                "entity_type": next(
+                                    (l for l in getattr(node, "labels", []) if l != "Entity"),
+                                    "Entity",
+                                ),
                             },
                             source="entity",
                         )
@@ -904,7 +910,10 @@ class GraphitiService:
                                 "type": "entity",
                                 "name": node.name,
                                 "uuid": node.uuid,
-                                "entity_type": "Entity",  # Default, maybe enrich later
+                                "entity_type": next(
+                                    (l for l in getattr(node, "labels", []) if l != "Entity"),
+                                    "Entity",
+                                ),
                             },
                             source="entity",
                         )
@@ -1151,7 +1160,7 @@ class GraphitiService:
             # Get entities in the community
             entities_query = """
             MATCH (c:Community {uuid: $uuid})-[:HAS_MEMBER]->(e:Entity)
-            RETURN properties(e) as props
+            RETURN properties(e) as props, labels(e) as labels
             LIMIT $limit
             """
             entities_result = await self.client.driver.execute_query(
@@ -1162,6 +1171,8 @@ class GraphitiService:
 
             for r in entities_result.records:
                 props = r["props"]
+                labels = r["labels"]
+                e_type = next((l for l in labels if l != "Entity"), "Unknown")
                 items.append(
                     MemoryItem(
                         content=f"{props.get('name', 'Unknown')}: {props.get('summary', '')}",
@@ -1169,7 +1180,7 @@ class GraphitiService:
                         metadata={
                             "type": "entity",
                             "uuid": props.get("uuid"),
-                            "entity_type": props.get("entity_type"),
+                            "entity_type": e_type,
                         },
                         source="community_entity",
                     )
@@ -2057,15 +2068,18 @@ class GraphitiService:
         try:
             query = """
             MATCH (e:Entity {uuid: $uuid})
-            RETURN properties(e) as props
+            RETURN properties(e) as props, labels(e) as labels
             """
             result = await self.client.driver.execute_query(query, uuid=entity_uuid)
             if result.records:
                 props = result.records[0]["props"]
+                labels = result.records[0]["labels"]
+                entity_type = next((l for l in labels if l != "Entity"), "Unknown")
+
                 return Entity(
                     uuid=props.get("uuid", entity_uuid),
                     name=props.get("name", ""),
-                    entity_type=props.get("entity_type", "Unknown"),
+                    entity_type=entity_type,
                     summary=props.get("summary", ""),
                     tenant_id=props.get("tenant_id"),
                     project_id=props.get("project_id"),
@@ -2103,7 +2117,7 @@ class GraphitiService:
             if tenant_id:
                 conditions.append("e.tenant_id = $tenant_id")
             if entity_type:
-                conditions.append("e.entity_type = $entity_type")
+                conditions.append("$entity_type IN labels(e)")
 
             base_where = " AND ".join(conditions) if conditions else "1=1"
 
@@ -2140,7 +2154,7 @@ class GraphitiService:
             list_query = f"""
             MATCH (e:Entity)
             WHERE {where_clause}
-            RETURN properties(e) as props
+            RETURN properties(e) as props, labels(e) as labels
             ORDER BY e.created_at DESC
             SKIP $offset
             LIMIT $limit
@@ -2157,11 +2171,14 @@ class GraphitiService:
             entities = []
             for r in list_result.records:
                 props = r["props"]
+                labels = r["labels"]
+                e_type = next((l for l in labels if l != "Entity"), "Unknown")
+
                 entities.append(
                     Entity(
                         uuid=props.get("uuid", ""),
                         name=props.get("name", ""),
-                        entity_type=props.get("entity_type", "Unknown"),
+                        entity_type=e_type,
                         summary=props.get("summary", ""),
                         tenant_id=props.get("tenant_id"),
                         project_id=props.get("project_id"),

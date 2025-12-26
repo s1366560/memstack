@@ -17,12 +17,6 @@ export const SchemaLayout: React.FC = () => {
             {/* Schema Header / Tabs */}
             <div className="flex-none px-8 pt-6 border-b border-slate-200 dark:border-[#2a324a] bg-white dark:bg-[#121521]">
                 <div className="flex flex-col gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Schema Configuration</h1>
-                        <p className="text-slate-500 dark:text-slate-400 mt-1">
-                            Define the structure of your knowledge graph, including entities, relationships, and extraction rules.
-                        </p>
-                    </div>
                     <div className="flex gap-6 -mb-px overflow-x-auto">
                         {tabs.map((tab) => (
                             <NavLink
