@@ -130,8 +130,8 @@ make dev  # http://localhost:8000
 
 # 启动Web控制台 (新终端)
 cd web
-npm install
-npm run dev  # http://localhost:5173
+pnpm install
+pnpm run dev  # http://localhost:5173
 ```
 
 ### 4. 验证安装

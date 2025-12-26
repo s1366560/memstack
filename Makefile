@@ -103,28 +103,28 @@ db-revision:
 
 # Web commands
 web-install:
-	cd web && npm install
+	cd web && pnpm install
 
 web-dev:
-	cd web && npm run dev
+	cd web && pnpm run dev
 
 web-build:
-	cd web && npm run build
+	cd web && pnpm run build
 
 web-preview:
-	cd web && npm run preview
+	cd web && pnpm run preview
 
 web-test:
-	cd web && npm test
+	cd web && pnpm test
 
 web-test-coverage:
-	cd web && npm run test:coverage
+	cd web && pnpm run test:coverage
 
 web-lint:
-	cd web && npm run lint
+	cd web && pnpm run lint
 
 web-e2e:
-	cd web && npm run test:e2e
+	cd web && pnpm run test:e2e
 
 # API Key helper
 get-api-key:
