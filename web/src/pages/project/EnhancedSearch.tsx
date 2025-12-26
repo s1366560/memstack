@@ -71,12 +71,20 @@ export const EnhancedSearch: React.FC = () => {
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
     const [copiedId, setCopiedId] = useState<string | null>(null)
     const [isSubgraphMode, setIsSubgraphMode] = useState(false)
+    const [selectedSubgraphIds, setSelectedSubgraphIds] = useState<string[]>([])
 
     const handleCopyId = (id: string, e: React.MouseEvent) => {
         e.stopPropagation()
         navigator.clipboard.writeText(id)
         setCopiedId(id)
         setTimeout(() => setCopiedId(null), 2000)
+    }
+
+    const handleResultClick = (result: SearchResult) => {
+        if (result.metadata.uuid) {
+            setSelectedSubgraphIds([result.metadata.uuid])
+            setIsSubgraphMode(true)
+        }
     }
 
     const handleSearch = async () => {
@@ -115,6 +123,10 @@ export const EnhancedSearch: React.FC = () => {
             if (mappedResults.length > 0) {
                 setIsResultsCollapsed(false)
                 setIsSubgraphMode(true)
+                // Default to the first result for subgraph
+                if (mappedResults[0].metadata.uuid) {
+                    setSelectedSubgraphIds([mappedResults[0].metadata.uuid])
+                }
             }
         } catch (err) {
             console.error('Search failed:', err)
@@ -468,7 +480,7 @@ export const EnhancedSearch: React.FC = () => {
                                     projectId={projectId}
                                     tenantId={currentProject?.tenant_id}
                                     highlightNodeIds={highlightNodeIds}
-                                    subgraphNodeIds={isSubgraphMode ? highlightNodeIds : undefined}
+                                    subgraphNodeIds={isSubgraphMode ? selectedSubgraphIds : undefined}
                                     includeCommunities={true}
                                     onNodeClick={(node) => {
                                         if (node?.uuid) {
@@ -607,90 +619,100 @@ export const EnhancedSearch: React.FC = () => {
                                     )}
 
                                     {/* Dynamic Results */}
-                                    {results.map((result, index) => (
-                                        <div key={index} className={`
-                                            bg-white dark:bg-[#1e212b] rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 hover:border-blue-600/40 dark:hover:border-blue-600/40 cursor-pointer transition-all group hover:shadow-md hover:shadow-blue-600/5
+                                    {results.map((result, index) => {
+                                        const isSelected = result.metadata.uuid && selectedSubgraphIds.includes(result.metadata.uuid)
+                                        return (
+                                            <div
+                                                key={index}
+                                                onClick={() => handleResultClick(result)}
+                                                className={`
+                                            bg-white dark:bg-[#1e212b] rounded-xl shadow-sm border transition-all group hover:shadow-md hover:shadow-blue-600/5 cursor-pointer
+                                            ${isSelected
+                                                        ? 'border-blue-600 dark:border-blue-500 ring-1 ring-blue-600 dark:ring-blue-500'
+                                                        : 'border-slate-200 dark:border-slate-800 hover:border-blue-600/40 dark:hover:border-blue-600/40'
+                                                    }
                                             ${viewMode === 'grid' ? 'p-4 flex flex-col h-full' : 'p-3 flex items-start gap-4'}
                                         `}>
-                                            <div className={`flex ${viewMode === 'grid' ? 'items-start justify-between mb-3' : 'shrink-0'}`}>
-                                                <div className="flex items-center gap-2">
-                                                    <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                                                        {getIconForType(result.metadata.type || 'document')}
+                                                <div className={`flex ${viewMode === 'grid' ? 'items-start justify-between mb-3' : 'shrink-0'}`}>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                                                            {getIconForType(result.metadata.type || 'document')}
+                                                        </div>
+                                                        {viewMode === 'grid' && (
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{result.metadata.type || 'Result'}</span>
+                                                                <span className="text-xs font-bold text-slate-600 dark:text-slate-400">{result.source}</span>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     {viewMode === 'grid' && (
-                                                        <div className="flex flex-col">
-                                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{result.metadata.type || 'Result'}</span>
-                                                            <span className="text-xs font-bold text-slate-600 dark:text-slate-400">{result.source}</span>
+                                                        <div className="flex flex-col items-end">
+                                                            <span className={`text-sm font-bold ${getScoreColor(result.score)}`}>{Math.round(result.score * 100)}%</span>
+                                                            <span className="text-[10px] text-slate-400">Relevance</span>
                                                         </div>
                                                     )}
                                                 </div>
-                                                {viewMode === 'grid' && (
-                                                    <div className="flex flex-col items-end">
-                                                        <span className={`text-sm font-bold ${getScoreColor(result.score)}`}>{Math.round(result.score * 100)}%</span>
-                                                        <span className="text-[10px] text-slate-400">Relevance</span>
-                                                    </div>
-                                                )}
-                                            </div>
 
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center justify-between gap-2 mb-1">
-                                                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors line-clamp-1">{result.metadata.name || 'Untitled Result'}</h3>
-                                                    {viewMode === 'list' && (
-                                                        <div className="flex items-center gap-3 shrink-0">
-                                                            {result.metadata.uuid && (
-                                                                <div
-                                                                    className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-[10px] text-slate-500 font-mono hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors group/id"
-                                                                    onClick={(e) => handleCopyId(result.metadata.uuid!, e)}
-                                                                    title="Copy Node ID"
-                                                                >
-                                                                    <span>{result.metadata.uuid.slice(0, 8)}...</span>
-                                                                    {copiedId === result.metadata.uuid ? (
-                                                                        <Check className="w-3 h-3 text-emerald-500" />
-                                                                    ) : (
-                                                                        <Copy className="w-3 h-3 hover:text-blue-600" />
-                                                                    )}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center justify-between gap-2 mb-1">
+                                                        <h3 className="text-sm font-semibold text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors line-clamp-1">{result.metadata.name || 'Untitled Result'}</h3>
+                                                        {viewMode === 'list' && (
+                                                            <div className="flex items-center gap-3 shrink-0">
+                                                                {result.metadata.uuid && (
+                                                                    <div
+                                                                        className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-[10px] text-slate-500 font-mono hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors group/id"
+                                                                        onClick={(e) => handleCopyId(result.metadata.uuid!, e)}
+                                                                        title="Copy Node ID"
+                                                                    >
+                                                                        <span>{result.metadata.uuid.slice(0, 8)}...</span>
+                                                                        {copiedId === result.metadata.uuid ? (
+                                                                            <Check className="w-3 h-3 text-emerald-500" />
+                                                                        ) : (
+                                                                            <Copy className="w-3 h-3 hover:text-blue-600" />
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                                <div className="flex flex-col items-end">
+                                                                    <span className={`text-sm font-bold ${getScoreColor(result.score)} leading-none`}>{Math.round(result.score * 100)}%</span>
                                                                 </div>
-                                                            )}
-                                                            <div className="flex flex-col items-end">
-                                                                <span className={`text-sm font-bold ${getScoreColor(result.score)} leading-none`}>{Math.round(result.score * 100)}%</span>
                                                             </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Node ID for Grid View */}
+                                                    {viewMode === 'grid' && result.metadata.uuid && (
+                                                        <div className="flex items-center gap-1.5 mb-2">
+                                                            <span
+                                                                className="text-[10px] text-slate-400 font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded flex items-center gap-1.5 group/id hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                                                onClick={(e) => handleCopyId(result.metadata.uuid!, e)}
+                                                                title="Copy Node ID"
+                                                            >
+                                                                {result.metadata.uuid.slice(0, 8)}...
+                                                                {copiedId === result.metadata.uuid ? (
+                                                                    <Check className="w-3 h-3 text-emerald-500" />
+                                                                ) : (
+                                                                    <Copy className="w-3 h-3 hover:text-blue-600 opacity-0 group-hover/id:opacity-100 transition-opacity" />
+                                                                )}
+                                                            </span>
                                                         </div>
                                                     )}
-                                                </div>
 
-                                                {/* Node ID for Grid View */}
-                                                {viewMode === 'grid' && result.metadata.uuid && (
-                                                    <div className="flex items-center gap-1.5 mb-2">
-                                                        <span
-                                                            className="text-[10px] text-slate-400 font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded flex items-center gap-1.5 group/id hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                                                            onClick={(e) => handleCopyId(result.metadata.uuid!, e)}
-                                                            title="Copy Node ID"
-                                                        >
-                                                            {result.metadata.uuid.slice(0, 8)}...
-                                                            {copiedId === result.metadata.uuid ? (
-                                                                <Check className="w-3 h-3 text-emerald-500" />
-                                                            ) : (
-                                                                <Copy className="w-3 h-3 hover:text-blue-600 opacity-0 group-hover/id:opacity-100 transition-opacity" />
-                                                            )}
-                                                        </span>
+                                                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-3 line-clamp-2">
+                                                        {result.content}
+                                                    </p>
+
+                                                    <div className={`flex items-center justify-between ${viewMode === 'grid' ? 'mt-auto pt-3 border-t border-slate-50 dark:border-slate-800' : ''}`}>
+                                                        <div className="flex gap-2">
+                                                            {result.metadata.tags && Array.isArray(result.metadata.tags) && result.metadata.tags.map((tag: string, i: number) => (
+                                                                <span key={i} className="text-[10px] text-slate-400 font-medium bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">#{tag}</span>
+                                                            ))}
+                                                        </div>
+                                                        <span className="text-[10px] text-slate-400 font-medium">{result.metadata.created_at || 'Unknown Date'}</span>
                                                     </div>
-                                                )}
-
-                                                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-3 line-clamp-2">
-                                                    {result.content}
-                                                </p>
-
-                                                <div className={`flex items-center justify-between ${viewMode === 'grid' ? 'mt-auto pt-3 border-t border-slate-50 dark:border-slate-800' : ''}`}>
-                                                    <div className="flex gap-2">
-                                                        {result.metadata.tags && Array.isArray(result.metadata.tags) && result.metadata.tags.map((tag: string, i: number) => (
-                                                            <span key={i} className="text-[10px] text-slate-400 font-medium bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">#{tag}</span>
-                                                        ))}
-                                                    </div>
-                                                    <span className="text-[10px] text-slate-400 font-medium">{result.metadata.created_at || 'Unknown Date'}</span>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        )
+                                    })}
                                 </div>
                             </div>
                         </section>

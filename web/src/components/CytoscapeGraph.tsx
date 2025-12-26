@@ -259,7 +259,10 @@ export const CytoscapeGraph: React.FC<CytoscapeGraphProps> = ({
                 })
             })
 
-            cyRef.current.json({ elements })
+            // Clear existing elements and add new ones to ensure clean state
+            cyRef.current.elements().remove()
+            cyRef.current.add(elements)
+
             cyRef.current.layout(layoutOptions).run()
 
             setNodeCount(elements.filter(e => e.group === 'nodes').length)
