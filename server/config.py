@@ -76,6 +76,8 @@ class Settings(BaseSettings):
 
     # Graphiti Settings
     graphiti_semaphore_limit: int = Field(default=10, alias="GRAPHITI_SEMAPHORE_LIMIT")
+    max_async_workers: int = Field(default=20, alias="MAX_ASYNC_WORKERS")
+    queue_batch_size: int = Field(default=1, alias="QUEUE_BATCH_SIZE")
 
     # Monitoring
     enable_metrics: bool = Field(default=True, alias="ENABLE_METRICS")

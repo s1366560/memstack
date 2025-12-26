@@ -10,6 +10,7 @@ from graphiti_core import Graphiti
 from graphiti_core.nodes import EpisodeType
 from sqlalchemy import update
 
+from server.config import get_settings
 from server.database import async_session_factory
 from server.db_models import Memory
 from server.models.enums import ProcessingStatus
@@ -18,14 +19,29 @@ logger = logging.getLogger(__name__)
 
 
 class QueueService:
-    """Service for managing sequential episode processing queues by group_id."""
+    """Service for managing sequential episode processing queues by group_id with a worker pool."""
 
     def __init__(self):
         """Initialize the queue service."""
+        self._settings = get_settings()
+
         # Dictionary to store queues for each group_id
         self._episode_queues: dict[str, asyncio.Queue] = {}
-        # Dictionary to track if a worker is running for each group_id
-        self._queue_workers: dict[str, bool] = {}
+
+        # Queue of group_ids that have pending work
+        self._active_groups: asyncio.Queue = asyncio.Queue()
+
+        # Set of group_ids that are currently in _active_groups or being processed
+        # This prevents the same group from being added to the scheduling queue multiple times
+        self._scheduled_groups: set[str] = set()
+
+        # Lock to protect _scheduled_groups access
+        self._schedule_lock = asyncio.Lock()
+
+        # Worker tasks
+        self._workers: list[asyncio.Task] = []
+        self._shutdown_event = asyncio.Event()
+
         # Store the graphiti client after initialization
         self._graphiti_client: Optional[Graphiti] = None
 
@@ -77,44 +93,80 @@ class QueueService:
         # Add the episode processing function to the queue
         await self._episode_queues[group_id].put(process_func)
 
-        # Start a worker for this queue if one isn't already running
-        if not self._queue_workers.get(group_id, False):
-            asyncio.create_task(self._process_episode_queue(group_id))
+        # Schedule the group for processing if not already scheduled
+        async with self._schedule_lock:
+            if group_id not in self._scheduled_groups:
+                self._scheduled_groups.add(group_id)
+                self._active_groups.put_nowait(group_id)
+                logger.debug(f"Scheduled group {group_id} for processing")
 
         return self._episode_queues[group_id].qsize()
 
-    async def _process_episode_queue(self, group_id: str) -> None:
-        """Process episodes for a specific group_id sequentially.
+    async def _worker_loop(self, worker_id: int) -> None:
+        """Worker loop to process episodes from active groups."""
+        logger.info(f"Starting worker {worker_id}")
 
-        This function runs as a long-lived task that processes episodes
-        from the queue one at a time.
-        """
-        logger.info(f"Starting episode queue worker for group_id: {group_id}")
-        self._queue_workers[group_id] = True
-
-        try:
-            while True:
-                # Get the next episode processing function from the queue
-                # This will wait if the queue is empty
-                process_func = await self._episode_queues[group_id].get()
-
+        while not self._shutdown_event.is_set():
+            try:
+                # Wait for a group to become active
+                # Use wait_for to allow checking shutdown event periodically if needed,
+                # though get() is cancellable so mostly fine.
                 try:
-                    # Process the episode
-                    await process_func()
-                except Exception as e:
-                    logger.error(
-                        f"Error processing queued episode for group_id {group_id}: {str(e)}"
-                    )
+                    group_id = await self._active_groups.get()
+                except asyncio.CancelledError:
+                    break
+
+                # Process one item from this group
+                try:
+                    queue = self._episode_queues.get(group_id)
+                    if not queue:
+                        # Should not happen if logic is correct
+                        logger.warning(
+                            f"Worker {worker_id} got group {group_id} but no queue found"
+                        )
+                        continue
+
+                    try:
+                        # Get task without waiting - it should be there
+                        process_func = queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        logger.warning(
+                            f"Worker {worker_id} got group {group_id} but queue was empty"
+                        )
+                        # Will be removed from schedule at end of loop if still empty
+                        process_func = None
+
+                    if process_func:
+                        try:
+                            await process_func()
+                        except Exception as e:
+                            logger.error(
+                                f"Worker {worker_id} error processing task for group {group_id}: {e}"
+                            )
+                        finally:
+                            queue.task_done()
+
                 finally:
-                    # Mark the task as done regardless of success/failure
-                    self._episode_queues[group_id].task_done()
-        except asyncio.CancelledError:
-            logger.info(f"Episode queue worker for group_id {group_id} was cancelled")
-        except Exception as e:
-            logger.error(f"Unexpected error in queue worker for group_id {group_id}: {str(e)}")
-        finally:
-            self._queue_workers[group_id] = False
-            logger.info(f"Stopped episode queue worker for group_id: {group_id}")
+                    self._active_groups.task_done()
+
+                    # Reschedule group if it still has items
+                    async with self._schedule_lock:
+                        if queue and not queue.empty():
+                            # Put back to end of queue (Round Robin)
+                            self._active_groups.put_nowait(group_id)
+                        else:
+                            # Mark as idle
+                            self._scheduled_groups.discard(group_id)
+                            # Clean up empty queue to free memory if needed?
+                            # Maybe keep it to avoid recreation overhead.
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Unexpected error in worker {worker_id}: {e}")
+                await asyncio.sleep(1)  # Prevent tight loop on error
+
+        logger.info(f"Worker {worker_id} stopped")
 
     def get_queue_size(self, group_id: str) -> int:
         """Get the current queue size for a group_id."""
@@ -123,8 +175,11 @@ class QueueService:
         return self._episode_queues[group_id].qsize()
 
     def is_worker_running(self, group_id: str) -> bool:
-        """Check if a worker is running for a group_id."""
-        return self._queue_workers.get(group_id, False)
+        """Check if a worker is running for a group_id.
+
+        With the pool model, we check if the group is currently scheduled.
+        """
+        return group_id in self._scheduled_groups
 
     async def initialize(self, graphiti_client: Graphiti) -> None:
         """Initialize the queue service with a graphiti client.
@@ -133,7 +188,30 @@ class QueueService:
             graphiti_client: The graphiti client instance to use for processing episodes
         """
         self._graphiti_client = graphiti_client
-        logger.info("Queue service initialized with graphiti client")
+
+        # Start workers
+        num_workers = self._settings.max_async_workers
+        logger.info(f"Initializing QueueService with {num_workers} workers")
+
+        for i in range(num_workers):
+            task = asyncio.create_task(self._worker_loop(i))
+            self._workers.append(task)
+
+        logger.info("Queue service initialized")
+
+    async def close(self) -> None:
+        """Shutdown the queue service."""
+        logger.info("Shutting down QueueService")
+        self._shutdown_event.set()
+
+        for task in self._workers:
+            task.cancel()
+
+        if self._workers:
+            await asyncio.gather(*self._workers, return_exceptions=True)
+
+        self._workers.clear()
+        logger.info("QueueService shutdown complete")
 
     async def add_episode(
         self,
