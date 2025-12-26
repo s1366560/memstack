@@ -73,7 +73,7 @@ test.describe('Graph Visualization', () => {
         // Check if graph container exists
         // The CytoscapeGraph component renders a div with ref=containerRef
         // It usually has a canvas inside when initialized
-        const graphContainer = page.locator('.cytoscape-container, canvas').first();
+        const _graphContainer = page.locator('.cytoscape-container, canvas').first();
 
         // We can also check for the control panel or legend if available
         // Based on CytoscapeGraph.tsx, there might be specific styles or elements

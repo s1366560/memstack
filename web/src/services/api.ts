@@ -172,4 +172,53 @@ export const memoryAPI = {
     },
 };
 
+export const schemaAPI = {
+    // Entity Types
+    listEntityTypes: async (projectId: string) => {
+        const response = await api.get(`/projects/${projectId}/schema/entities`);
+        return response.data;
+    },
+    createEntityType: async (projectId: string, data: any) => {
+        const response = await api.post(`/projects/${projectId}/schema/entities`, data);
+        return response.data;
+    },
+    updateEntityType: async (projectId: string, entityId: string, data: any) => {
+        const response = await api.put(`/projects/${projectId}/schema/entities/${entityId}`, data);
+        return response.data;
+    },
+    deleteEntityType: async (projectId: string, entityId: string) => {
+        await api.delete(`/projects/${projectId}/schema/entities/${entityId}`);
+    },
+
+    // Edge Types
+    listEdgeTypes: async (projectId: string) => {
+        const response = await api.get(`/projects/${projectId}/schema/edges`);
+        return response.data;
+    },
+    createEdgeType: async (projectId: string, data: any) => {
+        const response = await api.post(`/projects/${projectId}/schema/edges`, data);
+        return response.data;
+    },
+    updateEdgeType: async (projectId: string, edgeId: string, data: any) => {
+        const response = await api.put(`/projects/${projectId}/schema/edges/${edgeId}`, data);
+        return response.data;
+    },
+    deleteEdgeType: async (projectId: string, edgeId: string) => {
+        await api.delete(`/projects/${projectId}/schema/edges/${edgeId}`);
+    },
+
+    // Edge Mappings
+    listEdgeMaps: async (projectId: string) => {
+        const response = await api.get(`/projects/${projectId}/schema/mappings`);
+        return response.data;
+    },
+    createEdgeMap: async (projectId: string, data: any) => {
+        const response = await api.post(`/projects/${projectId}/schema/mappings`, data);
+        return response.data;
+    },
+    deleteEdgeMap: async (projectId: string, mapId: string) => {
+        await api.delete(`/projects/${projectId}/schema/mappings/${mapId}`);
+    },
+};
+
 export default api;

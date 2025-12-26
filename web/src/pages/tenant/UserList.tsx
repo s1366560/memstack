@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react'
 import { useTenantStore } from '../../stores/tenant'
-import { Link } from 'react-router-dom'
 
 interface TenantMember {
     user_id: string
@@ -33,12 +32,12 @@ export const UserList: React.FC = () => {
     }, [currentTenant, listMembers])
 
     const filteredMembers = members.filter(member => {
-        const matchesSearch = member.name.toLowerCase().includes(search.toLowerCase()) || 
-                              member.email.toLowerCase().includes(search.toLowerCase())
+        const matchesSearch = member.name.toLowerCase().includes(search.toLowerCase()) ||
+            member.email.toLowerCase().includes(search.toLowerCase())
         const matchesRole = roleFilter === 'All Roles' || member.role === roleFilter.toLowerCase()
         // Status is not yet in API response, assuming Active for now
         const matchesStatus = statusFilter === 'All Status' || 'active' === statusFilter.toLowerCase()
-        
+
         return matchesSearch && matchesRole && matchesStatus
     })
 
@@ -109,9 +108,9 @@ export const UserList: React.FC = () => {
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <span className="material-symbols-outlined text-slate-400 text-[20px]">search</span>
                         </div>
-                        <input 
-                            className="block w-full pl-10 pr-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg leading-5 bg-white dark:bg-surface-dark text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary sm:text-sm" 
-                            placeholder="Search by name, email, or role..." 
+                        <input
+                            className="block w-full pl-10 pr-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg leading-5 bg-white dark:bg-surface-dark text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary sm:text-sm"
+                            placeholder="Search by name, email, or role..."
                             type="text"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
@@ -119,7 +118,7 @@ export const UserList: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-3 w-full sm:w-auto">
                         <div className="relative">
-                            <select 
+                            <select
                                 className="appearance-none bg-white dark:bg-surface-dark border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 py-2 pl-3 pr-8 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary cursor-pointer"
                                 value={roleFilter}
                                 onChange={(e) => setRoleFilter(e.target.value)}
@@ -134,7 +133,7 @@ export const UserList: React.FC = () => {
                             </div>
                         </div>
                         <div className="relative">
-                            <select 
+                            <select
                                 className="appearance-none bg-white dark:bg-surface-dark border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 py-2 pl-3 pr-8 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary cursor-pointer"
                                 value={statusFilter}
                                 onChange={(e) => setStatusFilter(e.target.value)}
@@ -192,11 +191,10 @@ export const UserList: React.FC = () => {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                                member.role === 'owner' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' :
+                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${member.role === 'owner' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' :
                                                 member.role === 'admin' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' :
-                                                'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300'
-                                            }`}>
+                                                    'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300'
+                                                }`}>
                                                 {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
                                             </span>
                                         </td>

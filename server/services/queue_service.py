@@ -226,6 +226,8 @@ class QueueService:
         project_id: Optional[str] = None,
         user_id: Optional[str] = None,
         memory_id: Optional[str] = None,
+        edge_types: Optional[Any] = None,
+        edge_type_map: Optional[Any] = None,
     ) -> int:
         """Add an episode for processing.
 
@@ -271,6 +273,8 @@ class QueueService:
                     reference_time=datetime.now(timezone.utc),
                     update_communities=False,
                     entity_types=entity_types,
+                    edge_types=edge_types,
+                    edge_type_map=edge_type_map,
                     uuid=uuid,
                 )
 

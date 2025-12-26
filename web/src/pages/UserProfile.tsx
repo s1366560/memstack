@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useAuthStore } from '../stores/auth'
 import { authAPI } from '../services/api'
-import { UserUpdate, UserProfile as UserProfileType } from '../types/memory'
+import { UserUpdate } from '../types/memory'
 
 export const UserProfile: React.FC = () => {
     const { user, setUser } = useAuthStore()
@@ -102,10 +102,10 @@ export const UserProfile: React.FC = () => {
                         <div className="relative flex flex-col items-center px-6 pb-8">
                             <div className="relative -mt-16 mb-4">
                                 <div className="h-32 w-32 overflow-hidden rounded-full border-4 border-white bg-white shadow-md dark:border-surface-dark">
-                                    <img 
-                                        alt={user.name} 
-                                        className="h-full w-full object-cover" 
-                                        src={formData.profile?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=random`} 
+                                    <img
+                                        alt={user.name}
+                                        className="h-full w-full object-cover"
+                                        src={formData.profile?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=random`}
                                     />
                                 </div>
                                 <button className="absolute bottom-1 right-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-primary text-white shadow-lg transition-transform hover:scale-110 hover:bg-primary-dark">
@@ -168,12 +168,12 @@ export const UserProfile: React.FC = () => {
                                         <div className="sm:col-span-3">
                                             <label className="block text-sm font-medium leading-6 text-slate-900 dark:text-white" htmlFor="name">Full Name</label>
                                             <div className="mt-2">
-                                                <input 
-                                                    className="block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary dark:bg-background-dark dark:ring-gray-700 dark:text-white sm:text-sm sm:leading-6" 
-                                                    id="name" 
-                                                    name="name" 
-                                                    type="text" 
-                                                    value={formData.name} 
+                                                <input
+                                                    className="block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary dark:bg-background-dark dark:ring-gray-700 dark:text-white sm:text-sm sm:leading-6"
+                                                    id="name"
+                                                    name="name"
+                                                    type="text"
+                                                    value={formData.name}
                                                     onChange={handleChange}
                                                 />
                                             </div>
@@ -181,12 +181,12 @@ export const UserProfile: React.FC = () => {
                                         <div className="sm:col-span-3">
                                             <label className="block text-sm font-medium leading-6 text-slate-900 dark:text-white" htmlFor="job_title">Job Title</label>
                                             <div className="mt-2">
-                                                <input 
-                                                    className="block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary dark:bg-background-dark dark:ring-gray-700 dark:text-white sm:text-sm sm:leading-6" 
-                                                    id="job_title" 
-                                                    name="job_title" 
-                                                    type="text" 
-                                                    value={formData.profile?.job_title} 
+                                                <input
+                                                    className="block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary dark:bg-background-dark dark:ring-gray-700 dark:text-white sm:text-sm sm:leading-6"
+                                                    id="job_title"
+                                                    name="job_title"
+                                                    type="text"
+                                                    value={formData.profile?.job_title}
                                                     onChange={handleChange}
                                                 />
                                             </div>
@@ -194,9 +194,9 @@ export const UserProfile: React.FC = () => {
                                         <div className="sm:col-span-3">
                                             <label className="block text-sm font-medium leading-6 text-slate-900 dark:text-white" htmlFor="department">Department</label>
                                             <div className="mt-2">
-                                                <select 
-                                                    className="block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-primary dark:bg-background-dark dark:ring-gray-700 dark:text-white sm:text-sm sm:leading-6" 
-                                                    id="department" 
+                                                <select
+                                                    className="block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-primary dark:bg-background-dark dark:ring-gray-700 dark:text-white sm:text-sm sm:leading-6"
+                                                    id="department"
                                                     name="department"
                                                     value={formData.profile?.department}
                                                     onChange={handleChange}
@@ -211,10 +211,10 @@ export const UserProfile: React.FC = () => {
                                         <div className="col-span-full">
                                             <label className="block text-sm font-medium leading-6 text-slate-900 dark:text-white" htmlFor="bio">About</label>
                                             <div className="mt-2">
-                                                <textarea 
-                                                    className="block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary dark:bg-background-dark dark:ring-gray-700 dark:text-white sm:text-sm sm:leading-6" 
-                                                    id="bio" 
-                                                    name="bio" 
+                                                <textarea
+                                                    className="block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary dark:bg-background-dark dark:ring-gray-700 dark:text-white sm:text-sm sm:leading-6"
+                                                    id="bio"
+                                                    name="bio"
                                                     rows={3}
                                                     value={formData.profile?.bio}
                                                     onChange={handleChange}
@@ -224,7 +224,7 @@ export const UserProfile: React.FC = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <hr className="border-slate-200 dark:border-slate-700 my-8"/>
+                                <hr className="border-slate-200 dark:border-slate-700 my-8" />
                                 {/* Contact Information Section */}
                                 <div className="mb-8">
                                     <h3 className="mb-4 text-base font-semibold text-slate-900 dark:text-white">Contact Information</h3>
@@ -232,12 +232,12 @@ export const UserProfile: React.FC = () => {
                                         <div className="sm:col-span-3">
                                             <label className="block text-sm font-medium leading-6 text-slate-900 dark:text-white" htmlFor="phone">Phone Number</label>
                                             <div className="mt-2">
-                                                <input 
-                                                    className="block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary dark:bg-background-dark dark:ring-gray-700 dark:text-white sm:text-sm sm:leading-6" 
-                                                    id="phone" 
-                                                    name="phone" 
-                                                    type="tel" 
-                                                    value={formData.profile?.phone} 
+                                                <input
+                                                    className="block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary dark:bg-background-dark dark:ring-gray-700 dark:text-white sm:text-sm sm:leading-6"
+                                                    id="phone"
+                                                    name="phone"
+                                                    type="tel"
+                                                    value={formData.profile?.phone}
                                                     onChange={handleChange}
                                                 />
                                             </div>
@@ -249,13 +249,13 @@ export const UserProfile: React.FC = () => {
                                                     <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                                                         <span className="material-symbols-outlined text-gray-400 text-lg">location_on</span>
                                                     </div>
-                                                    <input 
-                                                        className="block w-full rounded-md border-0 py-1.5 pl-10 text-slate-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary dark:bg-background-dark dark:ring-gray-700 dark:text-white sm:text-sm sm:leading-6" 
-                                                        id="location" 
-                                                        name="location" 
-                                                        placeholder="City, Country" 
-                                                        type="text" 
-                                                        value={formData.profile?.location} 
+                                                    <input
+                                                        className="block w-full rounded-md border-0 py-1.5 pl-10 text-slate-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary dark:bg-background-dark dark:ring-gray-700 dark:text-white sm:text-sm sm:leading-6"
+                                                        id="location"
+                                                        name="location"
+                                                        placeholder="City, Country"
+                                                        type="text"
+                                                        value={formData.profile?.location}
                                                         onChange={handleChange}
                                                     />
                                                 </div>
@@ -263,7 +263,7 @@ export const UserProfile: React.FC = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <hr className="border-slate-200 dark:border-slate-700 my-8"/>
+                                <hr className="border-slate-200 dark:border-slate-700 my-8" />
                                 {/* Preferences Section */}
                                 <div className="mb-8">
                                     <h3 className="mb-4 text-base font-semibold text-slate-900 dark:text-white">System Preferences</h3>
@@ -271,9 +271,9 @@ export const UserProfile: React.FC = () => {
                                         <div className="sm:col-span-3">
                                             <label className="block text-sm font-medium leading-6 text-slate-900 dark:text-white" htmlFor="language">Language</label>
                                             <div className="mt-2">
-                                                <select 
-                                                    className="block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-primary dark:bg-background-dark dark:ring-gray-700 dark:text-white sm:text-sm sm:leading-6" 
-                                                    id="language" 
+                                                <select
+                                                    className="block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-primary dark:bg-background-dark dark:ring-gray-700 dark:text-white sm:text-sm sm:leading-6"
+                                                    id="language"
                                                     name="language"
                                                     value={formData.profile?.language}
                                                     onChange={handleChange}
@@ -287,9 +287,9 @@ export const UserProfile: React.FC = () => {
                                         <div className="sm:col-span-3">
                                             <label className="block text-sm font-medium leading-6 text-slate-900 dark:text-white" htmlFor="timezone">Timezone</label>
                                             <div className="mt-2">
-                                                <select 
-                                                    className="block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-primary dark:bg-background-dark dark:ring-gray-700 dark:text-white sm:text-sm sm:leading-6" 
-                                                    id="timezone" 
+                                                <select
+                                                    className="block w-full rounded-md border-0 py-1.5 text-slate-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-primary dark:bg-background-dark dark:ring-gray-700 dark:text-white sm:text-sm sm:leading-6"
+                                                    id="timezone"
                                                     name="timezone"
                                                     value={formData.profile?.timezone}
                                                     onChange={handleChange}
@@ -302,12 +302,12 @@ export const UserProfile: React.FC = () => {
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 {/* Action Buttons */}
                                 <div className="flex items-center justify-end gap-x-4 border-t border-slate-200 pt-6 dark:border-slate-700">
                                     <button className="rounded-md px-3 py-2 text-sm font-semibold text-slate-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:ring-gray-600 dark:text-white dark:hover:bg-gray-800" type="button">Cancel</button>
-                                    <button 
-                                        className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50" 
+                                    <button
+                                        className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50"
                                         type="submit"
                                         disabled={isLoading}
                                     >
@@ -335,8 +335,8 @@ export const UserProfile: React.FC = () => {
                                         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Your profile information has been updated.</p>
                                     </div>
                                     <div className="ml-4 flex flex-shrink-0">
-                                        <button 
-                                            className="inline-flex rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:bg-surface-dark dark:hover:text-gray-300" 
+                                        <button
+                                            className="inline-flex rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:bg-surface-dark dark:hover:text-gray-300"
                                             onClick={() => setShowSuccess(false)}
                                         >
                                             <span className="sr-only">Close</span>

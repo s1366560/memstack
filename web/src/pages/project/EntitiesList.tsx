@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { graphitiService } from '../../services/graphitiService'
 
@@ -40,7 +40,7 @@ export const EntitiesList: React.FC = () => {
         'Entity': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
     }
 
-    const loadEntities = async () => {
+    const loadEntities = useCallback(async () => {
         setLoading(true)
         setError(null)
         try {
@@ -59,7 +59,7 @@ export const EntitiesList: React.FC = () => {
         } finally {
             setLoading(false)
         }
-    }
+    }, [projectId, entityTypeFilter, page])
 
     const loadRelationships = async (entityUuid: string) => {
         try {
@@ -72,7 +72,7 @@ export const EntitiesList: React.FC = () => {
 
     useEffect(() => {
         loadEntities()
-    }, [page, entityTypeFilter, projectId])
+    }, [loadEntities])
 
     const handleEntityClick = (entity: Entity) => {
         setSelectedEntity(entity)
@@ -164,19 +164,17 @@ export const EntitiesList: React.FC = () => {
                                     <div
                                         key={entity.uuid}
                                         onClick={() => handleEntityClick(entity)}
-                                        className={`bg-white dark:bg-slate-800 rounded-lg border p-4 cursor-pointer transition-all hover:shadow-md ${
-                                            selectedEntity?.uuid === entity.uuid
+                                        className={`bg-white dark:bg-slate-800 rounded-lg border p-4 cursor-pointer transition-all hover:shadow-md ${selectedEntity?.uuid === entity.uuid
                                                 ? 'border-blue-500 shadow-md'
                                                 : 'border-slate-200 dark:border-slate-700'
-                                        }`}
+                                            }`}
                                     >
                                         <div className="flex items-start justify-between mb-2">
                                             <h3 className="font-semibold text-slate-900 dark:text-white">
                                                 {entity.name}
                                             </h3>
-                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                                entityTypeColors[entity.entity_type] || entityTypeColors['Entity']
-                                            }`}>
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${entityTypeColors[entity.entity_type] || entityTypeColors['Entity']
+                                                }`}>
                                                 {entity.entity_type || 'Entity'}
                                             </span>
                                         </div>
@@ -232,9 +230,8 @@ export const EntitiesList: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="text-xs font-semibold text-slate-500 uppercase">Type</label>
-                                    <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium mt-1 ${
-                                        entityTypeColors[selectedEntity.entity_type] || entityTypeColors['Entity']
-                                    }`}>
+                                    <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium mt-1 ${entityTypeColors[selectedEntity.entity_type] || entityTypeColors['Entity']
+                                        }`}>
                                         {selectedEntity.entity_type || 'Entity'}
                                     </span>
                                 </div>

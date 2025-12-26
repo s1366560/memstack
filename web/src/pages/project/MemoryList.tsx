@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { memoryAPI } from '../../services/api'
 import { Memory } from '../../types/memory'
@@ -13,7 +13,7 @@ export const MemoryList: React.FC = () => {
     const [deleteModalOpen, setDeleteModalOpen] = useState(false)
     const [itemToDelete, setItemToDelete] = useState<string | null>(null)
 
-    const fetchMemories = async () => {
+    const fetchMemories = useCallback(async () => {
         if (projectId) {
             setIsLoading(true)
             try {
@@ -27,7 +27,7 @@ export const MemoryList: React.FC = () => {
                 setIsLoading(false)
             }
         }
-    }
+    }, [projectId])
 
     // Polling for processing status
     useEffect(() => {
@@ -60,7 +60,7 @@ export const MemoryList: React.FC = () => {
 
     useEffect(() => {
         fetchMemories()
-    }, [projectId])
+    }, [fetchMemories])
 
     const confirmDelete = (memoryId: string) => {
         setItemToDelete(memoryId)

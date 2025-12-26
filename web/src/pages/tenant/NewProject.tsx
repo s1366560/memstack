@@ -32,22 +32,15 @@ export const NewProject: React.FC = () => {
 
         try {
             // Remove status as it's not part of the API payload
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { status, ...projectData } = formData
             await createProject(currentTenant.id, {
                 ...projectData,
                 tenant_id: currentTenant.id
             })
             navigate(`/tenant/${currentTenant.id}/projects`)
-        } catch (err: any) {
+        } catch (err) {
             console.error('Failed to create project:', err)
-            if (err.response) {
-                console.error('Error details:', JSON.stringify(err.response.data))
-            }
-            // Ensure error is visible if store didn't set it
-            // Assuming we have a local error state or we can alert
-            // For now, let's assume the store handles it, but if not, we should probably set it.
-            // Since `error` comes from store, we can't set it directly here unless we have a setError action or local state.
-            // Let's rely on the store, but log clearly.
         }
     }
 

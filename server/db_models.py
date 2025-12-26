@@ -1,7 +1,17 @@
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -183,6 +193,15 @@ class Project(Base):
     memories: Mapped[List["Memory"]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
+    entity_types: Mapped[List["EntityType"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    edge_types: Mapped[List["EdgeType"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    edge_maps: Mapped[List["EdgeTypeMap"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
 
 
 class UserTenant(Base):
@@ -238,3 +257,55 @@ class Memory(Base):
 
     project: Mapped["Project"] = relationship(back_populates="memories")
     author: Mapped["User"] = relationship(back_populates="memories")
+
+
+class EntityType(Base):
+    __tablename__ = "entity_types"
+    __table_args__ = (UniqueConstraint("project_id", "name", name="uq_entity_type_project_name"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(String, ForeignKey("projects.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    schema: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), onupdate=func.now(), nullable=True
+    )
+
+    project: Mapped["Project"] = relationship(back_populates="entity_types")
+
+
+class EdgeType(Base):
+    __tablename__ = "edge_types"
+    __table_args__ = (UniqueConstraint("project_id", "name", name="uq_edge_type_project_name"),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(String, ForeignKey("projects.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    schema: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), onupdate=func.now(), nullable=True
+    )
+
+    project: Mapped["Project"] = relationship(back_populates="edge_types")
+
+
+class EdgeTypeMap(Base):
+    __tablename__ = "edge_type_maps"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id", "source_type", "target_type", "edge_type", name="uq_edge_map_unique"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    project_id: Mapped[str] = mapped_column(String, ForeignKey("projects.id"), nullable=False)
+    source_type: Mapped[str] = mapped_column(String, nullable=False)
+    target_type: Mapped[str] = mapped_column(String, nullable=False)
+    edge_type: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    project: Mapped["Project"] = relationship(back_populates="edge_maps")

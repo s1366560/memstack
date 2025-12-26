@@ -67,6 +67,6 @@ outputs/
 
 node_modules/
 
-web/rest-results/
-
+web/test-results/
+web/coverage/
 web/playwright-report/

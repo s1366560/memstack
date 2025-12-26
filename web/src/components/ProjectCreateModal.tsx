@@ -65,7 +65,7 @@ export const ProjectCreateModal: React.FC<ProjectCreateModalProps> = ({
           community_detection: true
         }
       });
-    } catch (error) {
+    } catch (_error) {
       // Error is handled in store
     }
   };

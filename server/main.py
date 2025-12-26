@@ -25,6 +25,7 @@ from server.api.health import router as health_router
 from server.api.memories import router as memories_router
 from server.api.memos import router as memos_router
 from server.api.projects import router as projects_router
+from server.api.schema import router as schema_router
 from server.api.tenants import router as tenants_router
 from server.auth import initialize_default_credentials
 from server.config import get_settings
@@ -111,6 +112,7 @@ def setup_app() -> FastAPI:
     app.include_router(memos_router, prefix="/api/v1")
     app.include_router(memories_router)  # Already has prefix
     app.include_router(projects_router)  # Already has prefix
+    app.include_router(schema_router)  # Already has prefix
     app.include_router(tenants_router)  # Already has prefix
     app.include_router(entities_router, prefix="/api/v1")  # Entity management
     app.include_router(communities_router, prefix="/api/v1")  # Community management

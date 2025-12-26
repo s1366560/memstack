@@ -1,4 +1,5 @@
 
+/* eslint-disable react-refresh/only-export-components */
 import { ReactElement } from 'react'
 import { render, RenderOptions } from '@testing-library/react'
 import { MemoryRouter, MemoryRouterProps } from 'react-router-dom'
@@ -20,5 +21,14 @@ const customRender = (
     )
 }
 
+ 
 export * from '@testing-library/react'
 export { customRender as render }
+
+export const TestWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    return (
+        <MemoryRouter>
+            {children}
+        </MemoryRouter>
+    );
+};

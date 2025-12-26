@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import cytoscape, { Core, ElementDefinition } from 'cytoscape'
 import { graphitiService } from '../services/graphitiService'
 
@@ -100,6 +100,26 @@ interface CytoscapeGraphProps {
     onNodeClick?: (node: any) => void
 }
 
+// Cytoscape 布局配置
+const layoutOptions = {
+    name: 'cose' as const,
+    // 力导向参数
+    animate: true,
+    animationDuration: 500,
+    animationEasing: 'ease-out',
+    // 节点斥力
+    idealEdgeLength: 120,
+    nodeOverlap: 40,
+    // 组件
+    componentSpacing: 150,
+    // 重力
+    gravity: 0.8,
+    numIter: 1000,
+    initialTemp: 200,
+    coolingFactor: 0.95,
+    minTemp: 1.0,
+}
+
 export const CytoscapeGraph: React.FC<CytoscapeGraphProps> = ({
     projectId,
     tenantId,
@@ -113,9 +133,14 @@ export const CytoscapeGraph: React.FC<CytoscapeGraphProps> = ({
     const [error, setError] = useState<string | null>(null)
     const [nodeCount, setNodeCount] = useState(0)
     const [edgeCount, setEdgeCount] = useState(0)
+    const onNodeClickRef = useRef(onNodeClick)
+
+    useEffect(() => {
+        onNodeClickRef.current = onNodeClick
+    }, [onNodeClick])
 
     // 加载图谱数据
-    const loadGraphData = async () => {
+    const loadGraphData = useCallback(async () => {
         if (!cyRef.current) return
 
         setLoading(true)
@@ -187,27 +212,7 @@ export const CytoscapeGraph: React.FC<CytoscapeGraphProps> = ({
         } finally {
             setLoading(false)
         }
-    }
-
-    // Cytoscape 布局配置
-    const layoutOptions = {
-        name: 'cose' as const,
-        // 力导向参数
-        animate: true,
-        animationDuration: 500,
-        animationEasing: 'ease-out',
-        // 节点斥力
-        idealEdgeLength: 120,
-        nodeOverlap: 40,
-        // 组件
-        componentSpacing: 150,
-        // 重力
-        gravity: 0.8,
-        numIter: 1000,
-        initialTemp: 200,
-        coolingFactor: 0.95,
-        minTemp: 1.0,
-    }
+    }, [projectId, tenantId, includeCommunities, minConnections])
 
     // 初始化 Cytoscape
     useEffect(() => {
@@ -248,6 +253,7 @@ export const CytoscapeGraph: React.FC<CytoscapeGraphProps> = ({
         return () => {
             cy.destroy()
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     // 加载数据
@@ -255,7 +261,7 @@ export const CytoscapeGraph: React.FC<CytoscapeGraphProps> = ({
         if (cyRef.current) {
             loadGraphData()
         }
-    }, [projectId, tenantId, includeCommunities, minConnections])
+    }, [loadGraphData])
 
     // 导出图片功能
     const exportImage = () => {

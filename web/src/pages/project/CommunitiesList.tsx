@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { graphitiService } from '../../services/graphitiService'
 
@@ -27,7 +27,7 @@ export const CommunitiesList: React.FC = () => {
     const [error, setError] = useState<string | null>(null)
     const [rebuilding, setRebuilding] = useState(false)
 
-    const loadCommunities = async () => {
+    const loadCommunities = useCallback(async () => {
         setLoading(true)
         setError(null)
         try {
@@ -44,7 +44,7 @@ export const CommunitiesList: React.FC = () => {
         } finally {
             setLoading(false)
         }
-    }
+    }, [projectId])
 
     const loadMembers = async (communityUuid: string) => {
         try {
@@ -75,7 +75,7 @@ export const CommunitiesList: React.FC = () => {
 
     useEffect(() => {
         loadCommunities()
-    }, [projectId])
+    }, [loadCommunities])
 
     const getCommunityColor = (index: number) => {
         const colors = [
@@ -150,11 +150,10 @@ export const CommunitiesList: React.FC = () => {
                                 <div
                                     key={community.uuid}
                                     onClick={() => handleCommunityClick(community)}
-                                    className={`bg-white dark:bg-slate-800 rounded-lg border p-5 cursor-pointer transition-all hover:shadow-md ${
-                                        selectedCommunity?.uuid === community.uuid
-                                            ? 'border-purple-500 shadow-md'
-                                            : 'border-slate-200 dark:border-slate-700'
-                                    }`}
+                                    className={`bg-white dark:bg-slate-800 rounded-lg border p-5 cursor-pointer transition-all hover:shadow-md ${selectedCommunity?.uuid === community.uuid
+                                        ? 'border-purple-500 shadow-md'
+                                        : 'border-slate-200 dark:border-slate-700'
+                                        }`}
                                 >
                                     <div className="flex items-start justify-between mb-3">
                                         <div className={`p-3 rounded-lg bg-gradient-to-br ${getCommunityColor(index)} text-white`}>

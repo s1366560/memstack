@@ -19,6 +19,10 @@ import { EntitiesList } from './pages/project/EntitiesList'
 import { CommunitiesList } from './pages/project/CommunitiesList'
 import { EnhancedSearch } from './pages/project/EnhancedSearch'
 import { Maintenance } from './pages/project/Maintenance'
+import SchemaOverview from './pages/project/schema/SchemaOverview'
+import EntityTypeList from './pages/project/schema/EntityTypeList'
+import EdgeTypeList from './pages/project/schema/EdgeTypeList'
+import EdgeMapList from './pages/project/schema/EdgeMapList'
 import { useAuthStore } from './stores/auth'
 import './App.css'
 
@@ -76,6 +80,10 @@ function App() {
                 <Route path="communities" element={<CommunitiesList />} />
                 <Route path="advanced-search" element={<EnhancedSearch />} />
                 <Route path="maintenance" element={<Maintenance />} />
+                <Route path="schema" element={<SchemaOverview />} />
+                <Route path="schema/entities" element={<EntityTypeList />} />
+                <Route path="schema/edges" element={<EdgeTypeList />} />
+                <Route path="schema/mapping" element={<EdgeMapList />} />
                 <Route path="team" element={<div className="p-8 text-slate-500">Team Management (Coming Soon)</div>} />
                 <Route path="settings" element={<div className="p-8 text-slate-500">Project Settings (Coming Soon)</div>} />
                 <Route path="support" element={<div className="p-8 text-slate-500">Support (Coming Soon)</div>} />

@@ -17,7 +17,7 @@ export const Login: React.FC = () => {
         try {
             await login(email, password);
             // Navigation is handled by the route guard
-        } catch (error) {
+        } catch (_error) {
             // Error is handled in store
         } finally {
             setIsLoading(false);

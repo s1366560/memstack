@@ -38,18 +38,18 @@ export const SpaceDashboard: React.FC = () => {
         if (spaceId) {
             getTenant(spaceId);
             listProjects(spaceId);
-            fetchStats(spaceId);
+
+            const fetchStats = async () => {
+                try {
+                    const data = await tenantAPI.getStats(spaceId);
+                    setStats(data);
+                } catch (error) {
+                    console.error("Failed to fetch tenant stats", error);
+                }
+            };
+            fetchStats();
         }
     }, [spaceId, getTenant, listProjects]);
-
-    const fetchStats = async (id: string) => {
-        try {
-            const data = await tenantAPI.getStats(id);
-            setStats(data);
-        } catch (error) {
-            console.error("Failed to fetch tenant stats", error);
-        }
-    };
 
     const handleEnterProject = (project: Project) => {
         setCurrentProject(project);
@@ -324,7 +324,7 @@ export const SpaceDashboard: React.FC = () => {
                                             <td className="py-4 px-6">
                                                 <div className="flex items-center gap-2">
                                                     <div className="w-24 bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                                                        <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: `${Math.random() * 80 + 20}%` }}></div>
+                                                        <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: `${(index * 37) % 80 + 20}%` }}></div>
                                                     </div>
                                                     <span className="text-sm font-medium text-gray-700">{project.memory_consumed}</span>
                                                 </div>

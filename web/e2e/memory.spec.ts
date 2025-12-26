@@ -84,7 +84,7 @@ test.describe('Memory Operations', () => {
 
         // Verify graph container is present
         // CytoscapeGraph renders a canvas inside a div
-        const graphContainer = page.locator('.cytoscape-container, canvas').first();
+        const _graphContainer = page.locator('.cytoscape-container, canvas').first();
         // Since canvas selectors can be tricky, check for the parent container or specific text
         // The graph component has "Nodes:" and "Edges:" text in the toolbar
         await expect(page.getByText(/Nodes:/i)).toBeVisible();

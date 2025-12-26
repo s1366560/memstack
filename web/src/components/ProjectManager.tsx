@@ -42,7 +42,7 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onProjectSelect 
     if (window.confirm('确定要删除这个项目吗？此操作不可恢复。')) {
       try {
         await deleteProject(currentTenant.id, projectId);
-      } catch (error) {
+      } catch (_error) {
         // Error is handled in store
       }
     }

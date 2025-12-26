@@ -41,10 +41,10 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ onMemorySelect }) 
     
     try {
       await listMemories(currentProject.id, params);
-    } catch (error) {
+    } catch (_error) {
       console.error('Failed to load memories:', error);
     }
-  }, [currentProject, searchTerm, filterType, filterUser, dateRange, listMemories]);
+  }, [currentProject, searchTerm, filterType, filterUser, dateRange, listMemories, error]);
 
   useEffect(() => {
     if (currentProject) {
@@ -68,7 +68,7 @@ export const MemoryManager: React.FC<MemoryManagerProps> = ({ onMemorySelect }) 
     if (window.confirm('确定要删除这条记忆吗？此操作不可恢复。')) {
       try {
         await deleteMemory(currentProject.id, memoryId);
-      } catch (error) {
+      } catch (_error) {
         // Error is handled in store
       }
     }

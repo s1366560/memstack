@@ -209,6 +209,17 @@ export const ProjectLayout: React.FC = () => {
                             </Link>
 
                             <Link
+                                to={`/project/${projectId}/schema`}
+                                className={`flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors group ${isActive('/schema')
+                                    ? 'bg-primary/10 text-primary'
+                                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
+                                    }`}
+                            >
+                                <span className="material-symbols-outlined" style={{ fontVariationSettings: isActive('/schema') ? "'FILL' 1" : "'FILL' 0" }}>schema</span>
+                                <span className="text-sm font-medium">Schema</span>
+                            </Link>
+
+                            <Link
                                 to={`/project/${projectId}/maintenance`}
                                 className={`flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors group ${isActive('/maintenance')
                                     ? 'bg-primary/10 text-primary'

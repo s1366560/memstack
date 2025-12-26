@@ -27,7 +27,7 @@ export const TenantCreateModal: React.FC<TenantCreateModalProps> = ({
       onSuccess?.();
       onClose();
       setFormData({ name: '', description: '', plan: 'free' });
-    } catch (error) {
+    } catch (_error) {
       // Error is handled in store
     }
   };

@@ -13,6 +13,7 @@ interface AuthState {
     logout: () => void;
     checkAuth: () => Promise<void>;
     clearError: () => void;
+    setUser: (user: any) => void;
 }
 
 export const useAuthStore = create<AuthState>((set, _) => ({
@@ -91,7 +92,7 @@ export const useAuthStore = create<AuthState>((set, _) => ({
                 isLoading: false,
                 error: null,
             });
-        } catch (error) {
+        } catch (_error) {
             // Token is invalid, clear it
             localStorage.removeItem('token');
             localStorage.removeItem('user');
@@ -106,4 +107,5 @@ export const useAuthStore = create<AuthState>((set, _) => ({
     },
 
     clearError: () => set({ error: null }),
+    setUser: (user) => set({ user }),
 }));

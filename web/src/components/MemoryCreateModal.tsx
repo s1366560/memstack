@@ -46,7 +46,7 @@ export const MemoryCreateModal: React.FC<MemoryCreateModalProps> = ({
       onSuccess?.();
       onClose();
       resetForm();
-    } catch (error) {
+    } catch (_error) {
       // Error is handled in store
     }
   };
@@ -58,7 +58,7 @@ export const MemoryCreateModal: React.FC<MemoryCreateModalProps> = ({
     try {
       const entities = await extractEntities(currentProject.id, formData.content);
       setExtractedEntities(entities);
-    } catch (error) {
+    } catch (_error) {
       // Error is handled in store
     } finally {
       setIsExtracting(false);
@@ -72,7 +72,7 @@ export const MemoryCreateModal: React.FC<MemoryCreateModalProps> = ({
     try {
       const relationships = await extractRelationships(currentProject.id, formData.content);
       setExtractedRelationships(relationships);
-    } catch (error) {
+    } catch (_error) {
       // Error is handled in store
     } finally {
       setIsExtracting(false);
