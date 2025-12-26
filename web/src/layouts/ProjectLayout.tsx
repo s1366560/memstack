@@ -191,7 +191,6 @@ export const ProjectLayout: React.FC = () => {
                             )}
                             {(isSidebarCollapsed || openGroups['discovery']) && (
                                 <>
-                                    <NavItem to={`/project/${projectId}/search`} icon={Search} label="Search" />
                                     <NavItem to={`/project/${projectId}/advanced-search`} icon={Telescope} label="Deep Search" />
                                 </>
                             )}
@@ -293,7 +292,7 @@ export const ProjectLayout: React.FC = () => {
                                 placeholder="Search memories..."
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
-                                        window.location.href = `/project/${projectId}/search`
+                                        window.location.href = `/project/${projectId}/advanced-search`
                                     }
                                 }}
                             />
@@ -324,7 +323,12 @@ export const ProjectLayout: React.FC = () => {
                 </header>
 
                 {/* Scrollable Page Content */}
-                <div className={`flex-1 relative ${location.pathname.includes('/schema') || location.pathname.includes('/graph') ? 'overflow-hidden' : 'overflow-y-auto p-6 lg:p-10'}`}>
+                <div className={`flex-1 relative ${location.pathname.includes('/schema') ||
+                    location.pathname.includes('/graph') ||
+                    location.pathname.includes('/advanced-search')
+                    ? 'overflow-hidden'
+                    : 'overflow-y-auto p-6 lg:p-10'
+                    }`}>
                     <Outlet />
                 </div>
             </main>

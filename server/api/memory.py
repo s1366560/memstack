@@ -6,11 +6,35 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from server.auth import verify_api_key_dependency
 from server.db_models import APIKey
-from server.models.memory import MemoryQuery, MemoryResponse
+from server.models.memory import MemoryQuery, MemoryResponse, SubgraphRequest
 from server.services import GraphitiService, get_graphiti_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/memory", tags=["memory"])
+
+
+@router.post("/graph/subgraph")
+async def get_subgraph(
+    request: SubgraphRequest,
+    graphiti: GraphitiService = Depends(get_graphiti_service),
+    api_key: APIKey = Depends(verify_api_key_dependency),
+):
+    """Get a subgraph containing specific nodes and their connections.
+
+    Args:
+        request: Subgraph request parameters
+    """
+    try:
+        return await graphiti.get_subgraph(
+            node_uuids=request.node_uuids,
+            include_neighbors=request.include_neighbors,
+            limit=request.limit,
+            tenant_id=request.tenant_id,
+            project_id=request.project_id,
+        )
+    except Exception as e:
+        logger.error(f"Subgraph retrieval failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Subgraph retrieval failed: {str(e)}")
 
 
 @router.get("/graph")

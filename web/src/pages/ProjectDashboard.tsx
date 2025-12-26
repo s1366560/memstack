@@ -4,8 +4,7 @@ import {
     Brain,
     Network,
     Settings,
-    ArrowLeft,
-    Search
+    ArrowLeft
 } from 'lucide-react';
 import { AppLayout, NavigationItem } from '../components/AppLayout';
 import { useTenantStore } from '../stores/tenant';
@@ -36,7 +35,6 @@ export const ProjectDashboard: React.FC = () => {
         // { id: 'overview', label: '项目概览', icon: LayoutDashboard, onClick: () => setActiveTab('overview') },
         { id: 'memories', label: '记忆管理', icon: Brain, onClick: () => setActiveTab('memories') },
         { id: 'graph', label: '知识图谱', icon: Network, onClick: () => setActiveTab('graph') },
-        { id: 'search', label: '全文搜索', icon: Search, onClick: () => setActiveTab('search') },
         { id: 'settings', label: '项目设置', icon: Settings, onClick: () => setActiveTab('settings') },
     ];
 
@@ -78,13 +76,6 @@ export const ProjectDashboard: React.FC = () => {
                     <div className="flex-1 bg-white rounded-lg shadow-sm border border-gray-200 min-h-[600px]">
                         <GraphVisualization />
                     </div>
-                </div>
-            )}
-
-            {activeTab === 'search' && (
-                <div className="text-center py-20 text-gray-500">
-                    <Search className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p className="text-lg">高级搜索功能即将上线...</p>
                 </div>
             )}
 

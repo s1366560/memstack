@@ -26,3 +26,11 @@ class MemoryResponse(BaseModel):
     results: List[MemoryItem]
     total: int
     query: str
+
+
+class SubgraphRequest(BaseModel):
+    node_uuids: List[str]
+    include_neighbors: bool = True
+    limit: int = 100
+    tenant_id: Optional[str] = None
+    project_id: Optional[str] = None

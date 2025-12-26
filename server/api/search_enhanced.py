@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
+import graphiti_core.search.search_config_recipes as recipes
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from server.auth import verify_api_key_dependency
@@ -12,6 +13,75 @@ from server.services import GraphitiService, get_graphiti_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/search-enhanced", tags=["search-enhanced"])
+
+
+@router.post("/advanced")
+async def search_advanced(
+    query: str = Body(..., description="Search query"),
+    strategy: str = Body("COMBINED_HYBRID_SEARCH_RRF", description="Search strategy recipe name"),
+    focal_node_uuid: Optional[str] = Body(
+        None, description="Focal node UUID for Node Distance Reranking"
+    ),
+    reranker: Optional[str] = Body(None, description="Reranker client (openai, gemini, bge)"),
+    limit: int = Body(50, ge=1, le=200, description="Maximum results"),
+    tenant_id: Optional[str] = Body(None, description="Tenant filter"),
+    project_id: Optional[str] = Body(None, description="Project filter"),
+    since: Optional[str] = Body(None, description="Filter by creation date (ISO format)"),
+    graphiti: GraphitiService = Depends(get_graphiti_service),
+    api_key: APIKey = Depends(verify_api_key_dependency),
+):
+    """
+    Perform advanced search with configurable strategy and reranking.
+
+    Args:
+        query: Search query
+        strategy: Search strategy recipe name (e.g. COMBINED_HYBRID_SEARCH_RRF)
+        focal_node_uuid: UUID of the focal node for distance reranking
+        reranker: Reranker client to use (not yet fully implemented in service, placeholder)
+        limit: Maximum results
+        tenant_id: Tenant ID
+        project_id: Project ID
+        since: Filter by date
+
+    Returns:
+        Search results
+    """
+    try:
+        # Get recipe from strategy name
+        search_config = getattr(recipes, strategy, None)
+        if not search_config:
+            # Fallback to default or raise error? Let's fallback to RRF
+            logger.warning(
+                f"Unknown strategy {strategy}, falling back to COMBINED_HYBRID_SEARCH_RRF"
+            )
+            search_config = recipes.COMBINED_HYBRID_SEARCH_RRF
+
+        parsed_since = None
+        if since:
+            try:
+                parsed_since = datetime.fromisoformat(since)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid 'since' datetime format")
+
+        results = await graphiti.search(
+            query=query,
+            limit=limit,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            as_of=parsed_since,
+            center_node_uuid=focal_node_uuid,
+            search_config=search_config,
+        )
+
+        return {
+            "results": [r.model_dump() for r in results],
+            "total": len(results),
+            "search_type": "advanced",
+            "strategy": strategy,
+        }
+    except Exception as e:
+        logger.error(f"Advanced search failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/graph-traversal")
@@ -225,6 +295,52 @@ async def search_with_facets(
         raise
     except Exception as e:
         logger.error(f"Faceted search failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/advanced")
+async def advanced_search(
+    query: str = Body(..., description="Search query"),
+    strategy: str = Body("COMBINED_HYBRID_SEARCH_RRF", description="Search strategy"),
+    limit: int = Body(50, ge=1, le=200, description="Maximum results"),
+    focal_node_uuid: Optional[str] = Body(None, description="Focal node UUID"),
+    reranker: Optional[str] = Body(None, description="Reranker type"),
+    tenant_id: Optional[str] = Body(None, description="Tenant filter"),
+    project_id: Optional[str] = Body(None, description="Project filter"),
+    since: Optional[str] = Body(None, description="Start of time range (ISO format)"),
+    graphiti: GraphitiService = Depends(get_graphiti_service),
+    api_key: APIKey = Depends(verify_api_key_dependency),
+):
+    """
+    Advanced search with configurable strategy.
+    """
+    try:
+        parsed_since = None
+        if since:
+            try:
+                parsed_since = datetime.fromisoformat(since)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid 'since' datetime format")
+
+        results = await graphiti.advanced_search(
+            query=query,
+            strategy=strategy,
+            limit=limit,
+            focal_node_uuid=focal_node_uuid,
+            reranker=reranker,
+            tenant_id=tenant_id,
+            project_id=project_id,
+            as_of=parsed_since,
+        )
+
+        return {
+            "results": [r.model_dump() for r in results],
+            "total": len(results),
+            "search_type": "advanced",
+            "strategy": strategy,
+        }
+    except Exception as e:
+        logger.error(f"Advanced search failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -45,6 +45,8 @@ interface CytoscapeGraphProps {
     includeCommunities?: boolean
     minConnections?: number
     onNodeClick?: (node: any) => void
+    highlightNodeIds?: string[]
+    subgraphNodeIds?: string[]
 }
 
 // Cytoscape Layout Configuration
@@ -69,6 +71,7 @@ export const CytoscapeGraph: React.FC<CytoscapeGraphProps> = ({
     includeCommunities = true,
     minConnections = 0,
     onNodeClick,
+    subgraphNodeIds,
 }) => {
     const containerRef = useRef<HTMLDivElement>(null)
     const cyRef = useRef<Core | null>(null)
@@ -195,11 +198,22 @@ export const CytoscapeGraph: React.FC<CytoscapeGraphProps> = ({
         setError(null)
 
         try {
-            const data = await graphitiService.getGraphData({
-                tenant_id: tenantId,
-                project_id: projectId,
-                limit: 500,
-            })
+            let data;
+            if (subgraphNodeIds && subgraphNodeIds.length > 0) {
+                data = await graphitiService.getSubgraph({
+                    node_uuids: subgraphNodeIds,
+                    include_neighbors: true,
+                    limit: 500,
+                    tenant_id: tenantId,
+                    project_id: projectId
+                })
+            } else {
+                data = await graphitiService.getGraphData({
+                    tenant_id: tenantId,
+                    project_id: projectId,
+                    limit: 500,
+                })
+            }
 
             const elements: ElementDefinition[] = []
 
@@ -257,7 +271,7 @@ export const CytoscapeGraph: React.FC<CytoscapeGraphProps> = ({
         } finally {
             setLoading(false)
         }
-    }, [projectId, tenantId, includeCommunities, minConnections])
+    }, [projectId, tenantId, includeCommunities, minConnections, subgraphNodeIds])
 
     // Initialize Cytoscape
     useEffect(() => {

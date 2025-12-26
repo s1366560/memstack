@@ -13,7 +13,6 @@ import { ProjectOverview } from './pages/project/ProjectOverview'
 import { MemoryList } from './pages/project/MemoryList'
 import { NewMemory } from './pages/project/NewMemory'
 import { MemoryDetail } from './pages/project/MemoryDetail'
-import { SearchPage } from './pages/project/SearchPage'
 import { MemoryGraph } from './pages/project/MemoryGraph'
 import { EntitiesList } from './pages/project/EntitiesList'
 import { CommunitiesList } from './pages/project/CommunitiesList'
@@ -75,11 +74,12 @@ function App() {
                 <Route path="memories" element={<MemoryList />} />
                 <Route path="memories/new" element={<NewMemory />} />
                 <Route path="memory/:memoryId" element={<MemoryDetail />} />
-                <Route path="search" element={<SearchPage />} />
+                {/* <Route path="search" element={<SearchPage />} /> */}
                 <Route path="graph" element={<MemoryGraph />} />
                 <Route path="entities" element={<EntitiesList />} />
                 <Route path="communities" element={<CommunitiesList />} />
                 <Route path="advanced-search" element={<EnhancedSearch />} />
+                <Route path="search" element={<Navigate to="advanced-search" replace />} />
                 <Route path="maintenance" element={<Maintenance />} />
                 <Route path="schema" element={<SchemaLayout />}>
                     <Route index element={<SchemaOverview />} />

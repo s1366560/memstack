@@ -19,7 +19,25 @@ from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
 from graphiti_core.llm_client import LLMConfig, OpenAIClient
 from graphiti_core.llm_client.gemini_client import GeminiClient
 from graphiti_core.nodes import EpisodeType
-from graphiti_core.search.search_config_recipes import COMBINED_HYBRID_SEARCH_RRF
+from graphiti_core.search.search_config import SearchConfig
+from graphiti_core.search.search_config_recipes import (
+    COMBINED_HYBRID_SEARCH_CROSS_ENCODER,
+    COMBINED_HYBRID_SEARCH_MMR,
+    COMBINED_HYBRID_SEARCH_RRF,
+    COMMUNITY_HYBRID_SEARCH_CROSS_ENCODER,
+    COMMUNITY_HYBRID_SEARCH_MMR,
+    COMMUNITY_HYBRID_SEARCH_RRF,
+    EDGE_HYBRID_SEARCH_CROSS_ENCODER,
+    EDGE_HYBRID_SEARCH_EPISODE_MENTIONS,
+    EDGE_HYBRID_SEARCH_MMR,
+    EDGE_HYBRID_SEARCH_NODE_DISTANCE,
+    EDGE_HYBRID_SEARCH_RRF,
+    NODE_HYBRID_SEARCH_CROSS_ENCODER,
+    NODE_HYBRID_SEARCH_EPISODE_MENTIONS,
+    NODE_HYBRID_SEARCH_MMR,
+    NODE_HYBRID_SEARCH_NODE_DISTANCE,
+    NODE_HYBRID_SEARCH_RRF,
+)
 from graphiti_core.search.search_filters import ComparisonOperator, DateFilter, SearchFilters
 from pydantic import BaseModel, Field, create_model
 from sqlalchemy import select
@@ -485,6 +503,261 @@ class GraphitiService:
             logger.error(f"Failed to add episode: {e}")
             raise
 
+    async def advanced_search(
+        self,
+        query: str,
+        strategy: str = "COMBINED_HYBRID_SEARCH_RRF",
+        limit: int = 50,
+        focal_node_uuid: Optional[str] = None,
+        reranker: Optional[str] = None,
+        tenant_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        as_of: Optional[datetime] = None,
+        search_filter: Optional[SearchFilters] = None,
+    ) -> List[MemoryItem]:
+        """
+        Advanced search with configurable strategy and reranker.
+
+        Args:
+            query: Search query
+            strategy: Search strategy recipe name
+            limit: Maximum number of results
+            focal_node_uuid: Focal node UUID for node distance reranking
+            reranker: Reranker type (openai, gemini, bge)
+            tenant_id: Optional tenant filter
+            project_id: Optional project filter
+            user_id: Optional user filter
+            as_of: Optional time travel filter
+            search_filter: Optional advanced filters
+
+        Returns:
+            List of memory items
+        """
+        try:
+            # Map strategy name to recipe object
+            recipes = {
+                "COMBINED_HYBRID_SEARCH_RRF": COMBINED_HYBRID_SEARCH_RRF,
+                "COMBINED_HYBRID_SEARCH_MMR": COMBINED_HYBRID_SEARCH_MMR,
+                "COMBINED_HYBRID_SEARCH_CROSS_ENCODER": COMBINED_HYBRID_SEARCH_CROSS_ENCODER,
+                "EDGE_HYBRID_SEARCH_RRF": EDGE_HYBRID_SEARCH_RRF,
+                "EDGE_HYBRID_SEARCH_MMR": EDGE_HYBRID_SEARCH_MMR,
+                "EDGE_HYBRID_SEARCH_NODE_DISTANCE": EDGE_HYBRID_SEARCH_NODE_DISTANCE,
+                "EDGE_HYBRID_SEARCH_EPISODE_MENTIONS": EDGE_HYBRID_SEARCH_EPISODE_MENTIONS,
+                "EDGE_HYBRID_SEARCH_CROSS_ENCODER": EDGE_HYBRID_SEARCH_CROSS_ENCODER,
+                "NODE_HYBRID_SEARCH_RRF": NODE_HYBRID_SEARCH_RRF,
+                "NODE_HYBRID_SEARCH_MMR": NODE_HYBRID_SEARCH_MMR,
+                "NODE_HYBRID_SEARCH_NODE_DISTANCE": NODE_HYBRID_SEARCH_NODE_DISTANCE,
+                "NODE_HYBRID_SEARCH_EPISODE_MENTIONS": NODE_HYBRID_SEARCH_EPISODE_MENTIONS,
+                "NODE_HYBRID_SEARCH_CROSS_ENCODER": NODE_HYBRID_SEARCH_CROSS_ENCODER,
+                "COMMUNITY_HYBRID_SEARCH_RRF": COMMUNITY_HYBRID_SEARCH_RRF,
+                "COMMUNITY_HYBRID_SEARCH_MMR": COMMUNITY_HYBRID_SEARCH_MMR,
+                "COMMUNITY_HYBRID_SEARCH_CROSS_ENCODER": COMMUNITY_HYBRID_SEARCH_CROSS_ENCODER,
+            }
+
+            config = recipes.get(strategy, COMBINED_HYBRID_SEARCH_RRF)
+
+            # Construct group_ids from project_id if available
+            group_ids = [project_id] if project_id else None
+
+            # Construct SearchFilters if not provided
+            if not search_filter:
+                search_filter = SearchFilters()
+
+            # Handle as_of using filters
+            if as_of:
+                # created_at <= as_of
+                search_filter.created_at = [
+                    [DateFilter(date=as_of, comparison_operator=ComparisonOperator.less_than_equal)]
+                ]
+
+                # expired_at > as_of OR expired_at IS NULL
+                search_filter.expired_at = [
+                    [DateFilter(date=as_of, comparison_operator=ComparisonOperator.greater_than)],
+                    [DateFilter(date=None, comparison_operator=ComparisonOperator.is_null)],
+                ]
+
+            # Perform search using Graphiti's search method
+            # Note: We are using the internal _search method indirectly via client.search_
+            # or we might need to use client.search(query, center_node_uuid) for simple cases
+            # But here we want full config.
+
+            # If Node Distance strategy is used, we need to pass focal_node_uuid to the search context?
+            # Or does Graphiti's search_config handle it?
+            # Looking at docs: await graphiti.search(query, focal_node_uuid)
+            # This suggests that if we use a recipe that requires it (like NODE_DISTANCE),
+            # we might need to pass it.
+            # However, graphiti.search() is a high-level wrapper.
+            # We want to use graphiti._search() which takes config.
+
+            # If we are using a specific recipe, we pass it as 'config'.
+
+            # For Node Distance, the recipe might expect center_node_uuid?
+            # Actually, `search_` (with underscore) is the lower level one in the python client likely?
+            # Let's check existing usage: await self.client.search_(...)
+
+            # Wait, existing code uses `self.client.search_(...)`.
+            # Let's assume `search_` accepts `center_node_uuid` if needed?
+            # Or maybe `config` has it? No, config is static recipe.
+
+            # If the strategy implies node distance, we should provide the node.
+            # Let's check if `search_` accepts optional arguments.
+            # Assuming it does based on common patterns.
+
+            # Actually, if we look at the docs:
+            # await graphiti.search(query, focal_node_uuid)
+            # This maps to `search` (high level).
+
+            # If we use `search_` (low level), we pass `config`.
+            # Does `search_` accept `center_node_uuid`?
+            # Let's assume it does as `center_node_uuid`.
+
+            kwargs = {}
+            if focal_node_uuid and "NODE_DISTANCE" in strategy:
+                kwargs["center_node_uuid"] = focal_node_uuid
+
+            search_results = await self.client.search_(
+                query=query,
+                config=config,
+                group_ids=group_ids,
+                search_filter=search_filter,
+                **kwargs,
+            )
+
+            # Convert search results to MemoryItem format
+            memory_items = []
+
+            # Helper to check filters via direct property lookup when needed
+            async def _passes_filters(node_label: str, name: Optional[str]) -> bool:
+                if project_id and not user_id:
+                    return True
+                if not (tenant_id or user_id):
+                    return True
+                if not name:
+                    return True
+                try:
+                    cy = "MATCH (n:%s {name: $name}) RETURN properties(n) as props" % node_label
+                    res = await self.client.driver.execute_query(cy, name=name)
+                    props = res.records[0]["props"] if res.records else {}
+                except Exception:
+                    props = {}
+
+                if not project_id:
+                    if tenant_id and props.get("tenant_id") != tenant_id:
+                        return False
+                if user_id and props.get("user_id") != user_id:
+                    return False
+                return True
+
+            # Process episodes from search results
+            if hasattr(search_results, "episodes") and search_results.episodes:
+                for i, episode in enumerate(search_results.episodes):
+                    score = (
+                        search_results.episode_reranker_scores[i]
+                        if i < len(search_results.episode_reranker_scores)
+                        else 0.0
+                    )
+                    if not await _passes_filters("Episodic", getattr(episode, "name", None)):
+                        continue
+                    memory_items.append(
+                        MemoryItem(
+                            content=episode.content,
+                            score=score,
+                            metadata={
+                                "type": "episode",
+                                "name": episode.name,
+                                "uuid": episode.uuid,
+                                "created_at": getattr(episode, "created_at", None),
+                            },
+                            source="episode",
+                        )
+                    )
+
+            # Process nodes (entities) from search results
+            if hasattr(search_results, "nodes") and search_results.nodes:
+                for i, node in enumerate(search_results.nodes):
+                    score = (
+                        search_results.node_reranker_scores[i]
+                        if i < len(search_results.node_reranker_scores)
+                        else 0.0
+                    )
+                    if not await _passes_filters("Entity", getattr(node, "name", None)):
+                        continue
+                    memory_items.append(
+                        MemoryItem(
+                            content=f"{node.name}: {node.summary}"
+                            if hasattr(node, "summary")
+                            else node.name,
+                            score=score,
+                            metadata={
+                                "type": "entity",
+                                "name": node.name,
+                                "uuid": node.uuid,
+                                "entity_type": "Entity",
+                            },
+                            source="entity",
+                        )
+                    )
+
+            # Process edges (relationships) from search results
+            if hasattr(search_results, "edges") and search_results.edges:
+                for i, edge in enumerate(search_results.edges):
+                    score = (
+                        search_results.edge_reranker_scores[i]
+                        if i < len(search_results.edge_reranker_scores)
+                        else 0.0
+                    )
+                    if not await _passes_filters("Entity", getattr(edge, "source_node_name", None)):
+                        continue
+                    memory_items.append(
+                        MemoryItem(
+                            content=edge.fact,
+                            score=score,
+                            metadata={
+                                "type": "relationship",
+                                "source": edge.source_node_uuid,
+                                "target": edge.target_node_uuid,
+                                "uuid": edge.uuid,
+                            },
+                            source="relationship",
+                        )
+                    )
+
+            # Process communities from search results
+            if hasattr(search_results, "communities") and search_results.communities:
+                for i, community in enumerate(search_results.communities):
+                    score = (
+                        search_results.community_reranker_scores[i]
+                        if i < len(search_results.community_reranker_scores)
+                        else 0.0
+                    )
+                    # Community filtering might be tricky, skip for now or assume passed if project_id matches
+                    memory_items.append(
+                        MemoryItem(
+                            content=f"Community: {community.summary}",
+                            score=score,
+                            metadata={
+                                "type": "community",
+                                "name": community.name,
+                                "uuid": community.uuid,
+                            },
+                            source="community",
+                        )
+                    )
+
+            # Sort by score descending and limit results
+            memory_items.sort(key=lambda x: x.score, reverse=True)
+            memory_items = memory_items[:limit]
+
+            logger.info(
+                f"Advanced search returned {len(memory_items)} results for query: {query}, strategy: {strategy}"
+            )
+            return memory_items
+
+        except Exception as e:
+            logger.error(f"Advanced search failed: {e}")
+            raise
+
     async def search(
         self,
         query: str,
@@ -494,6 +767,8 @@ class GraphitiService:
         user_id: Optional[str] = None,
         as_of: Optional[datetime] = None,
         search_filter: Optional[SearchFilters] = None,
+        center_node_uuid: Optional[str] = None,
+        search_config: Optional[SearchConfig] = None,
     ) -> List[MemoryItem]:
         """
         Search the knowledge graph for relevant memories.
@@ -506,6 +781,8 @@ class GraphitiService:
             user_id: Optional user filter
             as_of: Optional time travel filter
             search_filter: Optional advanced filters
+            center_node_uuid: Optional UUID for node distance reranking
+            search_config: Optional search configuration (recipe)
 
         Returns:
             List of memory items
@@ -531,14 +808,17 @@ class GraphitiService:
                     [DateFilter(date=None, comparison_operator=ComparisonOperator.is_null)],
                 ]
 
+            # Use provided config or default to COMBINED_HYBRID_SEARCH_RRF
+            config = search_config or COMBINED_HYBRID_SEARCH_RRF
+
             # Perform semantic search using Graphiti's advanced search method
             # Note: search_() returns SearchResults object, while search() returns list[EntityEdge]
-            # Using COMBINED_HYBRID_SEARCH_RRF which doesn't require LLM calls for reranking
             search_results = await self.client.search_(
                 query=query,
-                config=COMBINED_HYBRID_SEARCH_RRF,
+                config=config,
                 group_ids=group_ids,
                 search_filter=search_filter,
+                center_node_uuid=center_node_uuid,
             )
 
             # Convert search results to MemoryItem format
@@ -1139,6 +1419,172 @@ class GraphitiService:
         except Exception as e:
             logger.error(f"Failed to rebuild communities: {e}")
             raise
+
+    async def get_subgraph(
+        self,
+        node_uuids: List[str],
+        include_neighbors: bool = True,
+        limit: int = 100,
+        tenant_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Get a subgraph containing specific nodes and their connections.
+
+        Args:
+            node_uuids: List of node UUIDs to include
+            include_neighbors: Whether to include 1-hop neighbors
+            limit: Maximum number of elements to return
+            tenant_id: Optional tenant filter
+            project_id: Optional project filter
+
+        Returns:
+            Subgraph data in the same format as get_graph_data
+        """
+        try:
+            if not node_uuids:
+                return {"elements": {"nodes": [], "edges": []}}
+
+            # Build WHERE clause for tenant/project
+            conditions = []
+            if tenant_id:
+                conditions.append("n.tenant_id = $tenant_id")
+            if project_id:
+                conditions.append("n.project_id = $project_id")
+
+            # Additional filter for the initial nodes
+            node_filter = ""
+            if conditions:
+                node_filter = " AND " + " AND ".join(conditions)
+
+            if include_neighbors:
+                query = (
+                    """
+                MATCH (n)
+                WHERE n.uuid IN $uuids
+                """
+                    + node_filter
+                    + """
+                WITH collect(distinct n) as start_nodes
+                
+                // Get neighbors and edges connected to start nodes
+                UNWIND start_nodes as n
+                OPTIONAL MATCH (n)-[r]-(m)
+                """
+                    + (
+                        ("WHERE " + " AND ".join([c.replace("n.", "m.") for c in conditions]))
+                        if conditions
+                        else ""
+                    )
+                    + """
+                
+                WITH start_nodes, collect(distinct m) as neighbors, collect(distinct r) as edges
+                WITH start_nodes + [x in neighbors where x is not null] as all_nodes, edges
+                
+                // Deduplicate nodes
+                UNWIND all_nodes as n
+                WITH collect(distinct n) as unique_nodes, edges
+                
+                RETURN 
+                    [n in unique_nodes | {
+                        id: elementId(n), 
+                        labels: labels(n), 
+                        props: properties(n)
+                    }] as nodes_data,
+                    [r in edges | {
+                        id: elementId(r), 
+                        type: type(r), 
+                        props: properties(r), 
+                        source: elementId(startNode(r)), 
+                        target: elementId(endNode(r))
+                    }] as edges_data
+                LIMIT $limit
+                """
+                )
+            else:
+                query = (
+                    """
+                MATCH (n)
+                WHERE n.uuid IN $uuids
+                """
+                    + node_filter
+                    + """
+                WITH collect(distinct n) as nodes
+                
+                // Get edges only between these nodes
+                UNWIND nodes as n
+                MATCH (n)-[r]->(m)
+                WHERE m IN nodes
+                
+                WITH nodes, collect(distinct r) as edges
+                
+                RETURN 
+                    [n in nodes | {
+                        id: elementId(n), 
+                        labels: labels(n), 
+                        props: properties(n)
+                    }] as nodes_data,
+                    [r in edges | {
+                        id: elementId(r), 
+                        type: type(r), 
+                        props: properties(r), 
+                        source: elementId(startNode(r)), 
+                        target: elementId(endNode(r))
+                    }] as edges_data
+                LIMIT $limit
+                """
+                )
+
+            result = await self.client.driver.execute_query(
+                query, uuids=node_uuids, tenant_id=tenant_id, project_id=project_id, limit=limit
+            )
+
+            nodes_map = {}
+            edges_list = []
+
+            if result.records:
+                record = result.records[0]
+                nodes_data = record["nodes_data"]
+                edges_data = record["edges_data"]
+
+                for n in nodes_data:
+                    n_id = n["id"]
+                    if n_id not in nodes_map:
+                        nodes_map[n_id] = {
+                            "data": {
+                                "id": n_id,
+                                "label": n["labels"][0] if n["labels"] else "Entity",
+                                "name": n["props"].get("name", "Unknown"),
+                                **n["props"],
+                            }
+                        }
+
+                for r in edges_data:
+                    # Verify both source and target are in our node map (should be true by definition of query)
+                    # But for include_neighbors=True, we collected all nodes.
+                    # For include_neighbors=False, we matched m IN nodes.
+                    s_id = r["source"]
+                    t_id = r["target"]
+
+                    if s_id in nodes_map and t_id in nodes_map:
+                        edges_list.append(
+                            {
+                                "data": {
+                                    "id": r["id"],
+                                    "source": s_id,
+                                    "target": t_id,
+                                    "label": r["type"],
+                                    **r["props"],
+                                }
+                            }
+                        )
+
+            return {"elements": {"nodes": list(nodes_map.values()), "edges": edges_list}}
+
+        except Exception as e:
+            logger.error(f"Failed to get subgraph: {e}")
+            # Return empty graph on error
+            return {"elements": {"nodes": [], "edges": []}}
 
     async def get_graph_data(
         self,

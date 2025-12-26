@@ -96,6 +96,17 @@ export const graphitiService = {
         return response.data
     },
 
+    async getSubgraph(params: {
+        node_uuids: string[]
+        include_neighbors?: boolean
+        limit?: number
+        tenant_id?: string
+        project_id?: string
+    }): Promise<GraphData> {
+        const response = await apiClient.post(`/memory/graph/subgraph`, params)
+        return response.data
+    },
+
     // Entities
     async getEntity(entityId: string): Promise<Entity> {
         const response = await apiClient.get(`/entities/${entityId}`)
@@ -168,6 +179,20 @@ export const graphitiService = {
     },
 
     // Enhanced Search
+    async advancedSearch(params: {
+        query: string
+        strategy?: string
+        limit?: number
+        focal_node_uuid?: string
+        reranker?: string
+        tenant_id?: string
+        project_id?: string
+        since?: string
+    }): Promise<{ results: any[]; total: number; search_type: string; strategy: string }> {
+        const response = await apiClient.post('/search-enhanced/advanced', params)
+        return response.data
+    },
+
     async searchByGraphTraversal(params: {
         start_entity_uuid: string
         max_depth?: number
