@@ -57,11 +57,11 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onProjectSelect 
 
   if (!currentTenant) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+      <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-gray-200 dark:border-slate-800 p-8">
         <div className="text-center">
-          <Folder className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">请先选择工作空间</h3>
-          <p className="text-gray-600">选择一个工作空间来查看和管理项目</p>
+          <Folder className="h-12 w-12 text-gray-400 dark:text-slate-600 mx-auto mb-3" />
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">请先选择工作空间</h3>
+          <p className="text-gray-600 dark:text-slate-400">选择一个工作空间来查看和管理项目</p>
         </div>
       </div>
     );
@@ -69,21 +69,21 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onProjectSelect 
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+      <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-gray-200 dark:border-slate-800 p-8">
         <div className="flex items-center justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400"></div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-      <div className="p-6 border-b border-gray-200">
+    <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-gray-200 dark:border-slate-800">
+      <div className="p-6 border-b border-gray-200 dark:border-slate-800">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-2">
-            <Folder className="h-5 w-5 text-gray-600" />
-            <h3 className="text-lg font-semibold text-gray-900">项目列表</h3>
+            <Folder className="h-5 w-5 text-gray-600 dark:text-slate-400" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">项目列表</h3>
           </div>
           <button
             onClick={() => setIsCreateModalOpen(true)}
@@ -96,13 +96,13 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onProjectSelect 
 
         <div className="flex space-x-4">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-slate-500" />
             <input
               type="text"
               placeholder="搜索项目..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500"
             />
           </div>
           <div className="relative">
@@ -112,10 +112,10 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onProjectSelect 
       </div>
 
       {error && (
-        <div className="p-4 bg-red-50 border-b border-red-200">
+        <div className="p-4 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-900/30">
           <div className="flex items-center space-x-2">
-            <AlertCircle className="h-4 w-4 text-red-600" />
-            <span className="text-sm text-red-800">{error}</span>
+            <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+            <span className="text-sm text-red-800 dark:text-red-300">{error}</span>
           </div>
         </div>
       )}
@@ -123,9 +123,9 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onProjectSelect 
       <div className="p-6">
         {filteredProjects.length === 0 ? (
           <div className="text-center py-8">
-            <Folder className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-            <h4 className="text-lg font-medium text-gray-900 mb-2">暂无项目</h4>
-            <p className="text-gray-600 mb-4">
+            <Folder className="h-12 w-12 text-gray-400 dark:text-slate-600 mx-auto mb-3" />
+            <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">暂无项目</h4>
+            <p className="text-gray-600 dark:text-slate-400 mb-4">
               {searchTerm || filterStatus !== 'all' 
                 ? '没有找到匹配的项目' 
                 : '开始创建你的第一个项目'
@@ -147,8 +147,8 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onProjectSelect 
                 key={project.id}
                 className={`p-4 rounded-lg border cursor-pointer transition-all ${
                   currentProject?.id === project.id
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                    : 'border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-800'
                 }`}
                 onClick={() => handleProjectSelect(project)}
               >
@@ -158,7 +158,7 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onProjectSelect 
                       <Folder className="h-4 w-4 text-white" />
                     </div>
                     <div>
-                      <h4 className="text-sm font-medium text-gray-900">{project.name}</h4>
+                      <h4 className="text-sm font-medium text-gray-900 dark:text-white">{project.name}</h4>
                     </div>
                   </div>
                   <div className="flex items-center space-x-1">
@@ -167,7 +167,7 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onProjectSelect 
                         e.stopPropagation();
                         // TODO: Implement project settings
                       }}
-                      className="p-1 text-gray-400 hover:text-gray-600 rounded-md transition-colors"
+                      className="p-1 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 rounded-md transition-colors"
                     >
                       <Settings className="h-4 w-4" />
                     </button>
@@ -176,7 +176,7 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onProjectSelect 
                         e.stopPropagation();
                         handleDeleteProject(project.id);
                       }}
-                      className="p-1 text-gray-400 hover:text-red-600 rounded-md transition-colors"
+                      className="p-1 text-gray-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 rounded-md transition-colors"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -184,10 +184,10 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onProjectSelect 
                 </div>
 
                 {project.description && (
-                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">{project.description}</p>
+                  <p className="text-sm text-gray-600 dark:text-slate-400 mb-3 line-clamp-2">{project.description}</p>
                 )}
 
-                <div className="flex items-center justify-between text-xs text-gray-500">
+                <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-500">
                   <span>创建于 {new Date(project.created_at).toLocaleDateString()}</span>
                 </div>
               </div>

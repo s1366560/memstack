@@ -1,96 +1,43 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react'
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import cytoscape, { Core, ElementDefinition } from 'cytoscape'
 import { graphitiService } from '../services/graphitiService'
+import { useThemeStore } from '../stores/theme'
 
-// Cytoscape 样式定义
-const cytoscapeStyles = [
-    {
-        selector: 'node',
-        style: {
-            'background-color': (ele: any) => {
-                const type = ele.data('type')
-                const entityType = ele.data('entity_type')
-
-                if (type === 'Episodic') return '#10B981' // Emerald 500 (Documents/Episodes)
-                if (type === 'Community') return '#7C3AED' // Violet 600
-
-                // Entity types mapping
-                switch (entityType) {
-                    case 'Person': return '#E11D48' // Rose 600
-                    case 'Organization': return '#9333EA' // Purple 600
-                    case 'Location': return '#0891B2' // Cyan 600
-                    case 'Event': return '#D97706' // Amber 600
-                    case 'Product': return '#2563EB' // Blue 600
-                    default: return '#3B82F6' // Blue 500
-                }
-            },
-            'label': (ele: any) => {
-                const name = ele.data('name') || ''
-                return name.length > 20 ? name.substring(0, 20) + '...' : name
-            },
-            'width': (ele: any) => ele.data('type') === 'Community' ? 70 : 50,
-            'height': (ele: any) => ele.data('type') === 'Community' ? 70 : 50,
-            'font-size': '5px',
-            'font-weight': '600',
-            'font-family': 'Inter, "Noto Sans SC", sans-serif',
-            'text-valign': 'bottom',
-            'text-halign': 'center',
-            'text-margin-y': 6,
-
-            // Border & Glow
-            'border-width': 2,
-            'border-color': '#ffffff',
-            'border-opacity': 0.3,
-            'shadow-blur': 20,
-            'shadow-color': (ele: any) => {
-                const type = ele.data('type')
-                const entityType = ele.data('entity_type')
-                if (type === 'Episodic') return 'rgba(16, 185, 129, 0.4)'
-                if (type === 'Community') return 'rgba(124, 58, 237, 0.4)'
-                switch (entityType) {
-                    case 'Person': return 'rgba(225, 29, 72, 0.4)'
-                    case 'Organization': return 'rgba(147, 51, 234, 0.4)'
-                    default: return 'rgba(59, 130, 246, 0.4)'
-                }
-            },
-            'shadow-opacity': 1,
-            'z-index': 10,
-        } as any,
+// Theme configuration
+const THEME_COLORS = {
+    light: {
+        background: '#f8fafc', // slate-50
+        nodeBorder: '#ffffff',
+        edgeLine: '#cbd5e1', // slate-300
+        edgeLabel: '#64748b', // slate-500
+        colors: {
+            episodic: '#10B981', // emerald-500
+            community: '#7C3AED', // violet-600
+            person: '#E11D48', // rose-600
+            organization: '#9333EA', // purple-600
+            location: '#0891B2', // cyan-600
+            event: '#D97706', // amber-600
+            product: '#2563EB', // blue-600
+            default: '#3B82F6', // blue-500
+        }
     },
-    {
-        selector: 'node:selected',
-        style: {
-
-        },
-    },
-    {
-        selector: 'edge',
-        style: {
-            'width': 1.5,
-            'line-color': '#475569', // slate-600
-            'target-arrow-color': '#475569',
-            'target-arrow-shape': 'triangle',
-            'curve-style': 'bezier',
-            'arrow-scale': 0.8,
-            'opacity': 0.5,
-            'label': (ele: any) => {
-                const label = ele.data('label') || ''
-                return label.length > 15 ? label.substring(0, 15) + '...' : label
-            },
-            'font-size': '5px',
-            'font-family': 'Inter, "Noto Sans SC", sans-serif',
-            'color': '#94A3B8', // slate-400
-        },
-    },
-    {
-        selector: 'edge:selected',
-        style: {
-            'width': 2,
-            'opacity': 1,
-            'z-index': 999,
-        },
-    },
-]
+    dark: {
+        background: '#111521', // dark background
+        nodeBorder: '#ffffff',
+        edgeLine: '#475569', // slate-600
+        edgeLabel: '#94A3B8', // slate-400
+        colors: {
+            episodic: '#34D399', // emerald-400
+            community: '#A78BFA', // violet-400
+            person: '#FB7185', // rose-400
+            organization: '#C084FC', // purple-400
+            location: '#22D3EE', // cyan-400
+            event: '#FBBF24', // amber-400
+            product: '#60A5FA', // blue-400
+            default: '#60A5FA', // blue-400
+        }
+    }
+}
 
 interface CytoscapeGraphProps {
     projectId?: string
@@ -100,19 +47,15 @@ interface CytoscapeGraphProps {
     onNodeClick?: (node: any) => void
 }
 
-// Cytoscape 布局配置
+// Cytoscape Layout Configuration
 const layoutOptions = {
     name: 'cose' as const,
-    // 力导向参数
     animate: true,
     animationDuration: 500,
     animationEasing: 'ease-out',
-    // 节点斥力
     idealEdgeLength: 120,
     nodeOverlap: 40,
-    // 组件
     componentSpacing: 150,
-    // 重力
     gravity: 0.8,
     numIter: 1000,
     initialTemp: 200,
@@ -135,11 +78,116 @@ export const CytoscapeGraph: React.FC<CytoscapeGraphProps> = ({
     const [edgeCount, setEdgeCount] = useState(0)
     const onNodeClickRef = useRef(onNodeClick)
 
+    // Get current theme
+    const { computedTheme } = useThemeStore()
+    const currentTheme = THEME_COLORS[computedTheme]
+
     useEffect(() => {
         onNodeClickRef.current = onNodeClick
     }, [onNodeClick])
 
-    // 加载图谱数据
+    // Generate styles based on theme
+    const cytoscapeStyles = useMemo(() => [
+        {
+            selector: 'node',
+            style: {
+                'background-color': (ele: any) => {
+                    const type = ele.data('type')
+                    const entityType = ele.data('entity_type')
+
+                    if (type === 'Episodic') return currentTheme.colors.episodic
+                    if (type === 'Community') return currentTheme.colors.community
+
+                    switch (entityType) {
+                        case 'Person': return currentTheme.colors.person
+                        case 'Organization': return currentTheme.colors.organization
+                        case 'Location': return currentTheme.colors.location
+                        case 'Event': return currentTheme.colors.event
+                        case 'Product': return currentTheme.colors.product
+                        default: return currentTheme.colors.default
+                    }
+                },
+                'label': (ele: any) => {
+                    const name = ele.data('name') || ''
+                    return name.length > 20 ? name.substring(0, 20) + '...' : name
+                },
+                'color': computedTheme === 'dark' ? '#e2e8f0' : '#1e293b', // Label color
+                'width': (ele: any) => ele.data('type') === 'Community' ? 70 : 50,
+                'height': (ele: any) => ele.data('type') === 'Community' ? 70 : 50,
+                'font-size': '5px',
+                'font-weight': '600',
+                'font-family': 'Inter, "Noto Sans SC", sans-serif',
+                'text-valign': 'bottom',
+                'text-halign': 'center',
+                'text-margin-y': 6,
+                'border-width': 2,
+                'border-color': currentTheme.nodeBorder,
+                'border-opacity': computedTheme === 'dark' ? 0.2 : 0.6,
+                'shadow-blur': 20,
+                'shadow-color': (ele: any) => {
+                    const type = ele.data('type')
+                    const entityType = ele.data('entity_type')
+                    let color = currentTheme.colors.default
+
+                    if (type === 'Episodic') color = currentTheme.colors.episodic
+                    else if (type === 'Community') color = currentTheme.colors.community
+                    else {
+                        switch (entityType) {
+                            case 'Person': color = currentTheme.colors.person; break;
+                            case 'Organization': color = currentTheme.colors.organization; break;
+                            default: color = currentTheme.colors.default;
+                        }
+                    }
+                    return color
+                },
+                'shadow-opacity': computedTheme === 'dark' ? 0.6 : 0.3,
+                'z-index': 10,
+            } as any,
+        },
+        {
+            selector: 'node:selected',
+            style: {
+                'border-width': 4,
+                'border-color': computedTheme === 'dark' ? '#ffffff' : '#000000',
+                'border-opacity': 1,
+            },
+        },
+        {
+            selector: 'edge',
+            style: {
+                'width': 1.5,
+                'line-color': currentTheme.edgeLine,
+                'target-arrow-color': currentTheme.edgeLine,
+                'target-arrow-shape': 'triangle',
+                'curve-style': 'bezier',
+                'arrow-scale': 0.8,
+                'opacity': computedTheme === 'dark' ? 0.5 : 0.6,
+                'label': (ele: any) => {
+                    const label = ele.data('label') || ''
+                    return label.length > 15 ? label.substring(0, 15) + '...' : label
+                },
+                'font-size': '5px',
+                'font-family': 'Inter, "Noto Sans SC", sans-serif',
+                'color': currentTheme.edgeLabel,
+                'text-background-color': computedTheme === 'dark' ? '#1e293b' : '#ffffff',
+                'text-background-opacity': 0.8,
+                'text-background-padding': '2px',
+                'text-background-shape': 'roundrectangle',
+            },
+        },
+        {
+            selector: 'edge:selected',
+            style: {
+                'width': 2,
+                'opacity': 1,
+                'line-color': computedTheme === 'dark' ? '#94a3b8' : '#475569',
+                'target-arrow-color': computedTheme === 'dark' ? '#94a3b8' : '#475569',
+                'z-index': 999,
+            },
+        },
+    ], [computedTheme, currentTheme])
+
+    // Load Graph Data
     const loadGraphData = useCallback(async () => {
         if (!cyRef.current) return
 
@@ -153,14 +201,12 @@ export const CytoscapeGraph: React.FC<CytoscapeGraphProps> = ({
                 limit: 500,
             })
 
-            // 转换为 Cytoscape 格式
             const elements: ElementDefinition[] = []
 
-            // 添加节点
+            // Nodes
             data.elements.nodes.forEach((node: any) => {
                 const nodeType = node.data.label
 
-                // 过滤条件
                 if (!includeCommunities && nodeType === 'Community') return
                 if (minConnections > 0) {
                     const connections = data.elements.edges.filter(
@@ -186,7 +232,7 @@ export const CytoscapeGraph: React.FC<CytoscapeGraphProps> = ({
                 })
             })
 
-            // 添加边
+            // Edges
             data.elements.edges.forEach((edge: any) => {
                 elements.push({
                     group: 'edges',
@@ -199,7 +245,6 @@ export const CytoscapeGraph: React.FC<CytoscapeGraphProps> = ({
                 })
             })
 
-            // 更新 Cytoscape
             cyRef.current.json({ elements })
             cyRef.current.layout(layoutOptions).run()
 
@@ -214,7 +259,7 @@ export const CytoscapeGraph: React.FC<CytoscapeGraphProps> = ({
         }
     }, [projectId, tenantId, includeCommunities, minConnections])
 
-    // 初始化 Cytoscape
+    // Initialize Cytoscape
     useEffect(() => {
         if (!containerRef.current) return
 
@@ -228,7 +273,6 @@ export const CytoscapeGraph: React.FC<CytoscapeGraphProps> = ({
 
         cyRef.current = cy
 
-        // 事件监听
         cy.on('tap', 'node', (evt) => {
             const node = evt.target
             console.log('Node clicked:', node.data())
@@ -240,36 +284,42 @@ export const CytoscapeGraph: React.FC<CytoscapeGraphProps> = ({
             console.log('Edge clicked:', edge.data())
         })
 
-        // Background click to deselect
         cy.on('tap', (evt) => {
             if (evt.target === cy) {
                 onNodeClick?.(null)
             }
         })
 
-        // 启用节点选择框选
         cy.boxSelectionEnabled(true)
 
         return () => {
             cy.destroy()
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, []) // Initialize once
 
-    // 加载数据
+    // Update styles when theme changes
+    useEffect(() => {
+        if (cyRef.current) {
+            cyRef.current.style(cytoscapeStyles)
+        }
+    }, [cytoscapeStyles])
+
+    // Load data
     useEffect(() => {
         if (cyRef.current) {
             loadGraphData()
         }
     }, [loadGraphData])
 
-    // 导出图片功能
+    // Export Image
     const exportImage = () => {
         if (!cyRef.current) return
 
         const png = cyRef.current.png({
             full: true,
             scale: 2,
+            bg: computedTheme === 'dark' ? '#111521' : '#ffffff'
         })
 
         const link = document.createElement('a')
@@ -278,13 +328,11 @@ export const CytoscapeGraph: React.FC<CytoscapeGraphProps> = ({
         link.click()
     }
 
-    // 重新布局
     const relayout = () => {
         if (!cyRef.current) return
         cyRef.current.layout(layoutOptions).run()
     }
 
-    // 居中视图
     const fitView = () => {
         if (!cyRef.current) return
         cyRef.current.fit(undefined, 50)
@@ -292,7 +340,7 @@ export const CytoscapeGraph: React.FC<CytoscapeGraphProps> = ({
 
     return (
         <div className="flex flex-col h-full">
-            {/* 工具栏 */}
+            {/* Toolbar */}
             <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                 <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
@@ -337,7 +385,7 @@ export const CytoscapeGraph: React.FC<CytoscapeGraphProps> = ({
                 </div>
             </div>
 
-            {/* Cytoscape 容器 */}
+            {/* Cytoscape Container */}
             <div className="flex-1 relative">
                 {loading && (
                     <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
@@ -371,20 +419,20 @@ export const CytoscapeGraph: React.FC<CytoscapeGraphProps> = ({
                 />
             </div>
 
-            {/* 图例 */}
+            {/* Legend */}
             <div className="p-4 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
                 <div className="flex items-center gap-6 text-sm">
                     <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded-full bg-blue-600"></div>
+                        <div className="w-4 h-4 rounded-full" style={{ backgroundColor: currentTheme.colors.default }}></div>
                         <span className="text-slate-600 dark:text-slate-400">Entity</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded-full bg-emerald-600"></div>
+                        <div className="w-4 h-4 rounded-full" style={{ backgroundColor: currentTheme.colors.episodic }}></div>
                         <span className="text-slate-600 dark:text-slate-400">Episode</span>
                     </div>
                     {includeCommunities && (
                         <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-purple-600"></div>
+                            <div className="w-6 h-6 rounded-full" style={{ backgroundColor: currentTheme.colors.community }}></div>
                             <span className="text-slate-600 dark:text-slate-400">Community</span>
                         </div>
                     )}

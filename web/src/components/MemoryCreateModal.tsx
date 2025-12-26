@@ -100,29 +100,29 @@ export const MemoryCreateModal: React.FC<MemoryCreateModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+    <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-slate-800">
           <div className="flex items-center space-x-2">
-            <Brain className="h-5 w-5 text-blue-600" />
-            <h2 className="text-lg font-semibold text-gray-900">创建记忆</h2>
+            <Brain className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">创建记忆</h2>
           </div>
           <button
             onClick={handleClose}
-            className="p-1 text-gray-400 hover:text-gray-600 rounded-md transition-colors"
+            className="p-1 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 rounded-md transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="border-b border-gray-200">
+        <div className="border-b border-gray-200 dark:border-slate-800">
           <nav className="flex space-x-8 px-6">
             <button
               onClick={() => setActiveTab('basic')}
               className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === 'basic'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'
               }`}
             >
               <div className="flex items-center space-x-2">
@@ -134,8 +134,8 @@ export const MemoryCreateModal: React.FC<MemoryCreateModalProps> = ({
               onClick={() => setActiveTab('extraction')}
               className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === 'extraction'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'
               }`}
             >
               <div className="flex items-center space-x-2">
@@ -147,8 +147,8 @@ export const MemoryCreateModal: React.FC<MemoryCreateModalProps> = ({
               onClick={() => setActiveTab('advanced')}
               className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === 'advanced'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                  : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'
               }`}
             >
               <div className="flex items-center space-x-2">
@@ -159,19 +159,19 @@ export const MemoryCreateModal: React.FC<MemoryCreateModalProps> = ({
           </nav>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto" id="memory-form">
           <div className="p-6 space-y-4">
             {error && (
-              <div className="flex items-center space-x-2 p-3 bg-red-50 border border-red-200 rounded-md">
-                <AlertCircle className="h-4 w-4 text-red-600" />
-                <span className="text-sm text-red-800">{error}</span>
+              <div className="flex items-center space-x-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/30 rounded-md">
+                <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                <span className="text-sm text-red-800 dark:text-red-300">{error}</span>
               </div>
             )}
 
             {activeTab === 'basic' && (
               <>
                 <div>
-                  <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                     记忆标题 *
                   </label>
                   <input
@@ -179,7 +179,7 @@ export const MemoryCreateModal: React.FC<MemoryCreateModalProps> = ({
                     id="title"
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500"
                     placeholder="输入记忆标题"
                     required
                     disabled={isLoading}
@@ -187,14 +187,14 @@ export const MemoryCreateModal: React.FC<MemoryCreateModalProps> = ({
                 </div>
 
                 <div>
-                  <label htmlFor="content" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="content" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                     记忆内容 *
                   </label>
                   <textarea
                     id="content"
                     value={formData.content}
                     onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500"
                     placeholder="输入记忆内容"
                     rows={6}
                     required
@@ -204,14 +204,14 @@ export const MemoryCreateModal: React.FC<MemoryCreateModalProps> = ({
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="content_type" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="content_type" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                       记忆类型
                     </label>
                     <select
                       id="content_type"
                       value={formData.content_type}
                       onChange={(e) => setFormData({ ...formData, content_type: e.target.value as any })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
                       disabled={isLoading}
                     >
                       <option value="text">文本</option>
@@ -222,7 +222,7 @@ export const MemoryCreateModal: React.FC<MemoryCreateModalProps> = ({
                   </div>
 
                   <div>
-                    <label htmlFor="author_id" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="author_id" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                       用户ID
                     </label>
                     <input
@@ -230,7 +230,7 @@ export const MemoryCreateModal: React.FC<MemoryCreateModalProps> = ({
                       id="author_id"
                       value={formData.author_id}
                       onChange={(e) => setFormData({ ...formData, author_id: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500"
                       placeholder="输入用户ID（可选）"
                       disabled={isLoading}
                     />
@@ -241,12 +241,12 @@ export const MemoryCreateModal: React.FC<MemoryCreateModalProps> = ({
 
             {activeTab === 'extraction' && (
               <>
-                <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/30 rounded-md p-4 mb-4">
                   <div className="flex items-center space-x-2 mb-2">
-                    <Brain className="h-4 w-4 text-blue-600" />
-                    <span className="text-sm font-medium text-blue-800">AI 实体提取</span>
+                    <Brain className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    <span className="text-sm font-medium text-blue-800 dark:text-blue-200">AI 实体提取</span>
                   </div>
-                  <p className="text-sm text-blue-700">
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
                     点击下面的按钮来自动提取文本中的实体和关系。确保你已经在基础信息中输入了内容。
                   </p>
                 </div>
@@ -286,13 +286,13 @@ export const MemoryCreateModal: React.FC<MemoryCreateModalProps> = ({
 
                 {extractedEntities.length > 0 && (
                   <div className="mb-4">
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">提取的实体</h4>
+                    <h4 className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">提取的实体</h4>
                     <div className="grid grid-cols-2 gap-2">
                       {extractedEntities.map((entity, index) => (
-                        <div key={index} className="flex items-center space-x-2 p-2 bg-green-50 border border-green-200 rounded-md">
+                        <div key={index} className="flex items-center space-x-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-900/30 rounded-md">
                           <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                          <span className="text-sm text-green-800">{entity.name}</span>
-                          <span className="text-xs text-green-600">({entity.type})</span>
+                          <span className="text-sm text-green-800 dark:text-green-200">{entity.name}</span>
+                          <span className="text-xs text-green-600 dark:text-green-400">({entity.type})</span>
                         </div>
                       ))}
                     </div>
@@ -301,15 +301,15 @@ export const MemoryCreateModal: React.FC<MemoryCreateModalProps> = ({
 
                 {extractedRelationships.length > 0 && (
                   <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">提取的关系</h4>
+                    <h4 className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">提取的关系</h4>
                     <div className="space-y-2">
                       {extractedRelationships.map((relationship, index) => (
-                        <div key={index} className="flex items-center space-x-2 p-2 bg-purple-50 border border-purple-200 rounded-md">
+                        <div key={index} className="flex items-center space-x-2 p-2 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-900/30 rounded-md">
                           <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                          <span className="text-sm text-purple-800">
+                          <span className="text-sm text-purple-800 dark:text-purple-200">
                             {relationship.source_id} → {relationship.target_id}
                           </span>
-                          <span className="text-xs text-purple-600">({relationship.type})</span>
+                          <span className="text-xs text-purple-600 dark:text-purple-400">({relationship.type})</span>
                         </div>
                       ))}
                     </div>
@@ -321,7 +321,7 @@ export const MemoryCreateModal: React.FC<MemoryCreateModalProps> = ({
             {activeTab === 'advanced' && (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                     元数据设置
                   </label>
                   <div className="space-y-3">
@@ -337,10 +337,10 @@ export const MemoryCreateModal: React.FC<MemoryCreateModalProps> = ({
                             enable_search: e.target.checked
                           }
                         })}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800"
                         disabled={isLoading}
                       />
-                      <label htmlFor="enable_search" className="text-sm text-gray-700">
+                      <label htmlFor="enable_search" className="text-sm text-gray-700 dark:text-slate-300">
                         启用搜索
                       </label>
                     </div>
@@ -356,10 +356,10 @@ export const MemoryCreateModal: React.FC<MemoryCreateModalProps> = ({
                             enable_graph: e.target.checked
                           }
                         })}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800"
                         disabled={isLoading}
                       />
-                      <label htmlFor="enable_graph" className="text-sm text-gray-700">
+                      <label htmlFor="enable_graph" className="text-sm text-gray-700 dark:text-slate-300">
                         启用图谱
                       </label>
                     </div>
@@ -367,7 +367,7 @@ export const MemoryCreateModal: React.FC<MemoryCreateModalProps> = ({
                 </div>
 
                 <div>
-                  <label htmlFor="tags" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="tags" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                     标签
                   </label>
                   <input
@@ -381,7 +381,7 @@ export const MemoryCreateModal: React.FC<MemoryCreateModalProps> = ({
                         tags: e.target.value.split(',').map(tag => tag.trim()).filter(Boolean)
                       }
                     })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500"
                     placeholder="输入标签，用逗号分隔"
                     disabled={isLoading}
                   />
@@ -391,11 +391,11 @@ export const MemoryCreateModal: React.FC<MemoryCreateModalProps> = ({
           </div>
         </form>
 
-        <div className="flex space-x-3 p-6 border-t border-gray-200">
+        <div className="flex space-x-3 p-6 border-t border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900">
           <button
             type="button"
             onClick={handleClose}
-            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+            className="flex-1 px-4 py-2 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-md hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
             disabled={isLoading}
           >
             取消

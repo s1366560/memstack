@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { Network, Filter, ZoomIn, ZoomOut, RefreshCw, Download, Settings, Eye, EyeOff } from 'lucide-react';
 import { useMemoryStore } from '../stores/memory';
 import { useProjectStore } from '../stores/project';
+import { useThemeStore } from '../stores/theme';
 
 interface GraphVisualizationProps {
   width?: number;
@@ -63,6 +64,7 @@ export const GraphVisualization: React.FC<GraphVisualizationProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { currentProject } = useProjectStore();
   const { graphData, getGraphData, isLoading } = useMemoryStore();
+  const { computedTheme } = useThemeStore();
   
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -115,6 +117,8 @@ export const GraphVisualization: React.FC<GraphVisualizationProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const isDark = computedTheme === 'dark';
+
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
@@ -143,7 +147,7 @@ export const GraphVisualization: React.FC<GraphVisualizationProps> = ({
       ctx.beginPath();
       ctx.moveTo(sourceNode.x || 0, sourceNode.y || 0);
       ctx.lineTo(targetNode.x || 0, targetNode.y || 0);
-      ctx.strokeStyle = edge.color || '#9CA3AF';
+      ctx.strokeStyle = edge.color || (isDark ? '#4B5563' : '#9CA3AF');
       ctx.lineWidth = (edge.weight || 1) * 2;
       ctx.stroke();
 
@@ -152,7 +156,7 @@ export const GraphVisualization: React.FC<GraphVisualizationProps> = ({
         const midX = ((sourceNode.x || 0) + (targetNode.x || 0)) / 2;
         const midY = ((sourceNode.y || 0) + (targetNode.y || 0)) / 2;
         
-        ctx.fillStyle = '#374151';
+        ctx.fillStyle = isDark ? '#D1D5DB' : '#374151';
         ctx.font = '12px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(edge.label, midX, midY - 5);
@@ -172,14 +176,14 @@ export const GraphVisualization: React.FC<GraphVisualizationProps> = ({
       ctx.fill();
       
       if (selectedNode?.id === node.id) {
-        ctx.strokeStyle = '#1F2937';
+        ctx.strokeStyle = isDark ? '#F3F4F6' : '#1F2937';
         ctx.lineWidth = 3;
         ctx.stroke();
       }
 
       // Draw node label
       if (showLabels) {
-        ctx.fillStyle = '#1F2937';
+        ctx.fillStyle = isDark ? '#F3F4F6' : '#1F2937';
         ctx.font = '14px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(node.label, x, y + size + 20);
@@ -187,7 +191,7 @@ export const GraphVisualization: React.FC<GraphVisualizationProps> = ({
     });
 
     ctx.restore();
-  }, [nodes, edges, scale, offset, showLabels, filterTypes, selectedNode]);
+  }, [nodes, edges, scale, offset, showLabels, filterTypes, selectedNode, computedTheme]);
 
   useEffect(() => {
     drawGraph();
@@ -258,11 +262,11 @@ export const GraphVisualization: React.FC<GraphVisualizationProps> = ({
 
   if (!currentProject) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+      <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-gray-200 dark:border-slate-800 p-8">
         <div className="text-center">
-          <Network className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">请先选择项目</h3>
-          <p className="text-gray-600">选择一个项目来查看知识图谱</p>
+          <Network className="h-12 w-12 text-gray-400 dark:text-slate-600 mx-auto mb-3" />
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">请先选择项目</h3>
+          <p className="text-gray-600 dark:text-slate-400">选择一个项目来查看知识图谱</p>
         </div>
       </div>
     );
@@ -270,51 +274,51 @@ export const GraphVisualization: React.FC<GraphVisualizationProps> = ({
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+      <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-gray-200 dark:border-slate-800 p-8">
         <div className="flex items-center justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400"></div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+    <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-gray-200 dark:border-slate-800">
       {showControls && (
-        <div className="p-4 border-b border-gray-200">
+        <div className="p-4 border-b border-gray-200 dark:border-slate-800">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-2">
-              <Network className="h-5 w-5 text-gray-600" />
-              <h3 className="text-lg font-semibold text-gray-900">知识图谱</h3>
-              <span className="text-sm text-gray-500">
+              <Network className="h-5 w-5 text-gray-600 dark:text-slate-400" />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">知识图谱</h3>
+              <span className="text-sm text-gray-500 dark:text-slate-500">
                 ({nodes.length} 节点, {edges.length} 边)
               </span>
             </div>
             <div className="flex items-center space-x-2">
               <button
                 onClick={handleZoomIn}
-                className="p-1.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                className="p-1.5 text-gray-600 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
                 title="放大"
               >
                 <ZoomIn className="h-5 w-5" />
               </button>
               <button
                 onClick={handleZoomOut}
-                className="p-1.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                className="p-1.5 text-gray-600 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
                 title="缩小"
               >
                 <ZoomOut className="h-5 w-5" />
               </button>
               <button
                 onClick={handleResetView}
-                className="p-1.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                className="p-1.5 text-gray-600 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
                 title="重置视图"
               >
                 <RefreshCw className="h-5 w-5" />
               </button>
               <button
                 onClick={handleExportGraph}
-                className="p-1.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                className="p-1.5 text-gray-600 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
                 title="导出图片"
               >
                 <Download className="h-5 w-5" />
@@ -323,7 +327,7 @@ export const GraphVisualization: React.FC<GraphVisualizationProps> = ({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <div className="flex items-center space-x-1 px-2 py-1 bg-gray-100 rounded-md text-sm text-gray-600">
+            <div className="flex items-center space-x-1 px-2 py-1 bg-gray-100 dark:bg-slate-800 rounded-md text-sm text-gray-600 dark:text-slate-400">
               <Filter className="h-3 w-3" />
               <span>筛选:</span>
             </div>
@@ -339,8 +343,8 @@ export const GraphVisualization: React.FC<GraphVisualizationProps> = ({
                 }}
                 className={`px-2 py-1 rounded-md text-sm transition-colors ${
                   filterTypes.includes(type)
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                    : 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-700'
                 }`}
               >
                 {type}
@@ -353,8 +357,8 @@ export const GraphVisualization: React.FC<GraphVisualizationProps> = ({
               onClick={() => setShowLabels(!showLabels)}
               className={`flex items-center space-x-1 px-2 py-1 rounded-md text-sm transition-colors ${
                 showLabels
-                  ? 'bg-blue-100 text-blue-800'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                  : 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-700'
               }`}
             >
               {showLabels ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
@@ -364,7 +368,7 @@ export const GraphVisualization: React.FC<GraphVisualizationProps> = ({
         </div>
       )}
 
-      <div className="relative overflow-hidden bg-gray-50" style={{ height }}>
+      <div className="relative overflow-hidden bg-gray-50 dark:bg-[#111521]" style={{ height }}>
         <canvas
           ref={canvasRef}
           width={width}
@@ -377,26 +381,26 @@ export const GraphVisualization: React.FC<GraphVisualizationProps> = ({
         />
         
         {selectedNode && (
-          <div className="absolute top-4 right-4 w-64 bg-white rounded-lg shadow-lg border border-gray-200 p-4">
+          <div className="absolute top-4 right-4 w-64 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 p-4">
             <div className="flex items-center justify-between mb-2">
-              <h4 className="font-medium text-gray-900 truncate" title={selectedNode.label}>
+              <h4 className="font-medium text-gray-900 dark:text-white truncate" title={selectedNode.label}>
                 {selectedNode.label}
               </h4>
               <button
                 onClick={() => setSelectedNode(null)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300"
               >
                 <Settings className="h-4 w-4" />
               </button>
             </div>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-500">类型:</span>
-                <span className="text-gray-900 font-medium">{selectedNode.type}</span>
+                <span className="text-gray-500 dark:text-slate-400">类型:</span>
+                <span className="text-gray-900 dark:text-white font-medium">{selectedNode.type}</span>
               </div>
               {selectedNode.entity?.description && (
-                <div className="pt-2 border-t border-gray-100">
-                  <p className="text-gray-600 line-clamp-3">
+                <div className="pt-2 border-t border-gray-100 dark:border-slate-700">
+                  <p className="text-gray-600 dark:text-slate-300 line-clamp-3">
                     {selectedNode.entity.description}
                   </p>
                 </div>

@@ -112,11 +112,11 @@ export const UserManager: React.FC<UserManagerProps> = ({ context }) => {
 
     const getRoleColor = (role: string) => {
         switch (role) {
-            case 'owner': return 'bg-red-100 text-red-800';
-            case 'admin': return 'bg-orange-100 text-orange-800';
-            case 'member': return 'bg-blue-100 text-blue-800';
-            case 'viewer': return 'bg-gray-100 text-gray-800';
-            default: return 'bg-gray-100 text-gray-800';
+            case 'owner': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
+            case 'admin': return 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300';
+            case 'member': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+            case 'viewer': return 'bg-gray-100 text-gray-800 dark:bg-slate-800 dark:text-slate-300';
+            default: return 'bg-gray-100 text-gray-800 dark:bg-slate-800 dark:text-slate-300';
         }
     };
 
@@ -163,11 +163,11 @@ export const UserManager: React.FC<UserManagerProps> = ({ context }) => {
 
     if (!currentTenant && context === 'tenant') {
         return (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+            <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-gray-200 dark:border-slate-800 p-8">
                 <div className="text-center">
-                    <Users className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">请先选择工作空间</h3>
-                    <p className="text-gray-600">选择一个工作空间来管理用户</p>
+                    <Users className="h-12 w-12 text-gray-400 dark:text-slate-600 mx-auto mb-3" />
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">请先选择工作空间</h3>
+                    <p className="text-gray-600 dark:text-slate-400">选择一个工作空间来管理用户</p>
                 </div>
             </div>
         );
@@ -175,26 +175,26 @@ export const UserManager: React.FC<UserManagerProps> = ({ context }) => {
 
     if (!currentProject && context === 'project') {
         return (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+            <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-gray-200 dark:border-slate-800 p-8">
                 <div className="text-center">
-                    <Users className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">请先选择项目</h3>
-                    <p className="text-gray-600">选择一个项目来管理用户</p>
+                    <Users className="h-12 w-12 text-gray-400 dark:text-slate-600 mx-auto mb-3" />
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">请先选择项目</h3>
+                    <p className="text-gray-600 dark:text-slate-400">选择一个项目来管理用户</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div className="p-6 border-b border-gray-200">
+        <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-gray-200 dark:border-slate-800">
+            <div className="p-6 border-b border-gray-200 dark:border-slate-800">
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center space-x-2">
-                        <Users className="h-5 w-5 text-gray-600" />
-                        <h3 className="text-lg font-semibold text-gray-900">
+                        <Users className="h-5 w-5 text-gray-600 dark:text-slate-400" />
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                             {context === 'tenant' ? '工作空间用户' : '项目用户'}
                         </h3>
-                        <span className="text-sm text-gray-500">({filteredUsers.length} 人)</span>
+                        <span className="text-sm text-gray-500 dark:text-slate-500">({filteredUsers.length} 人)</span>
                     </div>
                     <button
                         onClick={handleInviteUser}
@@ -207,20 +207,20 @@ export const UserManager: React.FC<UserManagerProps> = ({ context }) => {
 
                 <div className="flex space-x-4">
                     <div className="flex-1 relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-slate-500" />
                         <input
                             type="text"
                             placeholder="搜索用户..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500"
                         />
                     </div>
                     <div>
                         <select
                             value={filterRole}
                             onChange={(e) => setFilterRole(e.target.value)}
-                            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
                         >
                             <option value="all">所有角色</option>
                             <option value="owner">所有者</option>
@@ -235,13 +235,13 @@ export const UserManager: React.FC<UserManagerProps> = ({ context }) => {
             <div className="p-6">
                 {isLoading ? (
                     <div className="flex items-center justify-center py-8">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400"></div>
                     </div>
                 ) : filteredUsers.length === 0 ? (
                     <div className="text-center py-8">
-                        <Users className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                        <h4 className="text-lg font-medium text-gray-900 mb-2">暂无用户</h4>
-                        <p className="text-gray-600 mb-4">
+                        <Users className="h-12 w-12 text-gray-400 dark:text-slate-600 mx-auto mb-3" />
+                        <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">暂无用户</h4>
+                        <p className="text-gray-600 dark:text-slate-400 mb-4">
                             {searchTerm || filterRole !== 'all'
                                 ? '没有找到匹配的用户'
                                 : '开始邀请用户加入'
@@ -261,7 +261,7 @@ export const UserManager: React.FC<UserManagerProps> = ({ context }) => {
                         {filteredUsers.map((user) => (
                             <div
                                 key={user.id}
-                                className="flex items-center justify-between p-4 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors"
+                                className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-600 transition-colors"
                             >
                                 <div className="flex items-center space-x-4 flex-1">
                                     <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
@@ -272,15 +272,15 @@ export const UserManager: React.FC<UserManagerProps> = ({ context }) => {
 
                                     <div className="flex-1">
                                         <div className="flex items-center space-x-2 mb-1">
-                                            <h4 className="font-medium text-gray-900">{user.name}</h4>
+                                            <h4 className="font-medium text-gray-900 dark:text-white">{user.name}</h4>
                                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}>
                                                 {user.role}
                                             </span>
                                             {user.role === 'owner' && (
-                                                <Shield className="h-4 w-4 text-red-600" />
+                                                <Shield className="h-4 w-4 text-red-600 dark:text-red-400" />
                                             )}
                                         </div>
-                                        <div className="flex items-center space-x-4 text-sm text-gray-500">
+                                        <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-slate-400">
                                             <div className="flex items-center space-x-1">
                                                 <Mail className="h-3 w-3" />
                                                 <span>{user.email}</span>
@@ -301,7 +301,7 @@ export const UserManager: React.FC<UserManagerProps> = ({ context }) => {
                                 <div className="flex items-center space-x-2">
                                     <button
                                         onClick={() => handleEditUser(user)}
-                                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                                        className="p-2 text-gray-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
                                         title="编辑用户"
                                     >
                                         <Edit3 className="h-4 w-4" />
@@ -309,7 +309,7 @@ export const UserManager: React.FC<UserManagerProps> = ({ context }) => {
                                     {user.role !== 'owner' && (
                                         <button
                                             onClick={() => handleRemoveUser(user.id)}
-                                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                                            className="p-2 text-gray-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
                                             title="移除用户"
                                         >
                                             <Trash2 className="h-4 w-4" />
@@ -324,18 +324,18 @@ export const UserManager: React.FC<UserManagerProps> = ({ context }) => {
 
             {/* Invite User Modal */}
             {isInviteModalOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
-                        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50">
+                    <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-md mx-4">
+                        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-slate-800">
                             <div className="flex items-center space-x-2">
-                                <UserPlus className="h-5 w-5 text-blue-600" />
-                                <h2 className="text-lg font-semibold text-gray-900">
+                                <UserPlus className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                                     邀请用户
                                 </h2>
                             </div>
                             <button
                                 onClick={() => setIsInviteModalOpen(false)}
-                                className="p-1 text-gray-400 hover:text-gray-600 rounded-md transition-colors"
+                                className="p-1 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 rounded-md transition-colors"
                             >
                                 <span className="text-xl">×</span>
                             </button>
@@ -343,22 +343,22 @@ export const UserManager: React.FC<UserManagerProps> = ({ context }) => {
 
                         <form className="p-6 space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                                     邮箱地址 *
                                 </label>
                                 <input
                                     type="email"
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500"
                                     placeholder="输入用户邮箱地址"
                                     required
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                                     角色 *
                                 </label>
-                                <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <select className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-800 text-gray-900 dark:text-white">
                                     <option value="member">成员</option>
                                     <option value="admin">管理员</option>
                                     <option value="viewer">查看者</option>
@@ -366,11 +366,11 @@ export const UserManager: React.FC<UserManagerProps> = ({ context }) => {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                                     消息（可选）
                                 </label>
                                 <textarea
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none bg-white dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500"
                                     placeholder="添加邀请消息..."
                                     rows={3}
                                 />
@@ -380,7 +380,7 @@ export const UserManager: React.FC<UserManagerProps> = ({ context }) => {
                                 <button
                                     type="button"
                                     onClick={() => setIsInviteModalOpen(false)}
-                                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+                                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
                                 >
                                     取消
                                 </button>

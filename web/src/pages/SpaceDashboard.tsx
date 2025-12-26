@@ -117,8 +117,8 @@ export const SpaceDashboard: React.FC = () => {
                 <div className="max-w-7xl mx-auto flex flex-col gap-8">
                     {/* Page Heading */}
                     <div className="flex flex-col gap-1">
-                        <h2 className="text-3xl font-bold text-gray-900 tracking-tight">Overview</h2>
-                        <p className="text-gray-500">Welcome back, here's what's happening with your tenant today.</p>
+                        <h2 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Overview</h2>
+                        <p className="text-gray-500 dark:text-slate-400">Welcome back, here's what's happening with your tenant today.</p>
                     </div>
 
                     {/* Stats Cards (Gradient) */}
@@ -193,13 +193,13 @@ export const SpaceDashboard: React.FC = () => {
                     {/* Middle Row: Chart & Tenant Info */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         {/* Main Chart Area */}
-                        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col">
+                        <div className="lg:col-span-2 bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-gray-200 dark:border-slate-800 p-6 flex flex-col">
                             <div className="flex justify-between items-center mb-6">
                                 <div>
-                                    <h3 className="text-lg font-bold text-gray-900">Memory Usage History</h3>
-                                    <p className="text-sm text-gray-500">Last 30 Days</p>
+                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Memory Usage History</h3>
+                                    <p className="text-sm text-gray-500 dark:text-slate-400">Last 30 Days</p>
                                 </div>
-                                <select className="form-select bg-gray-50 border-gray-200 text-gray-700 text-sm rounded-lg py-1.5 px-3 focus:ring-blue-500 focus:border-blue-500">
+                                <select className="form-select bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 text-sm rounded-lg py-1.5 px-3 focus:ring-blue-500 focus:border-blue-500">
                                     <option>Last 30 Days</option>
                                     <option>Last 7 Days</option>
                                     <option>Last 24 Hours</option>
@@ -209,11 +209,11 @@ export const SpaceDashboard: React.FC = () => {
                             {/* Simulated Chart using SVG */}
                             <div className="flex-1 w-full min-h-[240px] relative">
                                 {/* Grid Lines */}
-                                <div className="absolute inset-0 flex flex-col justify-between text-xs text-gray-400">
+                                <div className="absolute inset-0 flex flex-col justify-between text-xs text-gray-400 dark:text-slate-500">
                                     {[100, 75, 50, 25, 0].map((val) => (
                                         <div key={val} className="flex w-full items-center">
                                             <span className="w-8 text-right pr-2">{val}%</span>
-                                            <div className="h-px bg-gray-100 flex-1"></div>
+                                            <div className="h-px bg-gray-100 dark:bg-slate-700 flex-1"></div>
                                         </div>
                                     ))}
                                 </div>
@@ -229,7 +229,7 @@ export const SpaceDashboard: React.FC = () => {
                                     <path d={generateLinePath(stats.memory_history, 800, 300)} fill="none" stroke="#1e3fae" strokeWidth="2" vectorEffect="non-scaling-stroke"></path>
                                 </svg>
                                 {/* X-Axis Labels */}
-                                <div className="absolute bottom-0 left-8 right-0 flex justify-between text-xs text-gray-400 pt-2">
+                                <div className="absolute bottom-0 left-8 right-0 flex justify-between text-xs text-gray-400 dark:text-slate-500 pt-2">
                                     {stats.memory_history.filter((_: any, i: number) => i % 7 === 0).map((point: any) => (
                                         <span key={point.date}>{point.date}</span>
                                     ))}
@@ -238,43 +238,43 @@ export const SpaceDashboard: React.FC = () => {
                         </div>
 
                         {/* Tenant Details */}
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                            <h3 className="text-lg font-bold text-gray-900 mb-6">Tenant Information</h3>
+                        <div className="bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-gray-200 dark:border-slate-800 p-6">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">Tenant Information</h3>
                             <div className="flex flex-col gap-6">
                                 <div className="flex items-center gap-4">
-                                    <div className="bg-blue-50 p-3 rounded-lg text-blue-600">
+                                    <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-blue-600 dark:text-blue-400">
                                         <Badge className="h-6 w-6" />
                                     </div>
                                     <div>
-                                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Organization ID</p>
-                                        <p className="text-gray-900 font-mono font-medium">{stats.tenant_info.organization_id}</p>
+                                        <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wider">Organization ID</p>
+                                        <p className="text-gray-900 dark:text-white font-mono font-medium">{stats.tenant_info.organization_id}</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-4">
-                                    <div className="bg-purple-50 p-3 rounded-lg text-purple-600">
+                                    <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg text-purple-600 dark:text-purple-400">
                                         <Database className="h-6 w-6" />
                                     </div>
                                     <div>
-                                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Current Plan</p>
-                                        <p className="text-gray-900 font-medium capitalize">{stats.tenant_info.plan}</p>
+                                        <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wider">Current Plan</p>
+                                        <p className="text-gray-900 dark:text-white font-medium capitalize">{stats.tenant_info.plan}</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-4">
-                                    <div className="bg-emerald-50 p-3 rounded-lg text-emerald-600">
+                                    <div className="bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-lg text-emerald-600 dark:text-emerald-400">
                                         <Globe className="h-6 w-6" />
                                     </div>
                                     <div>
-                                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Region</p>
-                                        <p className="text-gray-900 font-medium">{stats.tenant_info.region}</p>
+                                        <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wider">Region</p>
+                                        <p className="text-gray-900 dark:text-white font-medium">{stats.tenant_info.region}</p>
                                     </div>
                                 </div>
-                                <div className="h-px w-full bg-gray-100 my-2"></div>
-                                <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                                <div className="h-px w-full bg-gray-100 dark:bg-slate-800 my-2"></div>
+                                <div className="bg-gray-50 dark:bg-slate-800 rounded-lg p-4 border border-gray-100 dark:border-slate-700">
                                     <div className="flex justify-between items-center mb-2">
-                                        <span className="text-sm text-gray-500">Next Billing Date</span>
-                                        <span className="text-sm font-semibold text-gray-900">{stats.tenant_info.next_billing_date}</span>
+                                        <span className="text-sm text-gray-500 dark:text-slate-400">Next Billing Date</span>
+                                        <span className="text-sm font-semibold text-gray-900 dark:text-white">{stats.tenant_info.next_billing_date}</span>
                                     </div>
-                                    <button className="w-full py-2 px-4 bg-white border border-gray-200 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                                    <button className="w-full py-2 px-4 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-md text-sm font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors">
                                         View Invoice
                                     </button>
                                 </div>
@@ -283,60 +283,60 @@ export const SpaceDashboard: React.FC = () => {
                     </div>
 
                     {/* Bottom Row: Recent Active Projects */}
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden">
-                        <div className="p-6 border-b border-gray-100 flex flex-wrap gap-4 items-center justify-between">
-                            <h3 className="text-lg font-bold text-gray-900">Most Active Projects</h3>
-                            <button onClick={() => setActiveTab('projects')} className="text-blue-600 text-sm font-medium hover:underline">View All Projects</button>
+                    <div className="bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-gray-200 dark:border-slate-800 flex flex-col overflow-hidden">
+                        <div className="p-6 border-b border-gray-100 dark:border-slate-800 flex flex-wrap gap-4 items-center justify-between">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Most Active Projects</h3>
+                            <button onClick={() => setActiveTab('projects')} className="text-blue-600 dark:text-blue-400 text-sm font-medium hover:underline">View All Projects</button>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="bg-gray-50 border-b border-gray-100">
-                                        <th className="py-4 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider">Project Name</th>
-                                        <th className="py-4 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider">Owner</th>
-                                        <th className="py-4 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider">Memory Consumed</th>
-                                        <th className="py-4 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Status</th>
-                                        <th className="py-4 px-6 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                                    <tr className="bg-gray-50 dark:bg-slate-800 border-b border-gray-100 dark:border-slate-800">
+                                        <th className="py-4 px-6 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Project Name</th>
+                                        <th className="py-4 px-6 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Owner</th>
+                                        <th className="py-4 px-6 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Memory Consumed</th>
+                                        <th className="py-4 px-6 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider text-right">Status</th>
+                                        <th className="py-4 px-6 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider text-right">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-100">
+                                <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                                     {stats.projects.list.map((project: any, index: number) => (
-                                        <tr key={project.id} className="hover:bg-gray-50 transition-colors">
+                                        <tr key={project.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors">
                                             <td className="py-4 px-6">
                                                 <div className="flex items-center gap-3">
-                                                    <div className={`p-2 rounded-lg ${index % 3 === 0 ? 'bg-blue-50 text-blue-600' : index % 3 === 1 ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-600'}`}>
+                                                    <div className={`p-2 rounded-lg ${index % 3 === 0 ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : index % 3 === 1 ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400' : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400'}`}>
                                                         {index % 3 === 0 ? <Cpu className="h-5 w-5" /> : index % 3 === 1 ? <Cloud className="h-5 w-5" /> : <Beaker className="h-5 w-5" />}
                                                     </div>
                                                     <div>
-                                                        <p className="font-medium text-gray-900 cursor-pointer hover:text-blue-600" onClick={() => navigate(`/space/${spaceId}/project/${project.id}`)}>{project.name}</p>
-                                                        <p className="text-xs text-gray-500">ID: #{project.id.substring(0, 8)}</p>
+                                                        <p className="font-medium text-gray-900 dark:text-white cursor-pointer hover:text-blue-600 dark:hover:text-blue-400" onClick={() => navigate(`/space/${spaceId}/project/${project.id}`)}>{project.name}</p>
+                                                        <p className="text-xs text-gray-500 dark:text-slate-500">ID: #{project.id.substring(0, 8)}</p>
                                                     </div>
                                                 </div>
                                             </td>
                                             <td className="py-4 px-6">
                                                 <div className="flex items-center gap-2">
-                                                    <div className="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">
+                                                    <div className="h-6 w-6 rounded-full bg-gray-200 dark:bg-slate-700 flex items-center justify-center text-xs font-bold text-gray-600 dark:text-slate-300">
                                                         {project.owner.charAt(0)}
                                                     </div>
-                                                    <span className="text-sm text-gray-700">{project.owner}</span>
+                                                    <span className="text-sm text-gray-700 dark:text-slate-300">{project.owner}</span>
                                                 </div>
                                             </td>
                                             <td className="py-4 px-6">
                                                 <div className="flex items-center gap-2">
-                                                    <div className="w-24 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                                                    <div className="w-24 bg-gray-100 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
                                                         <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: `${(index * 37) % 80 + 20}%` }}></div>
                                                     </div>
-                                                    <span className="text-sm font-medium text-gray-700">{project.memory_consumed}</span>
+                                                    <span className="text-sm font-medium text-gray-700 dark:text-slate-300">{project.memory_consumed}</span>
                                                 </div>
                                             </td>
                                             <td className="py-4 px-6 text-right">
-                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${project.status === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${project.status === 'Active' ? 'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-400' : 'bg-amber-100 dark:bg-amber-900/20 text-amber-800 dark:text-amber-400'}`}>
                                                     <span className={`h-1.5 w-1.5 rounded-full ${project.status === 'Active' ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
                                                     {project.status}
                                                 </span>
                                             </td>
                                             <td className="py-4 px-6 text-right">
-                                                <button className="text-gray-400 hover:text-blue-600 transition-colors">
+                                                <button className="text-gray-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                                                     <MoreVertical className="h-5 w-5" />
                                                 </button>
                                             </td>
@@ -353,8 +353,8 @@ export const SpaceDashboard: React.FC = () => {
                 <div className="max-w-7xl mx-auto">
                     <div className="flex justify-between items-center mb-6">
                         <div>
-                            <h2 className="text-xl font-bold text-gray-900">Projects</h2>
-                            <p className="text-sm text-gray-500 mt-1">Manage all projects in this space</p>
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Projects</h2>
+                            <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">Manage all projects in this space</p>
                         </div>
                         <button
                             onClick={() => setIsCreateProjectOpen(true)}
@@ -370,23 +370,23 @@ export const SpaceDashboard: React.FC = () => {
                             <div
                                 key={project.id}
                                 onClick={() => handleEnterProject(project)}
-                                className="group bg-white rounded-lg border border-gray-200 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer flex flex-col h-full"
+                                className="group bg-white dark:bg-surface-dark rounded-lg border border-gray-200 dark:border-slate-800 hover:shadow-md hover:border-blue-300 dark:hover:border-blue-500 transition-all cursor-pointer flex flex-col h-full"
                             >
                                 <div className="p-5 flex-1">
                                     <div className="flex justify-between items-start mb-3">
-                                        <div className="p-2 bg-green-50 rounded-lg">
-                                            <Folder className="h-6 w-6 text-green-600" />
+                                        <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                                            <Folder className="h-6 w-6 text-green-600 dark:text-green-400" />
                                         </div>
                                     </div>
-                                    <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors truncate">
+                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate">
                                         {project.name}
                                     </h3>
-                                    <p className="text-sm text-gray-500 line-clamp-3 mb-4 h-10">
+                                    <p className="text-sm text-gray-500 dark:text-slate-400 line-clamp-3 mb-4 h-10">
                                         {project.description || 'No description'}
                                     </p>
                                 </div>
 
-                                <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 rounded-b-lg flex items-center justify-between text-xs text-gray-500">
+                                <div className="px-5 py-3 bg-gray-50 dark:bg-slate-800 border-t border-gray-100 dark:border-slate-800 rounded-b-lg flex items-center justify-between text-xs text-gray-500 dark:text-slate-500">
                                     <span>{new Date(project.created_at).toLocaleDateString()}</span>
                                     <span>1 Member</span>
                                 </div>
@@ -404,11 +404,11 @@ export const SpaceDashboard: React.FC = () => {
             {/* Other Tabs */}
             {(activeTab === 'users' || activeTab === 'analytics' || activeTab === 'billing' || activeTab === 'settings') && (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <div className="p-4 bg-gray-100 rounded-full mb-4">
-                        <Settings className="h-8 w-8 text-gray-400" />
+                    <div className="p-4 bg-gray-100 dark:bg-slate-800 rounded-full mb-4">
+                        <Settings className="h-8 w-8 text-gray-400 dark:text-slate-500" />
                     </div>
-                    <h3 className="text-lg font-medium text-gray-900">Coming Soon</h3>
-                    <p className="text-gray-500 max-w-sm mt-1">
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">Coming Soon</h3>
+                    <p className="text-gray-500 dark:text-slate-400 max-w-sm mt-1">
                         The {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} module is currently under development.
                     </p>
                 </div>

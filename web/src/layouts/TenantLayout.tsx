@@ -307,6 +307,9 @@ export const TenantLayout: React.FC = () => {
                 </nav>
 
                 <div className="p-4 border-t border-slate-100 dark:border-slate-800">
+                    <div className="flex justify-center mb-4">
+                        <ThemeToggle />
+                    </div>
                     <div className={`flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 ${isSidebarCollapsed ? 'justify-center' : ''} group`}>
                         <div className="flex items-center gap-3 min-w-0">
                             <div className="size-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 shrink-0">

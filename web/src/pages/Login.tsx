@@ -35,7 +35,7 @@ export const Login: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen flex bg-gray-50">
+        <div className="min-h-screen flex bg-gray-50 dark:bg-[#121520]">
             {/* Left Side - Hero Section */}
             <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-slate-900">
                 {/* Background Gradients */}
@@ -97,7 +97,7 @@ export const Login: React.FC = () => {
             </div>
 
             {/* Right Side - Login Form */}
-            <div className="flex-1 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-20 xl:px-24 bg-white">
+            <div className="flex-1 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-20 xl:px-24 bg-white dark:bg-slate-900">
                 <div className="mx-auto w-full max-w-sm lg:w-96">
                     {/* Mobile Logo */}
                     <div className="lg:hidden mb-8 text-center">
@@ -105,28 +105,28 @@ export const Login: React.FC = () => {
                             <div className="p-2 bg-blue-600 rounded-lg">
                                 <Brain className="h-8 w-8 text-white" />
                             </div>
-                            <span className="text-2xl font-bold text-gray-900">VIP Memory</span>
+                            <span className="text-2xl font-bold text-gray-900 dark:text-white">VIP Memory</span>
                         </div>
-                        <p className="text-gray-500">企业级 LLM 记忆平台</p>
+                        <p className="text-gray-500 dark:text-slate-400">企业级 LLM 记忆平台</p>
                     </div>
 
                     <div className="mb-8">
-                        <h2 className="text-3xl font-bold text-gray-900">欢迎回来</h2>
-                        <p className="mt-2 text-sm text-gray-600">
+                        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">欢迎回来</h2>
+                        <p className="mt-2 text-sm text-gray-600 dark:text-slate-400">
                             请登录您的账户以继续访问
                         </p>
                     </div>
 
                     {error && (
-                        <div className="mb-6 flex items-center p-4 bg-red-50 border border-red-100 rounded-lg">
-                            <AlertCircle className="h-5 w-5 text-red-500 mr-3 flex-shrink-0" />
-                            <span className="text-sm text-red-700">{error}</span>
+                        <div className="mb-6 flex items-center p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-lg">
+                            <AlertCircle className="h-5 w-5 text-red-500 dark:text-red-400 mr-3 flex-shrink-0" />
+                            <span className="text-sm text-red-700 dark:text-red-300">{error}</span>
                         </div>
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div>
-                            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
+                            <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                                 邮箱地址
                             </label>
                             <div className="relative">
@@ -135,7 +135,7 @@ export const Login: React.FC = () => {
                                     type="email"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
-                                    className="block w-full px-4 py-3 text-gray-900 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 focus:bg-white"
+                                    className="block w-full px-4 py-3 text-gray-900 dark:text-white border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900"
                                     placeholder="name@company.com"
                                     required
                                     disabled={isLoading || authLoading}
@@ -145,10 +145,10 @@ export const Login: React.FC = () => {
 
                         <div>
                             <div className="flex items-center justify-between mb-1.5">
-                                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                                <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-slate-300">
                                     密码
                                 </label>
-                                <a href="#" className="text-sm font-medium text-blue-600 hover:text-blue-500 transition-colors">
+                                <a href="#" className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-500 transition-colors">
                                     忘记密码？
                                 </a>
                             </div>
@@ -158,7 +158,7 @@ export const Login: React.FC = () => {
                                     type={showPassword ? 'text' : 'password'}
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="block w-full px-4 py-3 pr-10 text-gray-900 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 focus:bg-white"
+                                    className="block w-full px-4 py-3 pr-10 text-gray-900 dark:text-white border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900"
                                     placeholder="请输入您的密码"
                                     required
                                     disabled={isLoading || authLoading}
@@ -170,9 +170,9 @@ export const Login: React.FC = () => {
                                     disabled={isLoading || authLoading}
                                 >
                                     {showPassword ? (
-                                        <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600 transition-colors" />
+                                        <EyeOff className="h-5 w-5 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 transition-colors" />
                                     ) : (
-                                        <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600 transition-colors" />
+                                        <Eye className="h-5 w-5 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 transition-colors" />
                                     )}
                                 </button>
                             </div>
@@ -197,17 +197,17 @@ export const Login: React.FC = () => {
                     <div className="mt-8">
                         <div className="relative">
                             <div className="absolute inset-0 flex items-center">
-                                <div className="w-full border-t border-gray-200" />
+                                <div className="w-full border-t border-gray-200 dark:border-slate-800" />
                             </div>
                             <div className="relative flex justify-center text-sm">
-                                <span className="px-4 bg-white text-gray-500">或者</span>
+                                <span className="px-4 bg-white dark:bg-slate-900 text-gray-500 dark:text-slate-500">或者</span>
                             </div>
                         </div>
 
                         <div className="mt-8 text-center">
-                            <p className="text-sm text-gray-600">
+                            <p className="text-sm text-gray-600 dark:text-slate-400">
                                 还没有账户？{' '}
-                                <a href="#" className="font-semibold text-blue-600 hover:text-blue-500 transition-colors">
+                                <a href="#" className="font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-500 transition-colors">
                                     立即注册
                                 </a>
                             </p>
@@ -215,15 +215,15 @@ export const Login: React.FC = () => {
                     </div>
 
                     {/* Demo Credentials Hint */}
-                    <div className="mt-10 p-5 bg-blue-50 rounded-xl border border-blue-100">
+                    <div className="mt-10 p-5 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/30">
                         <div className="flex items-center space-x-2 mb-3">
-                            <ShieldCheck className="h-4 w-4 text-blue-600" />
-                            <h3 className="text-sm font-semibold text-blue-900">演示账户 (点击填充)</h3>
+                            <ShieldCheck className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200">演示账户 (点击填充)</h3>
                         </div>
                         <div className="space-y-2 text-sm">
                             <div
                                 onClick={() => handleDemoLogin('admin')}
-                                className="flex justify-between items-center text-blue-800 bg-blue-100/50 p-2 rounded cursor-pointer hover:bg-blue-100 transition-colors"
+                                className="flex justify-between items-center text-blue-800 dark:text-blue-300 bg-blue-100/50 dark:bg-blue-900/30 p-2 rounded cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
                                 role="button"
                                 tabIndex={0}
                             >
@@ -232,7 +232,7 @@ export const Login: React.FC = () => {
                             </div>
                             <div
                                 onClick={() => handleDemoLogin('user')}
-                                className="flex justify-between items-center text-blue-800 bg-blue-100/50 p-2 rounded cursor-pointer hover:bg-blue-100 transition-colors"
+                                className="flex justify-between items-center text-blue-800 dark:text-blue-300 bg-blue-100/50 dark:bg-blue-900/30 p-2 rounded cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
                                 role="button"
                                 tabIndex={0}
                             >
