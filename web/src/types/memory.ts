@@ -50,6 +50,14 @@ export interface Tenant {
     updated_at?: string;
 }
 
+export interface ProjectStats {
+    memory_count: number;
+    storage_used: number;
+    node_count: number;
+    member_count: number;
+    last_active: string | null;
+}
+
 export interface Project {
     id: string;
     tenant_id: string;
@@ -62,6 +70,7 @@ export interface Project {
     is_public: boolean;
     created_at: string;
     updated_at?: string;
+    stats?: ProjectStats;
 }
 
 export interface Memory {

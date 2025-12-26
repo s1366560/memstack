@@ -9,14 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.auth import get_current_user
 from server.database import get_db
-from server.db_models import Project, Tenant, User, UserProject, UserTenant
+from server.db_models import Project, Tenant, User, UserProject, UserTenant, Memory
 from server.logging_config import get_logger
 from server.models import (
     ProjectCreate,
     ProjectListResponse,
     ProjectResponse,
+    ProjectStats,
     ProjectUpdate,
 )
+from server.services.graphiti_service import graphiti_service
 
 router = APIRouter(prefix="/api/v1/projects", tags=["projects"])
 logger = get_logger(__name__)
@@ -155,8 +157,82 @@ async def list_projects(
     result = await db.execute(query)
     projects = result.scalars().all()
 
+    # Calculate stats for projects
+    project_responses = []
+    if projects:
+        project_ids_in_page = [p.id for p in projects]
+
+        # Memory stats
+        memory_stats_result = await db.execute(
+            select(
+                Memory.project_id,
+                func.count(Memory.id).label("count"),
+                func.sum(func.length(Memory.content)).label("size"),
+                func.max(Memory.created_at).label("last_created"),
+            )
+            .where(Memory.project_id.in_(project_ids_in_page))
+            .group_by(Memory.project_id)
+        )
+        memory_stats = {
+            row.project_id: {
+                "count": row.count,
+                "size": row.size or 0,
+                "last_created": row.last_created,
+            }
+            for row in memory_stats_result.fetchall()
+        }
+
+        # Member stats
+        member_stats_result = await db.execute(
+            select(
+                UserProject.project_id,
+                func.count(UserProject.user_id).label("count"),
+            )
+            .where(UserProject.project_id.in_(project_ids_in_page))
+            .group_by(UserProject.project_id)
+        )
+        member_stats = {
+            row.project_id: row.count for row in member_stats_result.fetchall()
+        }
+
+        # Graph stats for active nodes
+        node_stats = {}
+        for pid in project_ids_in_page:
+            try:
+                graph_stats = await graphiti_service.get_graph_stats(project_id=pid)
+                node_stats[pid] = graph_stats.get("entity_count", 0)
+            except Exception as e:
+                logger.error(f"Failed to get graph stats for project {pid}: {e}")
+                node_stats[pid] = 0
+
+        for project in projects:
+            p_resp = ProjectResponse.from_orm(project)
+
+            m_stats = memory_stats.get(
+                project.id, {"count": 0, "size": 0, "last_created": None}
+            )
+            member_count = member_stats.get(project.id, 0)
+
+            # Calculate last active
+            last_active = project.updated_at
+            if m_stats["last_created"]:
+                if not last_active or m_stats["last_created"] > last_active:
+                    last_active = m_stats["last_created"]
+
+            # Get node count from Graphiti
+            node_count = node_stats.get(project.id, 0)
+
+            p_resp.stats = ProjectStats(
+                memory_count=m_stats["count"],
+                storage_used=m_stats["size"],
+                node_count=node_count,
+                member_count=member_count,
+                last_active=last_active,
+            )
+            project_responses.append(p_resp)
+
     return ProjectListResponse(
-        projects=[ProjectResponse.from_orm(project) for project in projects],
+        projects=project_responses,
         total=total,
         page=page,
         page_size=page_size,
@@ -466,13 +542,18 @@ async def get_project_stats(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # Get memory count
+    # Get memory stats
     from server.db_models import Memory
 
-    memory_count_result = await db.execute(
-        select(func.count(Memory.id)).where(Memory.project_id == project_id)
+    memory_stats_result = await db.execute(
+        select(
+            func.count(Memory.id).label("count"),
+            func.sum(func.length(Memory.content)).label("size"),
+        ).where(Memory.project_id == project_id)
     )
-    memory_count = memory_count_result.scalar()
+    memory_stats = memory_stats_result.one()
+    memory_count = memory_stats.count
+    storage_used = memory_stats.size or 0
 
     # Get member count
     member_count_result = await db.execute(
@@ -480,40 +561,59 @@ async def get_project_stats(
     )
     member_count = member_count_result.scalar()
 
-    # Mock data for dashboard
-    import random
+    # Get active nodes (from Graphiti)
+    graph_stats = await graphiti_service.get_graph_stats(project_id=project_id)
+    active_nodes = graph_stats.get("entity_count", 0)
 
-    # Mock storage usage (random between 1GB and 50GB)
-    storage_used = random.uniform(1, 50) * 1024 * 1024 * 1024
+    # Get tenant limit for storage
+    tenant_result = await db.execute(select(Tenant).where(Tenant.id == project.tenant_id))
+    tenant = tenant_result.scalar_one_or_none()
+    storage_limit = tenant.max_storage if tenant else 1024 * 1024 * 1024  # Default 1GB
 
-    # Mock active nodes (random between 5 and 50)
-    active_nodes = random.randint(5, 50)
-
-    # Mock recent activity
+    # Recent activity (from Memories)
+    recent_memories_result = await db.execute(
+        select(Memory, User)
+        .join(User, Memory.author_id == User.id)
+        .where(Memory.project_id == project_id)
+        .order_by(Memory.created_at.desc())
+        .limit(5)
+    )
     activities = []
-    actions = ["created a memory", "updated a document", "commented on", "shared"]
-    for i in range(5):
+    for memory, user in recent_memories_result.fetchall():
+        # Calculate relative time string
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        diff = now - memory.created_at
+        if diff.days > 0:
+            time_str = f"{diff.days}d ago"
+        elif diff.seconds >= 3600:
+            time_str = f"{diff.seconds // 3600}h ago"
+        elif diff.seconds >= 60:
+            time_str = f"{diff.seconds // 60}m ago"
+        else:
+            time_str = "Just now"
+
         activities.append(
             {
-                "id": f"act_{i}",
-                "user": "Team Member",
-                "action": random.choice(actions),
-                "target": f"Memory #{100 + i}",
-                "time": f"{random.randint(1, 24)}h ago",
+                "id": memory.id,
+                "user": user.name,
+                "action": "created a memory",
+                "target": memory.title or "Untitled Memory",
+                "time": time_str,
             }
         )
 
     return {
         "memory_count": memory_count,
         "storage_used": storage_used,
-        "storage_limit": 100 * 1024 * 1024 * 1024,  # 100GB mock limit
+        "storage_limit": storage_limit,
         "member_count": member_count,
         "active_nodes": active_nodes,
-        "collaborators": member_count,  # Same as members for now
+        "collaborators": member_count,
         "recent_activity": activities,
         "system_status": {
             "status": "operational",
             "indexing_active": True,
-            "indexing_progress": 76,
+            "indexing_progress": 100,
         },
     }

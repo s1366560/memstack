@@ -26,6 +26,7 @@ from server.models.project import (
     ProjectCreate,
     ProjectListResponse,
     ProjectResponse,
+    ProjectStats,
     ProjectUpdate,
 )
 from server.models.recall import (
@@ -69,6 +70,7 @@ __all__ = [
     "ProjectCreate",
     "ProjectUpdate",
     "ProjectResponse",
+    "ProjectStats",
     "ProjectListResponse",
     "MemoryRulesConfig",
     "ProjectGraphConfig",

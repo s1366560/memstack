@@ -6,6 +6,7 @@ import { ProjectList } from './pages/tenant/ProjectList'
 import { UserList } from './pages/tenant/UserList'
 import { UserProfile } from './pages/UserProfile'
 import { NewProject } from './pages/tenant/NewProject'
+import { EditProject } from './pages/tenant/EditProject'
 import { NewTenant } from './pages/tenant/NewTenant'
 import { TenantSettings } from './pages/tenant/TenantSettings'
 import { ProjectLayout } from './layouts/ProjectLayout'
@@ -62,6 +63,7 @@ function App() {
                 <Route path=":tenantId" element={<TenantOverview />} />
                 <Route path=":tenantId/projects" element={<ProjectList />} />
                 <Route path=":tenantId/projects/new" element={<NewProject />} />
+                <Route path=":tenantId/projects/:projectId/edit" element={<EditProject />} />
                 <Route path=":tenantId/users" element={<UserList />} />
                 <Route path=":tenantId/analytics" element={<div className="p-8 text-slate-500">Analytics (Coming Soon)</div>} />
                 <Route path=":tenantId/billing" element={<div className="p-8 text-slate-500">Billing (Coming Soon)</div>} />

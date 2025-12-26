@@ -2445,12 +2445,14 @@ class GraphitiService:
     async def get_graph_stats(
         self,
         tenant_id: Optional[str] = None,
+        project_id: Optional[str] = None,
     ) -> Dict[str, int]:
         """
         Get graph statistics.
 
         Args:
             tenant_id: Optional tenant filter
+            project_id: Optional project filter
 
         Returns:
             Dictionary with graph statistics
@@ -2460,28 +2462,48 @@ class GraphitiService:
 
             # Count nodes by type
             for label in ["Entity", "Episodic", "Community"]:
-                tenant_filter = "{tenant_id: $tenant_id}" if tenant_id else ""
+                conditions = []
+                if tenant_id:
+                    conditions.append("n.tenant_id = $tenant_id")
+                if project_id:
+                    conditions.append("n.project_id = $project_id")
+                
+                where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
+                
                 query = f"""
-                MATCH (n:{label} {tenant_filter})
+                MATCH (n:{label})
+                {where_clause}
                 RETURN count(n) as count
                 """
                 result = await self.client.driver.execute_query(
                     query,
                     tenant_id=tenant_id,
+                    project_id=project_id,
                 )
                 stats[f"{label.lower()}_count"] = (
                     result.records[0]["count"] if result.records else 0
                 )
 
             # Count edges
-            tenant_filter = "{tenant_id: $tenant_id}" if tenant_id else ""
+            conditions = []
+            if tenant_id:
+                conditions.append("n.tenant_id = $tenant_id")
+            if project_id:
+                conditions.append("n.project_id = $project_id")
+            
+            # For edges, we count relationships where at least one node matches the filter
+            # Or should we be stricter? Let's assume connected to a node in the project.
+            where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
+            
             query = f"""
-            MATCH ()-[r]-(n {tenant_filter})
+            MATCH ()-[r]-(n)
+            {where_clause}
             RETURN count(r) as count
             """
             result = await self.client.driver.execute_query(
                 query,
                 tenant_id=tenant_id,
+                project_id=project_id,
             )
             stats["edge_count"] = result.records[0]["count"] if result.records else 0
 

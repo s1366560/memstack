@@ -109,6 +109,16 @@ class ProjectUpdate(BaseModel):
     )
 
 
+class ProjectStats(BaseModel):
+    """Project statistics."""
+
+    memory_count: int = Field(default=0, description="Number of memories")
+    storage_used: int = Field(default=0, description="Storage used in bytes")
+    node_count: int = Field(default=0, description="Number of knowledge graph nodes")
+    member_count: int = Field(default=0, description="Number of members")
+    last_active: Optional[datetime] = Field(default=None, description="Last activity timestamp")
+
+
 class ProjectResponse(BaseModel):
     """Response model for project operations."""
 
@@ -127,6 +137,7 @@ class ProjectResponse(BaseModel):
     is_public: bool = Field(..., description="Whether the project is public")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: Optional[datetime] = Field(default=None, description="Last update timestamp")
+    stats: Optional[ProjectStats] = Field(default=None, description="Project statistics")
 
     model_config = ConfigDict(
         from_attributes=True,

@@ -1,12 +1,14 @@
-import React, { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import React, { useState, useEffect } from 'react'
+import { useNavigate, Link, useParams } from 'react-router-dom'
 import { useProjectStore } from '../../stores/project'
 import { useTenantStore } from '../../stores/tenant'
 
-export const NewProject: React.FC = () => {
+export const EditProject: React.FC = () => {
     const navigate = useNavigate()
-    const { createProject, isLoading, error } = useProjectStore()
+    const { tenantId, projectId } = useParams()
+    const { updateProject, getProject, isLoading, error } = useProjectStore()
     const { currentTenant } = useTenantStore()
+    const [isFetching, setIsFetching] = useState(true)
 
     const [formData, setFormData] = useState({
         name: '',
@@ -26,30 +28,66 @@ export const NewProject: React.FC = () => {
         }
     })
 
+    useEffect(() => {
+        const fetchProject = async () => {
+            if (tenantId && projectId) {
+                try {
+                    const project = await getProject(tenantId, projectId)
+                    setFormData({
+                        name: project.name,
+                        description: project.description || '',
+                        status: 'active', // Project model might not have status field exposed or it's different
+                        memory_rules: {
+                            max_episodes: project.config?.memory_rules?.max_episodes || 1000,
+                            retention_days: project.config?.memory_rules?.retention_days || 30,
+                            auto_refresh: project.config?.memory_rules?.auto_refresh ?? true,
+                            refresh_interval: project.config?.memory_rules?.refresh_interval || 24
+                        },
+                        graph_config: {
+                            max_nodes: project.config?.graph_config?.max_nodes || 5000,
+                            max_edges: project.config?.graph_config?.max_edges || 10000,
+                            similarity_threshold: project.config?.graph_config?.similarity_threshold || 0.7,
+                            community_detection: project.config?.graph_config?.community_detection ?? true
+                        }
+                    })
+                } catch (err) {
+                    console.error('Failed to fetch project:', err)
+                } finally {
+                    setIsFetching(false)
+                }
+            }
+        }
+        fetchProject()
+    }, [tenantId, projectId, getProject])
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!currentTenant) return
+        if (!tenantId || !projectId) return
 
         try {
             // Remove status as it's not part of the API payload
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { status, ...projectData } = formData
-            await createProject(currentTenant.id, {
+            await updateProject(tenantId, projectId, {
                 ...projectData,
-                tenant_id: currentTenant.id
+                tenant_id: tenantId
             })
-            navigate(`/tenant/${currentTenant.id}/projects`)
+            navigate(`/tenant/${tenantId}/projects`)
         } catch (err) {
-            console.error('Failed to create project:', err)
+            console.error('Failed to update project:', err)
         }
+    }
+
+    if (isFetching) {
+        return <div className="p-8 text-center text-slate-500">Loading project details...</div>
     }
 
     return (
         <div className="max-w-5xl mx-auto flex flex-col gap-8 pb-10 px-6">
             {/* Header */}
             <div className="flex flex-col gap-1">
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Create New Project</h1>
-                <p className="text-slate-500 dark:text-slate-400">Configure a new workspace for your memories and knowledge graph.</p>
+                <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Edit Project</h1>
+                <p className="text-slate-500 dark:text-slate-400">Update workspace configuration for your memories and knowledge graph.</p>
             </div>
 
             {error && (
@@ -282,7 +320,7 @@ export const NewProject: React.FC = () => {
                         className="px-6 py-2.5 rounded-lg bg-primary text-white font-medium hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                         {isLoading && <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>}
-                        Create Project
+                        Update Project
                     </button>
                 </div>
             </form>
