@@ -335,6 +335,7 @@ class QueueService:
         # We will NOT include them in the payload to avoid serialization issues.
         payload = {
             "group_id": group_id,
+            "task_type": "add_episode",
             "name": name,
             "content": content,
             "source_description": source_description,
@@ -360,6 +361,71 @@ class QueueService:
 
         logger.info(f"Task {task_id} added to queue {queue_key}")
         return await self._redis.llen(queue_key)
+
+    async def rebuild_communities(self, group_id: str = "global") -> int:
+        """Add a rebuild communities task to the queue."""
+        if not self._redis:
+            raise RuntimeError("Queue service not initialized")
+
+        payload = {
+            "group_id": group_id,
+            "task_type": "rebuild_communities",
+            "timestamp": time.time(),
+        }
+
+        # Create Task Log
+        task_id = await self._create_task_log(group_id, "rebuild_communities", payload)
+        payload["task_id"] = task_id
+
+        # Add to Redis
+        await self._redis.sadd("queue:active_groups", group_id)
+        queue_key = f"queue:group:{group_id}"
+        await self._redis.rpush(queue_key, json.dumps(payload))
+
+        logger.info(f"Task {task_id} (rebuild_communities) added to queue {queue_key}")
+        return await self._redis.llen(queue_key)
+
+    async def _process_rebuild_communities_task(self, payload: dict) -> None:
+        """Process the rebuild communities task logic."""
+        try:
+            # Graphiti's build_communities automatically removes old communities
+            await self._graphiti_client.build_communities()
+
+            # After rebuilding, we should re-apply tenant/project/user IDs to the new communities
+            query = """
+            MATCH (c:Community)-[:HAS_MEMBER]->(e:Entity)
+            WITH c, e
+            WHERE e.tenant_id IS NOT NULL
+            WITH c, e.tenant_id as tid, count(*) as count
+            ORDER BY count DESC
+            WITH c, collect(tid)[0] as major_tenant
+            SET c.tenant_id = major_tenant
+            """
+            await self._graphiti_client.driver.execute_query(query)
+
+            query_proj = """
+            MATCH (c:Community)-[:HAS_MEMBER]->(e:Entity)
+            WITH c, e
+            WHERE e.project_id IS NOT NULL
+            WITH c, e.project_id as pid, count(*) as count
+            ORDER BY count DESC
+            WITH c, collect(pid)[0] as major_project
+            SET c.project_id = major_project
+            """
+            await self._graphiti_client.driver.execute_query(query_proj)
+
+            # Count members for each community
+            count_query = """
+            MATCH (c:Community)-[:HAS_MEMBER]->(e:Entity)
+            WITH c, count(e) as member_count
+            SET c.member_count = member_count
+            """
+            await self._graphiti_client.driver.execute_query(count_query)
+
+            logger.info("Communities rebuild triggered successfully and properties updated")
+        except Exception as e:
+            logger.error(f"Failed to rebuild communities: {e}")
+            raise e
 
     async def _process_episode_task(self, payload: dict) -> None:
         """Process the episode task logic."""
@@ -517,7 +583,11 @@ class QueueService:
                         )
 
                     try:
-                        await self._process_episode_task(payload)
+                        task_type = payload.get("task_type", "add_episode")
+                        if task_type == "rebuild_communities":
+                            await self._process_rebuild_communities_task(payload)
+                        else:
+                            await self._process_episode_task(payload)
 
                         # Success: Remove from processing queue
                         await self._redis.lrem(processing_queue, 1, raw_task)

@@ -1386,51 +1386,13 @@ class GraphitiService:
             raise
 
     async def rebuild_communities(self):
-        """Trigger community rebuild using Graphiti's community builder."""
+        """Trigger community rebuild task."""
         try:
-            # Graphiti's build_communities automatically removes old communities
-            # We don't need to pass explicit group_ids unless we want to partition
-            # Currently assuming single partition/database for simplicity or relying on default behavior
-            await self.client.build_communities()
-
-            # After rebuilding, we should re-apply tenant/project/user IDs to the new communities
-            # This is a bit of a hack because Graphiti core doesn't know about our multi-tenancy yet
-
-            # Update tenant_id and project_id based on members
-            # We take the most frequent tenant/project if there are multiple (though there shouldn't be)
-            query = """
-            MATCH (c:Community)-[:HAS_MEMBER]->(e:Entity)
-            WITH c, e
-            WHERE e.tenant_id IS NOT NULL
-            WITH c, e.tenant_id as tid, count(*) as count
-            ORDER BY count DESC
-            WITH c, collect(tid)[0] as major_tenant
-            SET c.tenant_id = major_tenant
-            """
-            await self.client.driver.execute_query(query)
-
-            query_proj = """
-            MATCH (c:Community)-[:HAS_MEMBER]->(e:Entity)
-            WITH c, e
-            WHERE e.project_id IS NOT NULL
-            WITH c, e.project_id as pid, count(*) as count
-            ORDER BY count DESC
-            WITH c, collect(pid)[0] as major_project
-            SET c.project_id = major_project
-            """
-            await self.client.driver.execute_query(query_proj)
-
-            # Count members for each community
-            count_query = """
-            MATCH (c:Community)-[:HAS_MEMBER]->(e:Entity)
-            WITH c, count(e) as member_count
-            SET c.member_count = member_count
-            """
-            await self.client.driver.execute_query(count_query)
-
-            logger.info("Communities rebuild triggered successfully and properties updated")
+            # Enqueue the task instead of running it synchronously
+            await self.queue_service.rebuild_communities()
+            logger.info("Communities rebuild task queued successfully")
         except Exception as e:
-            logger.error(f"Failed to rebuild communities: {e}")
+            logger.error(f"Failed to queue rebuild communities task: {e}")
             raise
 
     async def get_subgraph(
