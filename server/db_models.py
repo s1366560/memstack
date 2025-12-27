@@ -309,3 +309,21 @@ class EdgeTypeMap(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     project: Mapped["Project"] = relationship(back_populates="edge_maps")
+
+
+class TaskLog(Base):
+    __tablename__ = "task_logs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    group_id: Mapped[str] = mapped_column(String, index=True)
+    task_type: Mapped[str] = mapped_column(String)
+    status: Mapped[str] = mapped_column(
+        String, index=True
+    )  # PENDING, PROCESSING, COMPLETED, FAILED
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    worker_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)  # Stores arguments

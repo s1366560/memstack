@@ -1,49 +1,106 @@
-"""Queue service for managing episode processing."""
+"""Queue service for managing episode processing using Redis."""
 
 import asyncio
+import json
 import logging
-from collections.abc import Awaitable, Callable
+import time
+import socket
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Optional, Callable, Awaitable
+from uuid import uuid4
+
+import redis.asyncio as redis
+from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert
 
 from graphiti_core import Graphiti
 from graphiti_core.nodes import EpisodeType
-from sqlalchemy import update
+from graphiti_core.helpers import semaphore_gather
+from graphiti_core.utils.maintenance.community_operations import update_community
 
 from server.config import get_settings
 from server.database import async_session_factory
-from server.db_models import Memory
+from server.db_models import Memory, TaskLog
 from server.models.enums import ProcessingStatus
 
 logger = logging.getLogger(__name__)
 
 
 class QueueService:
-    """Service for managing sequential episode processing queues by group_id with a worker pool."""
+    """Service for managing persistent episode processing queues using Redis."""
 
     def __init__(self):
         """Initialize the queue service."""
         self._settings = get_settings()
-
-        # Dictionary to store queues for each group_id
-        self._episode_queues: dict[str, asyncio.Queue] = {}
-
-        # Queue of group_ids that have pending work
-        self._active_groups: asyncio.Queue = asyncio.Queue()
-
-        # Set of group_ids that are currently in _active_groups or being processed
-        # This prevents the same group from being added to the scheduling queue multiple times
-        self._scheduled_groups: set[str] = set()
-
-        # Lock to protect _scheduled_groups access
-        self._schedule_lock = asyncio.Lock()
-
-        # Worker tasks
-        self._workers: list[asyncio.Task] = []
-        self._shutdown_event = asyncio.Event()
-
-        # Store the graphiti client after initialization
+        self._redis: Optional[redis.Redis] = None
         self._graphiti_client: Optional[Graphiti] = None
+        self._schema_loader: Optional[Callable[[str], Awaitable[tuple]]] = None
+        self._shutdown_event = asyncio.Event()
+        self._workers: list[asyncio.Task] = []
+        self._recovery_task: Optional[asyncio.Task] = None
+        self._worker_id = f"{socket.gethostname()}-{uuid4().hex[:8]}"
+
+    async def initialize(
+        self,
+        graphiti_client: Graphiti,
+        schema_loader: Optional[Callable[[str], Awaitable[tuple]]] = None,
+        run_workers: bool = True,
+    ) -> None:
+        """Initialize the queue service with a graphiti client and redis connection.
+
+        Args:
+            graphiti_client: The graphiti client instance
+            schema_loader: Async function to load schema (entity_types, edge_types, edge_type_map) by project_id
+            run_workers: Whether to start worker loops. Set to False for API-only instances.
+        """
+        self._graphiti_client = graphiti_client
+        self._schema_loader = schema_loader
+
+        # Initialize Redis connection
+        logger.info(f"Connecting to Redis at {self._settings.redis_url}")
+        self._redis = redis.from_url(
+            self._settings.redis_url, encoding="utf-8", decode_responses=True
+        )
+
+        if run_workers:
+            # Start workers
+            num_workers = self._settings.max_async_workers
+            logger.info(f"Initializing QueueService with {num_workers} workers (ID: {self._worker_id})")
+
+            for i in range(num_workers):
+                task = asyncio.create_task(self._worker_loop(i))
+                self._workers.append(task)
+
+            # Start recovery task
+            self._recovery_task = asyncio.create_task(self._recovery_loop())
+        else:
+            logger.info("QueueService initialized in producer-only mode (no workers started)")
+
+        logger.info("QueueService initialized")
+
+    async def close(self) -> None:
+        """Shutdown the queue service."""
+        logger.info("Shutting down QueueService")
+        self._shutdown_event.set()
+
+        if self._workers:
+            for task in self._workers:
+                task.cancel()
+            await asyncio.gather(*self._workers, return_exceptions=True)
+            self._workers.clear()
+
+        if self._recovery_task:
+            self._recovery_task.cancel()
+            try:
+                await self._recovery_task
+            except asyncio.CancelledError:
+                pass
+            self._recovery_task = None
+
+        if self._redis:
+            await self._redis.close()
+
+        logger.info("QueueService shutdown complete")
 
     async def _update_memory_status(self, memory_id: str, status: ProcessingStatus) -> None:
         """Update memory processing status in database."""
@@ -51,10 +108,8 @@ class QueueService:
             return
 
         try:
-            logger.info(f"Attempting to update memory {memory_id} status to {status.value}")
             async with async_session_factory() as session:
                 async with session.begin():
-                    # Check if memory exists
                     result = await session.execute(
                         update(Memory)
                         .where(Memory.id == memory_id)
@@ -64,154 +119,63 @@ class QueueService:
                         logger.warning(
                             f"Memory {memory_id} not found when updating status to {status.value}"
                         )
-                    else:
-                        logger.info(
-                            f"Successfully updated memory {memory_id} status to {status.value}"
-                        )
         except Exception as e:
             logger.error(f"Failed to update memory status {memory_id} to {status}: {e}")
-            import traceback
 
-            logger.error(traceback.format_exc())
+    async def _create_task_log(
+        self, group_id: str, task_type: str, payload: dict
+    ) -> str:
+        """Create a new task log entry."""
+        task_id = str(uuid4())
+        try:
+            async with async_session_factory() as session:
+                async with session.begin():
+                    task_log = TaskLog(
+                        id=task_id,
+                        group_id=group_id,
+                        task_type=task_type,
+                        status="PENDING",
+                        payload=payload,
+                        created_at=datetime.now(timezone.utc),
+                    )
+                    session.add(task_log)
+            return task_id
+        except Exception as e:
+            logger.error(f"Failed to create task log: {e}")
+            return task_id  # Return generated ID even if DB fails, to continue if possible
 
-    async def add_episode_task(
-        self, group_id: str, process_func: Callable[[], Awaitable[None]]
-    ) -> int:
-        """Add an episode processing task to the queue.
+    async def _update_task_log(
+        self,
+        task_id: str,
+        status: str,
+        worker_id: Optional[str] = None,
+        error_message: Optional[str] = None,
+        increment_retry: bool = False,
+    ) -> None:
+        """Update task log status."""
+        try:
+            async with async_session_factory() as session:
+                async with session.begin():
+                    stmt = update(TaskLog).where(TaskLog.id == task_id).values(status=status)
 
-        Args:
-            group_id: The group ID for the episode
-            process_func: The async function to process the episode
+                    if status == "PROCESSING":
+                        stmt = stmt.values(started_at=datetime.now(timezone.utc))
+                    if status in ["COMPLETED", "FAILED"]:
+                        stmt = stmt.values(completed_at=datetime.now(timezone.utc))
 
-        Returns:
-            The position in the queue
-        """
-        # Initialize queue for this group_id if it doesn't exist
-        if group_id not in self._episode_queues:
-            self._episode_queues[group_id] = asyncio.Queue()
+                    if worker_id:
+                        stmt = stmt.values(worker_id=worker_id)
+                    if error_message:
+                        stmt = stmt.values(error_message=error_message)
+                    if increment_retry:
+                        # This is tricky with simple update, need to read or use expression
+                        # But for now let's just use SQL expression if possible or read-update
+                        # SQLAlchemy supports expression: TaskLog.retry_count + 1
+                        stmt = stmt.values(retry_count=TaskLog.retry_count + 1)
 
-        # Add the episode processing function to the queue
-        await self._episode_queues[group_id].put(process_func)
-
-        # Schedule the group for processing if not already scheduled
-        async with self._schedule_lock:
-            if group_id not in self._scheduled_groups:
-                self._scheduled_groups.add(group_id)
-                self._active_groups.put_nowait(group_id)
-                logger.debug(f"Scheduled group {group_id} for processing")
-
-        return self._episode_queues[group_id].qsize()
-
-    async def _worker_loop(self, worker_id: int) -> None:
-        """Worker loop to process episodes from active groups."""
-        logger.info(f"Starting worker {worker_id}")
-
-        while not self._shutdown_event.is_set():
-            try:
-                # Wait for a group to become active
-                # Use wait_for to allow checking shutdown event periodically if needed,
-                # though get() is cancellable so mostly fine.
-                try:
-                    group_id = await self._active_groups.get()
-                except asyncio.CancelledError:
-                    break
-
-                # Process one item from this group
-                try:
-                    queue = self._episode_queues.get(group_id)
-                    if not queue:
-                        # Should not happen if logic is correct
-                        logger.warning(
-                            f"Worker {worker_id} got group {group_id} but no queue found"
-                        )
-                        continue
-
-                    try:
-                        # Get task without waiting - it should be there
-                        process_func = queue.get_nowait()
-                    except asyncio.QueueEmpty:
-                        logger.warning(
-                            f"Worker {worker_id} got group {group_id} but queue was empty"
-                        )
-                        # Will be removed from schedule at end of loop if still empty
-                        process_func = None
-
-                    if process_func:
-                        try:
-                            await process_func()
-                        except Exception as e:
-                            logger.error(
-                                f"Worker {worker_id} error processing task for group {group_id}: {e}"
-                            )
-                        finally:
-                            queue.task_done()
-
-                finally:
-                    self._active_groups.task_done()
-
-                    # Reschedule group if it still has items
-                    async with self._schedule_lock:
-                        if queue and not queue.empty():
-                            # Put back to end of queue (Round Robin)
-                            self._active_groups.put_nowait(group_id)
-                        else:
-                            # Mark as idle
-                            self._scheduled_groups.discard(group_id)
-                            # Clean up empty queue to free memory if needed?
-                            # Maybe keep it to avoid recreation overhead.
-
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"Unexpected error in worker {worker_id}: {e}")
-                await asyncio.sleep(1)  # Prevent tight loop on error
-
-        logger.info(f"Worker {worker_id} stopped")
-
-    def get_queue_size(self, group_id: str) -> int:
-        """Get the current queue size for a group_id."""
-        if group_id not in self._episode_queues:
-            return 0
-        return self._episode_queues[group_id].qsize()
-
-    def is_worker_running(self, group_id: str) -> bool:
-        """Check if a worker is running for a group_id.
-
-        With the pool model, we check if the group is currently scheduled.
-        """
-        return group_id in self._scheduled_groups
-
-    async def initialize(self, graphiti_client: Graphiti) -> None:
-        """Initialize the queue service with a graphiti client.
-
-        Args:
-            graphiti_client: The graphiti client instance to use for processing episodes
-        """
-        self._graphiti_client = graphiti_client
-
-        # Start workers
-        num_workers = self._settings.max_async_workers
-        logger.info(f"Initializing QueueService with {num_workers} workers")
-
-        for i in range(num_workers):
-            task = asyncio.create_task(self._worker_loop(i))
-            self._workers.append(task)
-
-        logger.info("Queue service initialized")
-
-    async def close(self) -> None:
-        """Shutdown the queue service."""
-        logger.info("Shutting down QueueService")
-        self._shutdown_event.set()
-
-        for task in self._workers:
-            task.cancel()
-
-        if self._workers:
-            await asyncio.gather(*self._workers, return_exceptions=True)
-
-        self._workers.clear()
-        logger.info("QueueService shutdown complete")
+                    await session.execute(stmt)
+        except Exception as e:
+            logger.error(f"Failed to update task log {task_id}: {e}")
 
     async def add_episode(
         self,
@@ -220,7 +184,7 @@ class QueueService:
         content: str,
         source_description: str,
         episode_type: EpisodeType,
-        entity_types: Any,
+        entity_types: Any,  # Kept for compatibility, but might not be serializable
         uuid: str | None,
         tenant_id: Optional[str] = None,
         project_id: Optional[str] = None,
@@ -229,133 +193,285 @@ class QueueService:
         edge_types: Optional[Any] = None,
         edge_type_map: Optional[Any] = None,
     ) -> int:
-        """Add an episode for processing.
+        """Add an episode processing task to the queue."""
+        if not self._redis:
+            raise RuntimeError("Queue service not initialized")
 
-        Args:
-            group_id: The group ID for the episode
-            name: Name of the episode
-            content: Episode content
-            source_description: Description of the episode source
-            episode_type: Type of the episode
-            entity_types: Entity types for extraction
-            uuid: Episode UUID
-            tenant_id: Tenant ID for metadata
-            project_id: Project ID for metadata
-            user_id: User ID for metadata
-            memory_id: Memory ID for status updates
+        # Prepare payload
+        # Note: entity_types, edge_types, edge_type_map are Pydantic models or dicts
+        # We cannot easily serialize them if they are classes.
+        # However, we have project_id, so the worker can re-fetch the schema.
+        # We will NOT include them in the payload to avoid serialization issues.
+        payload = {
+            "group_id": group_id,
+            "name": name,
+            "content": content,
+            "source_description": source_description,
+            "episode_type": episode_type.value if hasattr(episode_type, "value") else episode_type,
+            "uuid": uuid,
+            "tenant_id": tenant_id,
+            "project_id": project_id,
+            "user_id": user_id,
+            "memory_id": memory_id,
+            "timestamp": time.time(),
+        }
 
-        Returns:
-            The position in the queue
-        """
-        if self._graphiti_client is None:
-            raise RuntimeError("Queue service not initialized. Call initialize() first.")
+        # Create Task Log
+        task_id = await self._create_task_log(group_id, "add_episode", payload)
+        payload["task_id"] = task_id
 
-        async def process_episode():
-            """Process the episode using the graphiti client."""
-            try:
-                # Use memory_id if provided, otherwise fallback to uuid (for backward compatibility or direct episode usage)
-                status_id = memory_id or uuid
-                if status_id:
-                    await self._update_memory_status(status_id, ProcessingStatus.PROCESSING)
+        # Add to Redis
+        # 1. Add group_id to active groups set
+        await self._redis.sadd("queue:active_groups", group_id)
+        # 2. Push task to group queue
+        queue_key = f"queue:group:{group_id}"
+        await self._redis.rpush(queue_key, json.dumps(payload))
 
-                logger.info(f"Processing episode {uuid} for group {group_id}")
+        logger.info(f"Task {task_id} added to queue {queue_key}")
+        return await self._redis.llen(queue_key)
 
-                # Process the episode using the graphiti client
-                from graphiti_core.helpers import semaphore_gather
-                from graphiti_core.utils.maintenance.community_operations import update_community
+    async def _process_episode_task(self, payload: dict) -> None:
+        """Process the episode task logic."""
+        uuid = payload.get("uuid")
+        group_id = payload.get("group_id")
+        memory_id = payload.get("memory_id")
+        project_id = payload.get("project_id")
 
-                add_result = await self._graphiti_client.add_episode(
-                    name=name,
-                    episode_body=content,
-                    source_description=source_description,
-                    source=episode_type,
-                    group_id=group_id,
-                    reference_time=datetime.now(timezone.utc),
-                    update_communities=False,
-                    entity_types=entity_types,
-                    edge_types=edge_types,
-                    edge_type_map=edge_type_map,
+        try:
+            if memory_id:
+                await self._update_memory_status(memory_id, ProcessingStatus.PROCESSING)
+
+            # Re-fetch schema if possible
+            entity_types = None
+            edge_types = None
+            edge_type_map = None
+
+            if self._schema_loader and project_id:
+                try:
+                    entity_types, edge_types, edge_type_map = await self._schema_loader(project_id)
+                except Exception as e:
+                    logger.warning(f"Failed to load schema for project {project_id}: {e}")
+
+            # Call Graphiti
+            add_result = await self._graphiti_client.add_episode(
+                name=payload.get("name"),
+                episode_body=payload.get("content"),
+                source_description=payload.get("source_description"),
+                source=EpisodeType(payload.get("episode_type", "text")),
+                group_id=group_id,
+                reference_time=datetime.now(timezone.utc),
+                update_communities=False,
+                entity_types=entity_types,
+                edge_types=edge_types,
+                edge_type_map=edge_type_map,
+                uuid=uuid,
+            )
+
+            # Metadata propagation logic
+            tenant_id = payload.get("tenant_id")
+            user_id = payload.get("user_id")
+
+            if tenant_id or project_id or user_id:
+                query = """
+                MATCH (ep:Episodic {uuid: $uuid})
+                SET ep.tenant_id = $tenant_id,
+                    ep.project_id = $project_id,
+                    ep.user_id = $user_id,
+                    ep.status = 'Synced'
+                WITH ep
+                MATCH (ep)-[:MENTIONS]->(e:Entity)
+                SET e.tenant_id = ep.tenant_id,
+                    e.project_id = ep.project_id,
+                    e.user_id = ep.user_id
+                """
+                await self._graphiti_client.driver.execute_query(
+                    query,
                     uuid=uuid,
+                    tenant_id=tenant_id,
+                    project_id=project_id,
+                    user_id=user_id,
                 )
+            else:
+                query = """
+                MATCH (ep:Episodic {uuid: $uuid})
+                SET ep.status = 'Synced'
+                """
+                await self._graphiti_client.driver.execute_query(query, uuid=uuid)
 
-                # Propagate metadata to extracted entities
-                if tenant_id or project_id or user_id:
-                    try:
+            # Community updates
+            if add_result and add_result.nodes:
+                try:
+                    await semaphore_gather(
+                        *[
+                            update_community(
+                                self._graphiti_client.driver,
+                                self._graphiti_client.llm_client,
+                                self._graphiti_client.embedder,
+                                node,
+                            )
+                            for node in add_result.nodes
+                        ],
+                        max_coroutines=self._graphiti_client.max_coroutines,
+                    )
+
+                    # Propagate metadata to communities
+                    if tenant_id or project_id:
                         query = """
-                        MATCH (ep:Episodic {uuid: $uuid})
-                        SET ep.tenant_id = $tenant_id,
-                            ep.project_id = $project_id,
-                            ep.user_id = $user_id,
-                            ep.status = 'Synced'
-                        WITH ep
-                        MATCH (ep)-[:MENTIONS]->(e:Entity)
-                        SET e.tenant_id = ep.tenant_id,
-                            e.project_id = ep.project_id,
-                            e.user_id = ep.user_id
+                        MATCH (ep:Episodic {uuid: $uuid})-[:MENTIONS]->(e:Entity)-[:BELONGS_TO]->(c:Community)
+                        SET c.tenant_id = $tenant_id,
+                            c.project_id = $project_id
                         """
                         await self._graphiti_client.driver.execute_query(
-                            query,
-                            uuid=uuid,
-                            tenant_id=tenant_id,
-                            project_id=project_id,
-                            user_id=user_id,
+                            query, uuid=uuid, tenant_id=tenant_id, project_id=project_id
                         )
-                        logger.info(f"Metadata propagated to entities for episode {uuid}")
-                    except Exception as e:
-                        logger.warning(f"Failed to propagate metadata for episode {uuid}: {e}")
-                else:
-                    # If no metadata to propagate, still update status to Synced
-                    try:
-                        query = """
-                        MATCH (ep:Episodic {uuid: $uuid})
-                        SET ep.status = 'Synced'
-                        """
-                        await self._graphiti_client.driver.execute_query(query, uuid=uuid)
-                    except Exception as e:
-                        logger.warning(f"Failed to update status for episode {uuid}: {e}")
+                except Exception as e:
+                    logger.warning(f"Failed to update communities for episode {uuid}: {e}")
 
-                # Manual community update
-                if add_result and add_result.nodes:
-                    try:
-                        await semaphore_gather(
-                            *[
-                                update_community(
-                                    self._graphiti_client.driver,
-                                    self._graphiti_client.llm_client,
-                                    self._graphiti_client.embedder,
-                                    node,
-                                )
-                                for node in add_result.nodes
-                            ],
-                            max_coroutines=self._graphiti_client.max_coroutines,
+            if memory_id:
+                await self._update_memory_status(memory_id, ProcessingStatus.COMPLETED)
+
+        except Exception as e:
+            if memory_id:
+                await self._update_memory_status(memory_id, ProcessingStatus.FAILED)
+            raise e
+
+    async def _worker_loop(self, worker_index: int) -> None:
+        """Worker loop to process tasks from Redis."""
+        logger.info(f"Worker {worker_index} started")
+        
+        # Processing queue key for this worker (or global if we want simple recovery)
+        # Using a global processing queue simplifies recovery logic.
+        processing_queue = "queue:processing:global"
+
+        while not self._shutdown_event.is_set():
+            try:
+                # 1. Get active groups
+                active_groups = await self._redis.smembers("queue:active_groups")
+                if not active_groups:
+                    await asyncio.sleep(1)
+                    continue
+
+                # 2. Pick a group (Random for simple load balancing)
+                # Redis SET is unordered, so iterating or popping is random-ish.
+                # To prevent starvation, we could cycle through them, but random is often enough.
+                # Let's pick one randomly using SRANDMEMBER
+                group_id = await self._redis.srandmember("queue:active_groups")
+                if not group_id:
+                    continue
+
+                queue_key = f"queue:group:{group_id}"
+
+                # 3. Move task from pending to processing atomically
+                # RPOPLPUSH (or LMOVE)
+                # source: queue:group:{group_id}
+                # dest: queue:processing:global
+                raw_task = await self._redis.rpoplpush(queue_key, processing_queue)
+
+                if raw_task:
+                    payload = json.loads(raw_task)
+                    task_id = payload.get("task_id")
+                    
+                    logger.info(f"Worker {worker_index} processing task {task_id}")
+                    
+                    # Update Task Log
+                    if task_id:
+                        await self._update_task_log(
+                            task_id, "PROCESSING", worker_id=self._worker_id
                         )
-                        logger.info(f"Communities updated successfully for episode {uuid}")
 
-                        # Propagate metadata to communities
-                        if tenant_id or project_id:
-                            query = """
-                            MATCH (ep:Episodic {uuid: $uuid})-[:MENTIONS]->(e:Entity)-[:BELONGS_TO]->(c:Community)
-                            SET c.tenant_id = $tenant_id,
-                                c.project_id = $project_id
-                            """
-                            await self._graphiti_client.driver.execute_query(
-                                query, uuid=uuid, tenant_id=tenant_id, project_id=project_id
+                    try:
+                        await self._process_episode_task(payload)
+                        
+                        # Success: Remove from processing queue
+                        await self._redis.lrem(processing_queue, 1, raw_task)
+                        
+                        if task_id:
+                            await self._update_task_log(task_id, "COMPLETED")
+                            
+                    except Exception as e:
+                        logger.error(f"Error processing task {task_id}: {e}")
+                        # Failure: Remove from processing queue? 
+                        # If we remove it, it won't be retried.
+                        # If we keep it, recovery loop will pick it up.
+                        # For now, let's remove it and mark FAILED in DB.
+                        # If we want retries, we should re-enqueue it with incremented retry count.
+                        
+                        await self._redis.lrem(processing_queue, 1, raw_task)
+                        
+                        if task_id:
+                            await self._update_task_log(
+                                task_id, "FAILED", error_message=str(e)
                             )
-                    except Exception as e:
-                        logger.warning(f"Failed to update communities for episode {uuid}: {e}")
-
-                logger.info(f"Successfully processed episode {uuid} for group {group_id}")
-                if status_id:
-                    logger.info(f"Updating status for memory {status_id} to COMPLETED")
-                    await self._update_memory_status(status_id, ProcessingStatus.COMPLETED)
-                    logger.info(f"Status updated for memory {status_id}")
-
+                else:
+                    # Queue empty, remove from active set
+                    # Use watch/multi for strict correctness, but here it's fine
+                    # If we check and it's empty, remove. If someone added in between, it will be added back.
+                    qlen = await self._redis.llen(queue_key)
+                    if qlen == 0:
+                        await self._redis.srem("queue:active_groups", group_id)
+            
+            except asyncio.CancelledError:
+                break
             except Exception as e:
-                if status_id:
-                    logger.error(f"Updating status for memory {status_id} to FAILED")
-                    await self._update_memory_status(status_id, ProcessingStatus.FAILED)
-                logger.error(f"Failed to process episode {uuid} for group {group_id}: {str(e)}")
-                raise
+                logger.error(f"Unexpected error in worker {worker_index}: {e}")
+                await asyncio.sleep(5)
 
-        # Use the existing add_episode_task method to queue the processing
-        return await self.add_episode_task(group_id, process_episode)
+        logger.info(f"Worker {worker_index} stopped")
+
+    async def _recovery_loop(self) -> None:
+        """Background loop to recover stalled tasks."""
+        logger.info("Recovery task started")
+        processing_queue = "queue:processing:global"
+        timeout_seconds = 600  # 10 minutes
+
+        while not self._shutdown_event.is_set():
+            try:
+                # Check tasks in processing queue
+                # This is O(N) where N is number of processing tasks. Should be small.
+                tasks = await self._redis.lrange(processing_queue, 0, -1)
+                
+                now = time.time()
+                for raw_task in tasks:
+                    try:
+                        payload = json.loads(raw_task)
+                        timestamp = payload.get("timestamp", 0)
+                        
+                        if now - timestamp > timeout_seconds:
+                            task_id = payload.get("task_id")
+                            logger.warning(f"Recovering stalled task {task_id}")
+                            
+                            # Remove from processing
+                            await self._redis.lrem(processing_queue, 1, raw_task)
+                            
+                            # Update timestamp to avoid immediate re-recovery
+                            payload["timestamp"] = now
+                            new_raw_task = json.dumps(payload)
+                            
+                            # Update DB log
+                            if task_id:
+                                await self._update_task_log(
+                                    task_id, "PENDING", increment_retry=True
+                                )
+
+                            # Re-enqueue
+                            group_id = payload.get("group_id")
+                            if group_id:
+                                await self._redis.sadd("queue:active_groups", group_id)
+                                await self._redis.lpush(f"queue:group:{group_id}", new_raw_task)
+                                
+                    except Exception as e:
+                        logger.error(f"Error checking task for recovery: {e}")
+
+                await asyncio.sleep(60)  # Check every minute
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in recovery loop: {e}")
+                await asyncio.sleep(60)
+
+    async def get_queue_size(self, group_id: str) -> int:
+        """Get the current queue size for a group_id."""
+        if not self._redis:
+            return 0
+        return await self._redis.llen(f"queue:group:{group_id}")

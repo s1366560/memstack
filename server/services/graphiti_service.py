@@ -271,7 +271,9 @@ class GraphitiService:
             )
 
             # Initialize queue service
-            await self.queue_service.initialize(self._client)
+            await self.queue_service.initialize(
+                self._client, self.get_project_schema, run_workers=settings.run_background_workers
+            )
 
             # Ensure indices exist to avoid Neo4j warnings and improve performance
             await self.ensure_indices()
@@ -1561,12 +1563,17 @@ class GraphitiService:
                 for n in nodes_data:
                     n_id = n["id"]
                     if n_id not in nodes_map:
+                        n_props = n["props"]
+                        # Remove name_embedding if present
+                        if "name_embedding" in n_props:
+                            del n_props["name_embedding"]
+
                         nodes_map[n_id] = {
                             "data": {
                                 "id": n_id,
                                 "label": n["labels"][0] if n["labels"] else "Entity",
-                                "name": n["props"].get("name", "Unknown"),
-                                **n["props"],
+                                "name": n_props.get("name", "Unknown"),
+                                **n_props,
                             }
                         }
 
@@ -1578,6 +1585,11 @@ class GraphitiService:
                     t_id = r["target"]
 
                     if s_id in nodes_map and t_id in nodes_map:
+                        r_props = r["props"]
+                        # Remove fact_embedding if present
+                        if "fact_embedding" in r_props:
+                            del r_props["fact_embedding"]
+
                         edges_list.append(
                             {
                                 "data": {
@@ -1585,7 +1597,7 @@ class GraphitiService:
                                     "source": s_id,
                                     "target": t_id,
                                     "label": r["type"],
-                                    **r["props"],
+                                    **r_props,
                                 }
                             }
                         )
@@ -1668,6 +1680,10 @@ class GraphitiService:
                 # If r is None and n has no project_id, skip it?
 
                 s_props = r["source_props"]
+                # Remove name_embedding if present
+                if "name_embedding" in s_props:
+                    del s_props["name_embedding"]
+
                 r_edge = r["edge_id"]
 
                 # Check project_id filter for source node
@@ -1700,16 +1716,26 @@ class GraphitiService:
                 if r["target_id"]:
                     t_id = r["target_id"]
                     if t_id not in nodes_map:
+                        t_props = r["target_props"]
+                        # Remove name_embedding if present
+                        if "name_embedding" in t_props:
+                            del t_props["name_embedding"]
+
                         nodes_map[t_id] = {
                             "data": {
                                 "id": t_id,
                                 "label": r["target_labels"][0] if r["target_labels"] else "Entity",
-                                "name": r["target_props"].get("name", "Unknown"),
-                                **r["target_props"],
+                                "name": t_props.get("name", "Unknown"),
+                                **t_props,
                             }
                         }
 
                     if r["edge_id"]:
+                        e_props = r["edge_props"]
+                        # Remove fact_embedding if present
+                        if "fact_embedding" in e_props:
+                            del e_props["fact_embedding"]
+
                         edges_list.append(
                             {
                                 "data": {
@@ -1717,7 +1743,7 @@ class GraphitiService:
                                     "source": s_id,
                                     "target": t_id,
                                     "label": r["edge_type"],
-                                    **r["edge_props"],
+                                    **e_props,
                                 }
                             }
                         )
@@ -2467,9 +2493,9 @@ class GraphitiService:
                     conditions.append("n.tenant_id = $tenant_id")
                 if project_id:
                     conditions.append("n.project_id = $project_id")
-                
+
                 where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
-                
+
                 query = f"""
                 MATCH (n:{label})
                 {where_clause}
@@ -2490,11 +2516,11 @@ class GraphitiService:
                 conditions.append("n.tenant_id = $tenant_id")
             if project_id:
                 conditions.append("n.project_id = $project_id")
-            
+
             # For edges, we count relationships where at least one node matches the filter
             # Or should we be stricter? Let's assume connected to a node in the project.
             where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
-            
+
             query = f"""
             MATCH ()-[r]-(n)
             {where_clause}
