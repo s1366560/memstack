@@ -194,16 +194,18 @@ export default function EntityTypeList() {
                     {/* List View */}
                     <div className="flex flex-col rounded-xl border border-slate-200 dark:border-[#2a324a] bg-white dark:bg-[#1e2433] overflow-hidden shadow-xl">
                         <div className="grid grid-cols-12 gap-4 border-b border-slate-200 dark:border-[#2a324a] bg-slate-50 dark:bg-[#252d46]/50 px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-[#95a0c6]">
-                            <div className="col-span-3 flex items-center">Entity Type</div>
+                            <div className="col-span-2 flex items-center">Entity Type</div>
                             <div className="col-span-2 flex items-center">Internal ID</div>
-                            <div className="col-span-4 flex items-center">Schema Definition</div>
+                            <div className="col-span-3 flex items-center">Schema Definition</div>
+                            <div className="col-span-1 flex items-center">Status</div>
+                            <div className="col-span-1 flex items-center">Source</div>
                             <div className="col-span-2 flex items-center">Last Modified</div>
                             <div className="col-span-1 flex items-center justify-end">Actions</div>
                         </div>
                         <div className="divide-y divide-slate-200 dark:divide-[#2a324a]">
                             {entities.map((entity) => (
                                 <div key={entity.id} className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-slate-50 dark:hover:bg-[#252d46] transition-colors group items-start">
-                                    <div className="col-span-3 flex items-center gap-4">
+                                    <div className="col-span-2 flex items-center gap-4">
                                         <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20">
                                             <User className="w-6 h-6" />
                                         </div>
@@ -220,7 +222,7 @@ export default function EntityTypeList() {
                                             {entity.id.slice(0, 8)}...
                                         </code>
                                     </div>
-                                    <div className="col-span-4 flex flex-col gap-1.5">
+                                    <div className="col-span-3 flex flex-col gap-1.5">
                                         {Object.entries(entity.schema || {}).slice(0, 3).map(([key, val]: [string, any]) => (
                                             <div key={key} className="flex items-center gap-2 text-xs">
                                                 <span className="text-emerald-600 dark:text-emerald-300 font-mono">{key}</span>
@@ -233,6 +235,24 @@ export default function EntityTypeList() {
                                         {Object.keys(entity.schema || {}).length === 0 && (
                                             <div className="text-[10px] text-slate-400 dark:text-[#95a0c6] italic">No attributes defined</div>
                                         )}
+                                    </div>
+                                    <div className="col-span-1 flex items-center">
+                                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${
+                                            entity.status === 'ENABLED' 
+                                                ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20' 
+                                                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                                        }`}>
+                                            {entity.status || 'ENABLED'}
+                                        </span>
+                                    </div>
+                                    <div className="col-span-1 flex items-center">
+                                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${
+                                            entity.source === 'generated'
+                                                ? 'bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/20'
+                                                : 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/20'
+                                        }`}>
+                                            {entity.source || 'user'}
+                                        </span>
                                     </div>
                                     <div className="col-span-2 flex flex-col justify-start pt-1">
                                         <span className="text-sm text-slate-700 dark:text-white">{new Date(entity.created_at || Date.now()).toLocaleDateString()}</span>

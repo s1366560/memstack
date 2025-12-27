@@ -218,7 +218,8 @@ export default function EdgeMapList() {
                         {/* Legend */}
                         <div className="bg-slate-50 dark:bg-[#1e2433] px-4 py-2 border-b border-slate-200 dark:border-[#2a324a] flex items-center justify-between text-xs text-slate-500 dark:text-[#95a0c6]">
                             <div className="flex gap-4">
-                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-600 dark:bg-[#193db3]"></span> Active Mapping</span>
+                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-600 dark:bg-[#193db3]"></span> Manual Mapping</span>
+                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-600 dark:bg-purple-500"></span> Auto Generated</span>
                                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-200 dark:bg-[#2a324a]"></span> Empty</span>
                                 <span className="flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> Conflict</span>
                             </div>
@@ -273,7 +274,14 @@ export default function EdgeMapList() {
                                                     <td key={`${row}-${col}`} className="p-3 bg-white dark:bg-[#121521] hover:bg-slate-50 dark:hover:bg-[#1e2433] border-r border-slate-200/50 dark:border-[#2a324a]/30 transition-colors align-top min-h-[80px]">
                                                         <div className="flex flex-wrap gap-2">
                                                             {cellMappings.map(map => (
-                                                                <span key={map.id} className="inline-flex items-center gap-1 rounded bg-blue-50 dark:bg-[#193db3]/20 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-200 border border-blue-200 dark:border-[#193db3]/30 cursor-pointer hover:bg-blue-100 dark:hover:bg-[#193db3]/30 group/chip">
+                                                                <span 
+                                                                    key={map.id} 
+                                                                    className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium border cursor-pointer group/chip ${
+                                                                        map.source === 'generated'
+                                                                            ? 'bg-purple-50 dark:bg-purple-500/20 text-purple-700 dark:text-purple-200 border-purple-200 dark:border-purple-500/30 hover:bg-purple-100 dark:hover:bg-purple-500/30'
+                                                                            : 'bg-blue-50 dark:bg-[#193db3]/20 text-blue-700 dark:text-blue-200 border-blue-200 dark:border-[#193db3]/30 hover:bg-blue-100 dark:hover:bg-[#193db3]/30'
+                                                                    }`}
+                                                                >
                                                                     {map.edge_type}
                                                                     <X
                                                                         onClick={(e) => { e.stopPropagation(); handleDelete(map.id); }}

@@ -268,6 +268,8 @@ class EntityType(Base):
     name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     schema: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String, default=DataStatus.ENABLED)
+    source: Mapped[str] = mapped_column(String, default="user")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), onupdate=func.now(), nullable=True
@@ -285,6 +287,8 @@ class EdgeType(Base):
     name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     schema: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String, default=DataStatus.ENABLED)
+    source: Mapped[str] = mapped_column(String, default="user")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), onupdate=func.now(), nullable=True
@@ -306,6 +310,8 @@ class EdgeTypeMap(Base):
     source_type: Mapped[str] = mapped_column(String, nullable=False)
     target_type: Mapped[str] = mapped_column(String, nullable=False)
     edge_type: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, default=DataStatus.ENABLED)
+    source: Mapped[str] = mapped_column(String, default="user")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     project: Mapped["Project"] = relationship(back_populates="edge_maps")

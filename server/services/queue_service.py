@@ -3,25 +3,23 @@
 import asyncio
 import json
 import logging
-import time
 import socket
+import time
 from datetime import datetime, timezone
-from typing import Any, Optional, Callable, Awaitable
+from typing import Any, Awaitable, Callable, Optional
 from uuid import uuid4
 
 import redis.asyncio as redis
-from sqlalchemy import select, update
-from sqlalchemy.dialects.postgresql import insert
-
 from graphiti_core import Graphiti
-from graphiti_core.nodes import EpisodeType
 from graphiti_core.helpers import semaphore_gather
+from graphiti_core.nodes import EpisodeType
 from graphiti_core.utils.maintenance.community_operations import update_community
+from sqlalchemy import select, update
 
 from server.config import get_settings
 from server.database import async_session_factory
-from server.db_models import Memory, TaskLog
-from server.models.enums import ProcessingStatus
+from server.db_models import EdgeType, EdgeTypeMap, EntityType, Memory, TaskLog
+from server.models.enums import DataStatus, ProcessingStatus
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +63,9 @@ class QueueService:
         if run_workers:
             # Start workers
             num_workers = self._settings.max_async_workers
-            logger.info(f"Initializing QueueService with {num_workers} workers (ID: {self._worker_id})")
+            logger.info(
+                f"Initializing QueueService with {num_workers} workers (ID: {self._worker_id})"
+            )
 
             for i in range(num_workers):
                 task = asyncio.create_task(self._worker_loop(i))
@@ -122,9 +122,7 @@ class QueueService:
         except Exception as e:
             logger.error(f"Failed to update memory status {memory_id} to {status}: {e}")
 
-    async def _create_task_log(
-        self, group_id: str, task_type: str, payload: dict
-    ) -> str:
+    async def _create_task_log(self, group_id: str, task_type: str, payload: dict) -> str:
         """Create a new task log entry."""
         task_id = str(uuid4())
         try:
@@ -176,6 +174,139 @@ class QueueService:
                     await session.execute(stmt)
         except Exception as e:
             logger.error(f"Failed to update task log {task_id}: {e}")
+
+    async def _sync_schema_from_graph_result(
+        self,
+        nodes: list[Any],
+        edges: list[Any],
+        project_id: str,
+    ) -> None:
+        """Sync schema from Graphiti processing result."""
+        if not project_id:
+            return
+
+        try:
+            async with async_session_factory() as session:
+                async with session.begin():
+                    # 1. Sync Entity Types
+                    processed_entity_types = set()
+                    for node in nodes:
+                        labels = getattr(node, "labels", [])
+                        for label in labels:
+                            if label == "Entity" or label.startswith("Entity_"):
+                                continue
+
+                            if label in processed_entity_types:
+                                continue
+                            processed_entity_types.add(label)
+
+                            # Check if exists
+                            stmt = select(EntityType).where(
+                                EntityType.project_id == project_id, EntityType.name == label
+                            )
+                            result = await session.execute(stmt)
+                            existing = result.scalar_one_or_none()
+
+                            if not existing:
+                                new_type = EntityType(
+                                    id=str(uuid4()),
+                                    project_id=project_id,
+                                    name=label,
+                                    description="Auto-generated entity type from Graphiti",
+                                    schema={},
+                                    status=DataStatus.ENABLED,
+                                    source="generated",
+                                )
+                                session.add(new_type)
+                                logger.info(
+                                    f"Auto-generated EntityType {label} for project {project_id}"
+                                )
+
+                    # 2. Sync Edge Types and Maps
+                    # First build a map of node uuid -> type
+                    node_type_map = {}
+                    for node in nodes:
+                        labels = getattr(node, "labels", [])
+                        # Find specific label
+                        specific_label = next(
+                            (l for l in labels if l != "Entity" and not l.startswith("Entity_")),
+                            "Entity",
+                        )
+                        node_type_map[node.uuid] = specific_label
+
+                    processed_edge_types = set()
+                    processed_edge_maps = set()
+
+                    for edge in edges:
+                        edge_name = getattr(edge, "name", None)
+                        if not edge_name:
+                            continue
+
+                        # Sync EdgeType
+                        if edge_name not in processed_edge_types:
+                            processed_edge_types.add(edge_name)
+                            stmt = select(EdgeType).where(
+                                EdgeType.project_id == project_id, EdgeType.name == edge_name
+                            )
+                            result = await session.execute(stmt)
+                            existing = result.scalar_one_or_none()
+
+                            if not existing:
+                                new_edge_type = EdgeType(
+                                    id=str(uuid4()),
+                                    project_id=project_id,
+                                    name=edge_name,
+                                    description="Auto-generated edge type from Graphiti",
+                                    schema={},
+                                    status=DataStatus.ENABLED,
+                                    source="generated",
+                                )
+                                session.add(new_edge_type)
+                                logger.info(
+                                    f"Auto-generated EdgeType {edge_name} for project {project_id}"
+                                )
+
+                        # Sync EdgeTypeMap
+                        source_uuid = getattr(edge, "source_node_uuid", None)
+                        target_uuid = getattr(edge, "target_node_uuid", None)
+
+                        if source_uuid and target_uuid:
+                            # We can only map if we know the nodes.
+                            # Ideally nodes are in the 'nodes' list.
+                            source_type = node_type_map.get(source_uuid)
+                            target_type = node_type_map.get(target_uuid)
+
+                            if source_type and target_type:
+                                map_key = (source_type, target_type, edge_name)
+                                if map_key not in processed_edge_maps:
+                                    processed_edge_maps.add(map_key)
+
+                                    stmt = select(EdgeTypeMap).where(
+                                        EdgeTypeMap.project_id == project_id,
+                                        EdgeTypeMap.source_type == source_type,
+                                        EdgeTypeMap.target_type == target_type,
+                                        EdgeTypeMap.edge_type == edge_name,
+                                    )
+                                    result = await session.execute(stmt)
+                                    existing_map = result.scalar_one_or_none()
+
+                                    if not existing_map:
+                                        new_map = EdgeTypeMap(
+                                            id=str(uuid4()),
+                                            project_id=project_id,
+                                            source_type=source_type,
+                                            target_type=target_type,
+                                            edge_type=edge_name,
+                                            status=DataStatus.ENABLED,
+                                            source="generated",
+                                        )
+                                        session.add(new_map)
+                                        logger.info(
+                                            f"Auto-generated EdgeTypeMap {source_type}->{edge_name}->{target_type}"
+                                        )
+
+        except Exception as e:
+            logger.error(f"Failed to sync schema from graph result: {e}")
 
     async def add_episode(
         self,
@@ -267,6 +398,12 @@ class QueueService:
                 uuid=uuid,
             )
 
+            # Sync Schema from Graphiti result
+            if add_result and project_id:
+                await self._sync_schema_from_graph_result(
+                    add_result.nodes, add_result.edges, project_id
+                )
+
             # Metadata propagation logic
             tenant_id = payload.get("tenant_id")
             user_id = payload.get("user_id")
@@ -338,7 +475,7 @@ class QueueService:
     async def _worker_loop(self, worker_index: int) -> None:
         """Worker loop to process tasks from Redis."""
         logger.info(f"Worker {worker_index} started")
-        
+
         # Processing queue key for this worker (or global if we want simple recovery)
         # Using a global processing queue simplifies recovery logic.
         processing_queue = "queue:processing:global"
@@ -370,9 +507,9 @@ class QueueService:
                 if raw_task:
                     payload = json.loads(raw_task)
                     task_id = payload.get("task_id")
-                    
+
                     logger.info(f"Worker {worker_index} processing task {task_id}")
-                    
+
                     # Update Task Log
                     if task_id:
                         await self._update_task_log(
@@ -381,27 +518,25 @@ class QueueService:
 
                     try:
                         await self._process_episode_task(payload)
-                        
+
                         # Success: Remove from processing queue
                         await self._redis.lrem(processing_queue, 1, raw_task)
-                        
+
                         if task_id:
                             await self._update_task_log(task_id, "COMPLETED")
-                            
+
                     except Exception as e:
                         logger.error(f"Error processing task {task_id}: {e}")
-                        # Failure: Remove from processing queue? 
+                        # Failure: Remove from processing queue?
                         # If we remove it, it won't be retried.
                         # If we keep it, recovery loop will pick it up.
                         # For now, let's remove it and mark FAILED in DB.
                         # If we want retries, we should re-enqueue it with incremented retry count.
-                        
+
                         await self._redis.lrem(processing_queue, 1, raw_task)
-                        
+
                         if task_id:
-                            await self._update_task_log(
-                                task_id, "FAILED", error_message=str(e)
-                            )
+                            await self._update_task_log(task_id, "FAILED", error_message=str(e))
                 else:
                     # Queue empty, remove from active set
                     # Use watch/multi for strict correctness, but here it's fine
@@ -409,7 +544,7 @@ class QueueService:
                     qlen = await self._redis.llen(queue_key)
                     if qlen == 0:
                         await self._redis.srem("queue:active_groups", group_id)
-            
+
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -429,24 +564,24 @@ class QueueService:
                 # Check tasks in processing queue
                 # This is O(N) where N is number of processing tasks. Should be small.
                 tasks = await self._redis.lrange(processing_queue, 0, -1)
-                
+
                 now = time.time()
                 for raw_task in tasks:
                     try:
                         payload = json.loads(raw_task)
                         timestamp = payload.get("timestamp", 0)
-                        
+
                         if now - timestamp > timeout_seconds:
                             task_id = payload.get("task_id")
                             logger.warning(f"Recovering stalled task {task_id}")
-                            
+
                             # Remove from processing
                             await self._redis.lrem(processing_queue, 1, raw_task)
-                            
+
                             # Update timestamp to avoid immediate re-recovery
                             payload["timestamp"] = now
                             new_raw_task = json.dumps(payload)
-                            
+
                             # Update DB log
                             if task_id:
                                 await self._update_task_log(
@@ -458,7 +593,7 @@ class QueueService:
                             if group_id:
                                 await self._redis.sadd("queue:active_groups", group_id)
                                 await self._redis.lpush(f"queue:group:{group_id}", new_raw_task)
-                                
+
                     except Exception as e:
                         logger.error(f"Error checking task for recovery: {e}")
 

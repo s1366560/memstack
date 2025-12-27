@@ -204,7 +204,12 @@ export default function EdgeTypeList() {
                                     className={`p-4 border-b border-slate-200 dark:border-[#2d3748] cursor-pointer transition-colors border-l-4 ${selectedEdgeId === edge.id ? 'bg-blue-50 dark:bg-[#193db3]/10 border-l-blue-600 dark:border-l-[#193db3] hover:bg-blue-100 dark:hover:bg-[#193db3]/20' : 'border-l-transparent hover:bg-slate-100 dark:hover:bg-white/5'}`}
                                 >
                                     <div className="flex justify-between items-start mb-1">
-                                        <h3 className="text-slate-900 dark:text-white font-semibold text-sm">{edge.name}</h3>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="text-slate-900 dark:text-white font-semibold text-sm">{edge.name}</h3>
+                                            {edge.source === 'generated' && (
+                                                <span className="text-[10px] uppercase tracking-wider text-purple-600 dark:text-purple-400 font-bold bg-purple-100 dark:bg-purple-500/20 px-1.5 py-0.5 rounded">Auto</span>
+                                            )}
+                                        </div>
                                         {selectedEdgeId === edge.id && <span className="text-[10px] uppercase tracking-wider text-blue-600 dark:text-[#193db3] font-bold bg-blue-100 dark:bg-[#193db3]/20 px-1.5 py-0.5 rounded">Active</span>}
                                     </div>
                                     <p className="text-slate-500 dark:text-[#95a0c6] text-xs mb-3 line-clamp-2">{edge.description || 'No description provided.'}</p>
@@ -234,6 +239,20 @@ export default function EdgeTypeList() {
                                                 <h2 className="text-2xl font-bold text-slate-900 dark:text-white">{selectedEdge.name}</h2>
                                                 <div title={`ID: ${selectedEdge.id}`}>
                                                     <Info className="text-slate-400 dark:text-[#95a0c6] cursor-help w-5 h-5" />
+                                                </div>
+                                                <div className="flex gap-2 ml-2">
+                                                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide border ${selectedEdge.status === 'ENABLED'
+                                                            ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'
+                                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                                                        }`}>
+                                                        {selectedEdge.status || 'ENABLED'}
+                                                    </span>
+                                                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide border ${selectedEdge.source === 'generated'
+                                                            ? 'bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/20'
+                                                            : 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/20'
+                                                        }`}>
+                                                        {selectedEdge.source || 'user'}
+                                                    </span>
                                                 </div>
                                             </div>
                                             <p className="text-slate-500 dark:text-[#95a0c6] text-sm max-w-xl">{selectedEdge.description || 'No description provided.'}</p>

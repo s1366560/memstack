@@ -17,18 +17,21 @@ export default function SchemaOverview() {
     const { projectId } = useParams<{ projectId: string }>();
     const [entities, setEntities] = useState<any[]>([]);
     const [edges, setEdges] = useState<any[]>([]);
+    const [mappings, setMappings] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchData = async () => {
             if (!projectId) return;
             try {
-                const [fetchedEntities, fetchedEdges] = await Promise.all([
+                const [fetchedEntities, fetchedEdges, fetchedMappings] = await Promise.all([
                     schemaAPI.listEntityTypes(projectId),
-                    schemaAPI.listEdgeTypes(projectId)
+                    schemaAPI.listEdgeTypes(projectId),
+                    schemaAPI.listEdgeMaps(projectId)
                 ]);
                 setEntities(fetchedEntities);
                 setEdges(fetchedEdges);
+                setMappings(fetchedMappings);
             } catch (error) {
                 console.error('Failed to fetch schema data:', error);
             } finally {
@@ -108,7 +111,12 @@ export default function SchemaOverview() {
                                                     {entity.name.slice(0, 2).toUpperCase()}
                                                 </div>
                                                 <div>
-                                                    <h4 className="text-slate-900 dark:text-white font-bold text-base group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{entity.name}</h4>
+                                                    <div className="flex items-center gap-2">
+                                                        <h4 className="text-slate-900 dark:text-white font-bold text-base group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{entity.name}</h4>
+                                                        {entity.source === 'generated' && (
+                                                            <span className="text-[10px] uppercase tracking-wider text-purple-600 dark:text-purple-400 font-bold bg-purple-100 dark:bg-purple-500/20 px-1.5 py-0.5 rounded">Auto</span>
+                                                        )}
+                                                    </div>
                                                     <p className="text-slate-500 dark:text-[#95a0c6] text-sm">{entity.description || 'No description'}</p>
                                                 </div>
                                             </div>
@@ -166,7 +174,12 @@ export default function SchemaOverview() {
                                                     <Share2 className="text-blue-600 dark:text-[#193db3] w-5 h-5" />
                                                 </div>
                                                 <div>
-                                                    <h4 className="text-slate-900 dark:text-white font-bold text-base group-hover:text-blue-600 dark:group-hover:text-[#193db3] transition-colors">{edge.name}</h4>
+                                                    <div className="flex items-center gap-2">
+                                                        <h4 className="text-slate-900 dark:text-white font-bold text-base group-hover:text-blue-600 dark:group-hover:text-[#193db3] transition-colors">{edge.name}</h4>
+                                                        {edge.source === 'generated' && (
+                                                            <span className="text-[10px] uppercase tracking-wider text-purple-600 dark:text-purple-400 font-bold bg-purple-100 dark:bg-purple-500/20 px-1.5 py-0.5 rounded">Auto</span>
+                                                        )}
+                                                    </div>
                                                     <p className="text-slate-500 dark:text-[#95a0c6] text-sm font-mono">Source → Target</p>
                                                 </div>
                                             </div>
@@ -174,14 +187,30 @@ export default function SchemaOverview() {
                                                 <MoreVertical className="w-5 h-5" />
                                             </button>
                                         </div>
-                                        {/* Flow Visualization Placeholder */}
-                                        <div className="flex items-center gap-2 p-3 rounded-lg bg-slate-50 dark:bg-[#111521] border border-slate-200 dark:border-[#252d46]">
-                                            <span className="px-2 py-1 rounded bg-slate-200 dark:bg-[#252d46] text-xs font-bold text-slate-700 dark:text-white">Source</span>
-                                            <div className="flex-1 flex flex-col items-center gap-1">
-                                                <div className="h-px w-full bg-slate-300 dark:bg-[#56607a]"></div>
-                                            </div>
-                                            <ArrowRight className="text-slate-400 dark:text-[#56607a] w-4 h-4" />
-                                            <span className="px-2 py-1 rounded bg-slate-200 dark:bg-[#252d46] text-xs font-bold text-slate-700 dark:text-white">Target</span>
+                                        {/* Mappings Visualization */}
+                                        <div className="flex flex-col gap-2">
+                                            {mappings.filter(m => m.edge_type === edge.name).map(map => (
+                                                <div key={map.id} className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 dark:bg-[#111521] border border-slate-200 dark:border-[#252d46]">
+                                                    <span className="px-2 py-1 rounded bg-white dark:bg-[#252d46] text-xs font-bold text-slate-700 dark:text-white border border-slate-200 dark:border-transparent shadow-sm">
+                                                        {map.source_type}
+                                                    </span>
+                                                    <div className="flex-1 flex flex-col items-center gap-1 relative">
+                                                        <div className="h-px w-full bg-slate-300 dark:bg-[#56607a]"></div>
+                                                        {map.source === 'generated' && (
+                                                            <span className="absolute -top-2 text-[8px] uppercase tracking-wider text-purple-600 dark:text-purple-400 font-bold bg-white dark:bg-[#111521] px-1">Auto</span>
+                                                        )}
+                                                    </div>
+                                                    <ArrowRight className="text-slate-400 dark:text-[#56607a] w-4 h-4" />
+                                                    <span className="px-2 py-1 rounded bg-white dark:bg-[#252d46] text-xs font-bold text-slate-700 dark:text-white border border-slate-200 dark:border-transparent shadow-sm">
+                                                        {map.target_type}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                            {mappings.filter(m => m.edge_type === edge.name).length === 0 && (
+                                                <div className="flex items-center justify-center p-3 rounded-lg bg-slate-50 dark:bg-[#111521] border border-slate-200 dark:border-[#252d46] border-dashed">
+                                                    <span className="text-xs text-slate-400 dark:text-[#56607a] italic">No active mappings</span>
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="flex flex-col gap-2">
                                             <p className="text-xs font-semibold text-slate-400 dark:text-[#56607a] uppercase tracking-wider">Edge Attributes</p>
