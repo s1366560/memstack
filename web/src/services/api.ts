@@ -221,4 +221,33 @@ export const schemaAPI = {
     },
 };
 
+export const taskAPI = {
+    getStats: async () => {
+        const response = await api.get('/tasks/stats');
+        return response.data;
+    },
+    getQueueDepth: async () => {
+        const response = await api.get('/tasks/queue-depth');
+        return response.data;
+    },
+    getRecentTasks: async (params: {
+        limit?: number;
+        offset?: number;
+        status?: string;
+        task_type?: string;
+        search?: string;
+    } = {}) => {
+        const response = await api.get('/tasks/recent', { params });
+        return response.data;
+    },
+    getStatusBreakdown: async () => {
+        const response = await api.get('/tasks/status-breakdown');
+        return response.data;
+    },
+    retryTask: async (taskId: string) => {
+        const response = await api.post(`/tasks/${taskId}/retry`);
+        return response.data;
+    },
+};
+
 export default api;

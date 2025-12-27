@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 import server.db_models  # noqa: F401
 from server.api import (
@@ -26,6 +26,7 @@ from server.api.memories import router as memories_router
 from server.api.memos import router as memos_router
 from server.api.projects import router as projects_router
 from server.api.schema import router as schema_router
+from server.api.tasks import router as tasks_router
 from server.api.tenants import router as tenants_router
 from server.auth import initialize_default_credentials
 from server.config import get_settings
@@ -119,11 +120,25 @@ def setup_app() -> FastAPI:
     app.include_router(data_export_router, prefix="/api/v1")  # Data export/cleanup
     app.include_router(maintenance.router, prefix="/api/v1")  # Graph maintenance
     app.include_router(ai_tools.router, prefix="/api/v1")  # AI tools
+    app.include_router(tasks_router, prefix="/api/v1")  # Task management
 
     return app
 
 
 app = setup_app()
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard():
+    """Serve the task status dashboard."""
+    import os
+
+    # Assuming running from root, but let's be safe
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    template_path = os.path.join(base_dir, "server", "templates", "dashboard.html")
+
+    with open(template_path, "r") as f:
+        return f.read()
 
 
 @app.exception_handler(Exception)

@@ -270,6 +270,18 @@ export const TenantLayout: React.FC = () => {
                         {!isSidebarCollapsed && <span className="text-sm font-medium whitespace-nowrap">Analytics</span>}
                     </Link>
 
+                    <Link
+                        to={getLink('/tasks')}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${isActive('/tasks')
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                            } ${isSidebarCollapsed ? 'justify-center' : ''}`}
+                        title={isSidebarCollapsed ? "Tasks" : ""}
+                    >
+                        <span className={`material-symbols-outlined text-[20px] ${isActive('/tasks') ? 'icon-filled' : ''}`}>task</span>
+                        {!isSidebarCollapsed && <span className="text-sm font-medium whitespace-nowrap">Tasks</span>}
+                    </Link>
+
                     {!isSidebarCollapsed && (
                         <p className="px-2 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 mt-6 transition-opacity duration-300">Administration</p>
                     )}

@@ -605,6 +605,56 @@ class QueueService:
                 logger.error(f"Error in recovery loop: {e}")
                 await asyncio.sleep(60)
 
+    async def retry_task(self, task_id: str) -> bool:
+        """Retry a failed task."""
+        if not self._redis:
+            return False
+
+        try:
+            async with async_session_factory() as session:
+                async with session.begin():
+                    # Check task status
+                    result = await session.execute(select(TaskLog).where(TaskLog.id == task_id))
+                    task = result.scalar_one_or_none()
+
+                    if not task:
+                        logger.warning(f"Task {task_id} not found for retry")
+                        return False
+
+                    if task.status != "FAILED":
+                        logger.warning(
+                            f"Task {task_id} is not FAILED (status: {task.status}), skipping retry"
+                        )
+                        return False
+
+                    # Reset status
+                    task.status = "PENDING"
+                    task.retry_count += 1
+                    task.error_message = None
+                    task.started_at = None
+                    task.completed_at = None
+
+                    payload = task.payload
+                    group_id = task.group_id
+
+            # Re-enqueue
+            if payload and group_id:
+                # Ensure payload has task_id
+                if "task_id" not in payload:
+                    payload["task_id"] = task_id
+
+                await self._redis.sadd("queue:active_groups", group_id)
+                await self._redis.lpush(f"queue:group:{group_id}", json.dumps(payload))
+
+                logger.info(f"Retrying task {task_id}")
+                return True
+
+            return False
+
+        except Exception as e:
+            logger.error(f"Failed to retry task {task_id}: {e}")
+            return False
+
     async def get_queue_size(self, group_id: str) -> int:
         """Get the current queue size for a group_id."""
         if not self._redis:
