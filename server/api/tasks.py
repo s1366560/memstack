@@ -33,6 +33,8 @@ class TaskLogResponse(BaseModel):
     worker_id: Optional[str]
     retries: int  # mapped from retry_count
     duration: Optional[str]  # formatted string like "450ms" or "2.4s"
+    entity_id: Optional[str]
+    entity_type: Optional[str]
 
 
 class QueueDepthPoint(BaseModel):
@@ -158,6 +160,8 @@ async def get_recent_tasks(
     status: Optional[str] = None,
     task_type: Optional[str] = None,
     search: Optional[str] = None,
+    entity_id: Optional[str] = None,
+    entity_type: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
@@ -169,6 +173,12 @@ async def get_recent_tasks(
 
     if task_type and task_type != "All Types":
         query = query.where(TaskLog.task_type == task_type)
+
+    if entity_id:
+        query = query.where(TaskLog.entity_id == entity_id)
+
+    if entity_type:
+        query = query.where(TaskLog.entity_type == entity_type)
 
     if search:
         query = query.where(
@@ -206,6 +216,8 @@ async def get_recent_tasks(
                 worker_id=t.worker_id or "-",
                 retries=t.retry_count,
                 duration=duration_str,
+                entity_id=t.entity_id,
+                entity_type=t.entity_type,
             )
         )
 
@@ -246,3 +258,11 @@ async def retry_task_endpoint(task_id: str):
             status_code=400, detail="Failed to retry task or task not found/not failed"
         )
     return {"message": "Task retried successfully"}
+
+
+@router.post("/{task_id}/stop")
+async def stop_task_endpoint(task_id: str):
+    success = await graphiti_service.queue_service.stop_task(task_id)
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to stop task or task not found")
+    return {"message": "Task marked as stopped"}

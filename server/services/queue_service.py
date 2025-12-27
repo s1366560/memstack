@@ -11,15 +11,13 @@ from uuid import uuid4
 
 import redis.asyncio as redis
 from graphiti_core import Graphiti
-from graphiti_core.helpers import semaphore_gather
-from graphiti_core.nodes import EpisodeType
-from graphiti_core.utils.maintenance.community_operations import update_community
 from sqlalchemy import select, update
 
 from server.config import get_settings
 from server.database import async_session_factory
 from server.db_models import EdgeType, EdgeTypeMap, EntityType, Memory, TaskLog
 from server.models.enums import DataStatus, ProcessingStatus
+from server.services.tasks.registry import TaskRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +35,7 @@ class QueueService:
         self._workers: list[asyncio.Task] = []
         self._recovery_task: Optional[asyncio.Task] = None
         self._worker_id = f"{socket.gethostname()}-{uuid4().hex[:8]}"
+        self._task_registry = TaskRegistry()
 
     async def initialize(
         self,
@@ -122,7 +121,15 @@ class QueueService:
         except Exception as e:
             logger.error(f"Failed to update memory status {memory_id} to {status}: {e}")
 
-    async def _create_task_log(self, group_id: str, task_type: str, payload: dict) -> str:
+    async def _create_task_log(
+        self,
+        group_id: str,
+        task_type: str,
+        payload: dict,
+        entity_id: Optional[str] = None,
+        entity_type: Optional[str] = None,
+        parent_task_id: Optional[str] = None,
+    ) -> str:
         """Create a new task log entry."""
         task_id = str(uuid4())
         try:
@@ -135,6 +142,9 @@ class QueueService:
                         status="PENDING",
                         payload=payload,
                         created_at=datetime.now(timezone.utc),
+                        entity_id=entity_id,
+                        entity_type=entity_type,
+                        parent_task_id=parent_task_id,
                     )
                     session.add(task_log)
             return task_id
@@ -161,13 +171,15 @@ class QueueService:
                     if status in ["COMPLETED", "FAILED"]:
                         stmt = stmt.values(completed_at=datetime.now(timezone.utc))
 
+                    if status == "FAILED" or status == "STOPPED":
+                        if status == "STOPPED":
+                            stmt = stmt.values(stopped_at=datetime.now(timezone.utc))
+
                     if worker_id:
                         stmt = stmt.values(worker_id=worker_id)
                     if error_message:
                         stmt = stmt.values(error_message=error_message)
                     if increment_retry:
-                        # This is tricky with simple update, need to read or use expression
-                        # But for now let's just use SQL expression if possible or read-update
                         # SQLAlchemy supports expression: TaskLog.retry_count + 1
                         stmt = stmt.values(retry_count=TaskLog.retry_count + 1)
 
@@ -314,8 +326,8 @@ class QueueService:
         name: str,
         content: str,
         source_description: str,
-        episode_type: EpisodeType,
-        entity_types: Any,  # Kept for compatibility, but might not be serializable
+        episode_type: Any,
+        entity_types: Any,  # Kept for compatibility
         uuid: str | None,
         tenant_id: Optional[str] = None,
         project_id: Optional[str] = None,
@@ -329,10 +341,6 @@ class QueueService:
             raise RuntimeError("Queue service not initialized")
 
         # Prepare payload
-        # Note: entity_types, edge_types, edge_type_map are Pydantic models or dicts
-        # We cannot easily serialize them if they are classes.
-        # However, we have project_id, so the worker can re-fetch the schema.
-        # We will NOT include them in the payload to avoid serialization issues.
         payload = {
             "group_id": group_id,
             "task_type": "add_episode",
@@ -349,13 +357,13 @@ class QueueService:
         }
 
         # Create Task Log
-        task_id = await self._create_task_log(group_id, "add_episode", payload)
+        task_id = await self._create_task_log(
+            group_id, "add_episode", payload, entity_id=memory_id, entity_type="memory"
+        )
         payload["task_id"] = task_id
 
         # Add to Redis
-        # 1. Add group_id to active groups set
         await self._redis.sadd("queue:active_groups", group_id)
-        # 2. Push task to group queue
         queue_key = f"queue:group:{group_id}"
         await self._redis.rpush(queue_key, json.dumps(payload))
 
@@ -374,7 +382,14 @@ class QueueService:
         }
 
         # Create Task Log
-        task_id = await self._create_task_log(group_id, "rebuild_communities", payload)
+        # Use group_id as entity_id if not global? Or maybe project_id?
+        # For now, link to the group.
+        entity_id = group_id if group_id != "global" else None
+        entity_type = "group" if entity_id else None
+
+        task_id = await self._create_task_log(
+            group_id, "rebuild_communities", payload, entity_id=entity_id, entity_type=entity_type
+        )
         payload["task_id"] = task_id
 
         # Add to Redis
@@ -385,165 +400,10 @@ class QueueService:
         logger.info(f"Task {task_id} (rebuild_communities) added to queue {queue_key}")
         return await self._redis.llen(queue_key)
 
-    async def _process_rebuild_communities_task(self, payload: dict) -> None:
-        """Process the rebuild communities task logic."""
-        try:
-            # Graphiti's build_communities automatically removes old communities
-            await self._graphiti_client.build_communities()
-
-            # After rebuilding, we should re-apply tenant/project/user IDs to the new communities
-            query = """
-            MATCH (c:Community)-[:HAS_MEMBER]->(e:Entity)
-            WITH c, e
-            WHERE e.tenant_id IS NOT NULL
-            WITH c, e.tenant_id as tid, count(*) as count
-            ORDER BY count DESC
-            WITH c, collect(tid)[0] as major_tenant
-            SET c.tenant_id = major_tenant
-            """
-            await self._graphiti_client.driver.execute_query(query)
-
-            query_proj = """
-            MATCH (c:Community)-[:HAS_MEMBER]->(e:Entity)
-            WITH c, e
-            WHERE e.project_id IS NOT NULL
-            WITH c, e.project_id as pid, count(*) as count
-            ORDER BY count DESC
-            WITH c, collect(pid)[0] as major_project
-            SET c.project_id = major_project
-            """
-            await self._graphiti_client.driver.execute_query(query_proj)
-
-            # Count members for each community
-            count_query = """
-            MATCH (c:Community)-[:HAS_MEMBER]->(e:Entity)
-            WITH c, count(e) as member_count
-            SET c.member_count = member_count
-            """
-            await self._graphiti_client.driver.execute_query(count_query)
-
-            logger.info("Communities rebuild triggered successfully and properties updated")
-        except Exception as e:
-            logger.error(f"Failed to rebuild communities: {e}")
-            raise e
-
-    async def _process_episode_task(self, payload: dict) -> None:
-        """Process the episode task logic."""
-        uuid = payload.get("uuid")
-        group_id = payload.get("group_id")
-        memory_id = payload.get("memory_id")
-        project_id = payload.get("project_id")
-
-        try:
-            if memory_id:
-                await self._update_memory_status(memory_id, ProcessingStatus.PROCESSING)
-
-            # Re-fetch schema if possible
-            entity_types = None
-            edge_types = None
-            edge_type_map = None
-
-            if self._schema_loader and project_id:
-                try:
-                    entity_types, edge_types, edge_type_map = await self._schema_loader(project_id)
-                except Exception as e:
-                    logger.warning(f"Failed to load schema for project {project_id}: {e}")
-
-            # Call Graphiti
-            add_result = await self._graphiti_client.add_episode(
-                name=payload.get("name"),
-                episode_body=payload.get("content"),
-                source_description=payload.get("source_description"),
-                source=EpisodeType(payload.get("episode_type", "text")),
-                group_id=group_id,
-                reference_time=datetime.now(timezone.utc),
-                update_communities=False,
-                entity_types=entity_types,
-                edge_types=edge_types,
-                edge_type_map=edge_type_map,
-                uuid=uuid,
-            )
-
-            # Sync Schema from Graphiti result
-            if add_result and project_id:
-                await self._sync_schema_from_graph_result(
-                    add_result.nodes, add_result.edges, project_id
-                )
-
-            # Metadata propagation logic
-            tenant_id = payload.get("tenant_id")
-            user_id = payload.get("user_id")
-
-            if tenant_id or project_id or user_id:
-                query = """
-                MATCH (ep:Episodic {uuid: $uuid})
-                SET ep.tenant_id = $tenant_id,
-                    ep.project_id = $project_id,
-                    ep.user_id = $user_id,
-                    ep.status = 'Synced'
-                WITH ep
-                MATCH (ep)-[:MENTIONS]->(e:Entity)
-                SET e.tenant_id = ep.tenant_id,
-                    e.project_id = ep.project_id,
-                    e.user_id = ep.user_id
-                """
-                await self._graphiti_client.driver.execute_query(
-                    query,
-                    uuid=uuid,
-                    tenant_id=tenant_id,
-                    project_id=project_id,
-                    user_id=user_id,
-                )
-            else:
-                query = """
-                MATCH (ep:Episodic {uuid: $uuid})
-                SET ep.status = 'Synced'
-                """
-                await self._graphiti_client.driver.execute_query(query, uuid=uuid)
-
-            # Community updates
-            if add_result and add_result.nodes:
-                try:
-                    await semaphore_gather(
-                        *[
-                            update_community(
-                                self._graphiti_client.driver,
-                                self._graphiti_client.llm_client,
-                                self._graphiti_client.embedder,
-                                node,
-                            )
-                            for node in add_result.nodes
-                        ],
-                        max_coroutines=self._graphiti_client.max_coroutines,
-                    )
-
-                    # Propagate metadata to communities
-                    if tenant_id or project_id:
-                        query = """
-                        MATCH (ep:Episodic {uuid: $uuid})-[:MENTIONS]->(e:Entity)-[:BELONGS_TO]->(c:Community)
-                        SET c.tenant_id = $tenant_id,
-                            c.project_id = $project_id
-                        """
-                        await self._graphiti_client.driver.execute_query(
-                            query, uuid=uuid, tenant_id=tenant_id, project_id=project_id
-                        )
-                except Exception as e:
-                    logger.warning(f"Failed to update communities for episode {uuid}: {e}")
-
-            if memory_id:
-                await self._update_memory_status(memory_id, ProcessingStatus.COMPLETED)
-
-        except Exception as e:
-            if memory_id:
-                await self._update_memory_status(memory_id, ProcessingStatus.FAILED)
-            raise e
-
     async def _worker_loop(self, worker_index: int) -> None:
         """Worker loop to process tasks from Redis."""
         logger.info(f"Worker {worker_index} started")
 
-        # Processing queue key for this worker (or global if we want simple recovery)
-        # Using a global processing queue simplifies recovery logic.
         processing_queue = "queue:processing:global"
 
         while not self._shutdown_event.is_set():
@@ -555,65 +415,82 @@ class QueueService:
                     continue
 
                 # 2. Pick a group (Random for simple load balancing)
-                # Redis SET is unordered, so iterating or popping is random-ish.
-                # To prevent starvation, we could cycle through them, but random is often enough.
-                # Let's pick one randomly using SRANDMEMBER
-                group_id = await self._redis.srandmember("queue:active_groups")
-                if not group_id:
+                candidate_groups = await self._redis.srandmember("queue:active_groups", 5)
+                if not candidate_groups:
+                    await asyncio.sleep(1)
+                    continue
+
+                if isinstance(candidate_groups, str):
+                    candidate_groups = [candidate_groups]
+
+                group_id = None
+                lock_acquired = False
+                lock_key = None
+
+                for candidate in candidate_groups:
+                    candidate_lock_key = f"lock:queue:group:{candidate}"
+                    # Use set with nx=True (set if not exists)
+                    if await self._redis.set(candidate_lock_key, self._worker_id, nx=True, ex=3600):
+                        group_id = candidate
+                        lock_key = candidate_lock_key
+                        lock_acquired = True
+                        break
+
+                if not lock_acquired:
+                    await asyncio.sleep(0.5)
                     continue
 
                 queue_key = f"queue:group:{group_id}"
 
                 # 3. Move task from pending to processing atomically
-                # RPOPLPUSH (or LMOVE)
-                # source: queue:group:{group_id}
-                # dest: queue:processing:global
-                raw_task = await self._redis.rpoplpush(queue_key, processing_queue)
+                raw_task = None
+                try:
+                    raw_task = await self._redis.rpoplpush(queue_key, processing_queue)
 
-                if raw_task:
-                    payload = json.loads(raw_task)
-                    task_id = payload.get("task_id")
+                    if raw_task:
+                        payload = json.loads(raw_task)
+                        task_id = payload.get("task_id")
 
-                    logger.info(f"Worker {worker_index} processing task {task_id}")
+                        logger.info(f"Worker {worker_index} processing task {task_id}")
 
-                    # Update Task Log
-                    if task_id:
-                        await self._update_task_log(
-                            task_id, "PROCESSING", worker_id=self._worker_id
-                        )
-
-                    try:
-                        task_type = payload.get("task_type", "add_episode")
-                        if task_type == "rebuild_communities":
-                            await self._process_rebuild_communities_task(payload)
-                        else:
-                            await self._process_episode_task(payload)
-
-                        # Success: Remove from processing queue
-                        await self._redis.lrem(processing_queue, 1, raw_task)
-
+                        # Update Task Log
                         if task_id:
-                            await self._update_task_log(task_id, "COMPLETED")
+                            await self._update_task_log(
+                                task_id, "PROCESSING", worker_id=self._worker_id
+                            )
 
-                    except Exception as e:
-                        logger.error(f"Error processing task {task_id}: {e}")
-                        # Failure: Remove from processing queue?
-                        # If we remove it, it won't be retried.
-                        # If we keep it, recovery loop will pick it up.
-                        # For now, let's remove it and mark FAILED in DB.
-                        # If we want retries, we should re-enqueue it with incremented retry count.
+                        try:
+                            task_type = payload.get("task_type", "add_episode")
+                            handler = self._task_registry.get_handler(task_type)
 
-                        await self._redis.lrem(processing_queue, 1, raw_task)
+                            if handler:
+                                await handler.process(payload, self)
+                            else:
+                                logger.warning(f"No handler found for task type: {task_type}")
 
-                        if task_id:
-                            await self._update_task_log(task_id, "FAILED", error_message=str(e))
-                else:
-                    # Queue empty, remove from active set
-                    # Use watch/multi for strict correctness, but here it's fine
-                    # If we check and it's empty, remove. If someone added in between, it will be added back.
-                    qlen = await self._redis.llen(queue_key)
-                    if qlen == 0:
-                        await self._redis.srem("queue:active_groups", group_id)
+                            # Success: Remove from processing queue
+                            await self._redis.lrem(processing_queue, 1, raw_task)
+
+                            if task_id:
+                                await self._update_task_log(task_id, "COMPLETED")
+
+                        except Exception as e:
+                            logger.error(f"Error processing task {task_id}: {e}")
+                            # Failure
+                            await self._redis.lrem(processing_queue, 1, raw_task)
+
+                            if task_id:
+                                await self._update_task_log(task_id, "FAILED", error_message=str(e))
+                    else:
+                        # Queue empty, remove from active set
+                        qlen = await self._redis.llen(queue_key)
+                        if qlen == 0:
+                            await self._redis.srem("queue:active_groups", group_id)
+
+                finally:
+                    # Always release lock
+                    if lock_acquired and lock_key:
+                        await self._redis.delete(lock_key)
 
             except asyncio.CancelledError:
                 break
@@ -627,28 +504,35 @@ class QueueService:
         """Background loop to recover stalled tasks."""
         logger.info("Recovery task started")
         processing_queue = "queue:processing:global"
-        timeout_seconds = 600  # 10 minutes
+
+        # Default timeout
+        default_timeout = 600
 
         while not self._shutdown_event.is_set():
             try:
-                # Check tasks in processing queue
-                # This is O(N) where N is number of processing tasks. Should be small.
                 tasks = await self._redis.lrange(processing_queue, 0, -1)
-
                 now = time.time()
+
                 for raw_task in tasks:
                     try:
                         payload = json.loads(raw_task)
                         timestamp = payload.get("timestamp", 0)
+                        task_type = payload.get("task_type", "add_episode")
+
+                        # Get dynamic timeout from handler
+                        handler = self._task_registry.get_handler(task_type)
+                        timeout_seconds = handler.timeout_seconds if handler else default_timeout
 
                         if now - timestamp > timeout_seconds:
                             task_id = payload.get("task_id")
-                            logger.warning(f"Recovering stalled task {task_id}")
+                            logger.warning(
+                                f"Recovering stalled task {task_id} (Type: {task_type}, Timeout: {timeout_seconds}s)"
+                            )
 
                             # Remove from processing
                             await self._redis.lrem(processing_queue, 1, raw_task)
 
-                            # Update timestamp to avoid immediate re-recovery
+                            # Update timestamp
                             payload["timestamp"] = now
                             new_raw_task = json.dumps(payload)
 
@@ -691,9 +575,10 @@ class QueueService:
                         logger.warning(f"Task {task_id} not found for retry")
                         return False
 
-                    if task.status != "FAILED":
+                    # Allow retry if FAILED, STOPPED, or PENDING (for stuck tasks)
+                    if task.status not in ["FAILED", "STOPPED", "PENDING"]:
                         logger.warning(
-                            f"Task {task_id} is not FAILED (status: {task.status}), skipping retry"
+                            f"Task {task_id} is not FAILED/STOPPED/PENDING (status: {task.status}), skipping retry"
                         )
                         return False
 
@@ -703,13 +588,13 @@ class QueueService:
                     task.error_message = None
                     task.started_at = None
                     task.completed_at = None
+                    task.stopped_at = None
 
                     payload = task.payload
                     group_id = task.group_id
 
             # Re-enqueue
             if payload and group_id:
-                # Ensure payload has task_id
                 if "task_id" not in payload:
                     payload["task_id"] = task_id
 
@@ -723,6 +608,20 @@ class QueueService:
 
         except Exception as e:
             logger.error(f"Failed to retry task {task_id}: {e}")
+            return False
+
+    async def stop_task(self, task_id: str) -> bool:
+        """Stop a task (mark as STOPPED)."""
+        # Note: We cannot easily interrupt a running asyncio task on another worker.
+        # But we can mark it as STOPPED in DB.
+        # If it's PENDING, we can try to remove it from Redis (hard due to race conditions).
+        # For now, we just update the DB status.
+        try:
+            await self._update_task_log(task_id, "STOPPED")
+            logger.info(f"Task {task_id} marked as STOPPED")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to stop task {task_id}: {e}")
             return False
 
     async def get_queue_size(self, group_id: str) -> int:

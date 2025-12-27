@@ -333,3 +333,9 @@ class TaskLog(Base):
     worker_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
     payload: Mapped[dict] = mapped_column(JSON, default=dict)  # Stores arguments
+
+    # Association & Hierarchy
+    entity_id: Mapped[Optional[str]] = mapped_column(String, index=True, nullable=True)
+    entity_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    parent_task_id: Mapped[Optional[str]] = mapped_column(String, index=True, nullable=True)
+    stopped_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

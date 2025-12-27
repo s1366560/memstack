@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { graphitiService } from '../../services/graphitiService'
+import { TaskList } from '../../components/tasks/TaskList'
 
 interface Community {
     uuid: string
@@ -190,6 +191,12 @@ export const CommunitiesList: React.FC = () => {
                                 Community Details
                             </h2>
                             <div className="space-y-4">
+                                <div>
+                                    <label className="text-xs font-semibold text-slate-500 uppercase">Tasks</label>
+                                    <div className="mt-2">
+                                        <TaskList entityId={selectedCommunity.uuid} entityType="community" embedded />
+                                    </div>
+                                </div>
                                 <div>
                                     <label className="text-xs font-semibold text-slate-500 uppercase">Name</label>
                                     <p className="text-slate-900 dark:text-white font-medium">

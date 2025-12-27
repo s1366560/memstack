@@ -248,6 +248,10 @@ export const taskAPI = {
         const response = await api.post(`/tasks/${taskId}/retry`);
         return response.data;
     },
+    stopTask: async (taskId: string) => {
+        const response = await api.post(`/tasks/${taskId}/stop`);
+        return response.data;
+    },
 };
 
 export default api;

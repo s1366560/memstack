@@ -3,13 +3,14 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { memoryAPI } from '../../services/api'
 import { Memory } from '../../types/memory'
 import { DeleteConfirmationModal } from '../../components/DeleteConfirmationModal'
+import { TaskList } from '../../components/tasks/TaskList'
 
 export const MemoryDetail: React.FC = () => {
     const { projectId, memoryId } = useParams()
     const navigate = useNavigate()
     const [memory, setMemory] = useState<Memory | null>(null)
     const [isLoading, setIsLoading] = useState(false)
-    const [activeTab, setActiveTab] = useState<'content' | 'metadata' | 'history' | 'raw'>('content')
+    const [activeTab, setActiveTab] = useState<'content' | 'metadata' | 'history' | 'raw' | 'tasks'>('content')
     const [deleteModalOpen, setDeleteModalOpen] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
 
@@ -80,8 +81,8 @@ export const MemoryDetail: React.FC = () => {
                         <div className="flex items-center gap-2">
                             <span className="text-slate-900 dark:text-white text-sm font-medium truncate max-w-[200px]">{memory.title || 'Untitled'}</span>
                             <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${memory.processing_status === 'FAILED' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
-                                    memory.processing_status === 'COMPLETED' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                                        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                memory.processing_status === 'COMPLETED' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                                    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
                                 }`}>
                                 {memory.processing_status || 'PENDING'}
                             </span>
@@ -167,6 +168,15 @@ export const MemoryDetail: React.FC = () => {
                                     >
                                         Raw Data
                                     </button>
+                                    <button
+                                        onClick={() => setActiveTab('tasks')}
+                                        className={`relative flex items-center justify-center pb-4 font-semibold text-sm tracking-wide transition-colors ${activeTab === 'tasks'
+                                            ? 'text-primary border-b-2 border-primary'
+                                            : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                            }`}
+                                    >
+                                        Tasks
+                                    </button>
                                 </div>
                             </div>
                             {/* Content Body */}
@@ -196,6 +206,9 @@ export const MemoryDetail: React.FC = () => {
                                     <div className="bg-slate-900 text-slate-200 p-4 rounded-lg font-mono text-xs overflow-auto">
                                         <pre>{JSON.stringify(memory, null, 2)}</pre>
                                     </div>
+                                )}
+                                {activeTab === 'tasks' && (
+                                    <TaskList entityId={memoryId} entityType="memory" embedded />
                                 )}
                             </div>
                             {/* Footer / Activity Snippet */}

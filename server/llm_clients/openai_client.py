@@ -38,8 +38,6 @@ class OpenAIClient(GraphitiOpenAIClient):
             logger.warning("API key not provided and OPENAI_API_KEY environment variable not set")
 
         if not config.model:
-            config.model = DEFAULT_MODEL
-        if not config.small_model:
-            config.small_model = DEFAULT_SMALL_MODEL
+            config.model = os.environ.get("OPENAI_MODEL", DEFAULT_MODEL)
 
         super().__init__(config=config, cache=cache)
