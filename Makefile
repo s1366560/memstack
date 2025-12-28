@@ -11,9 +11,11 @@ help:
 	@echo "lint        - Run linting checks (ruff + mypy)"
 	@echo "clean       - Remove generated files and caches"
 	@echo "dev         - Start development server with hot reload"
+	@echo "dev-new     - Start new (Hexagonal) development server"
 	@echo "run-api     - Start API server only (no background workers)"
 	@echo "run-worker  - Start background worker process"
 	@echo "serve       - Start production server"
+	@echo "serve-new   - Start new (Hexagonal) production server"
 	@echo "docker-up   - Start all services with Docker Compose"
 	@echo "docker-dev  - Start infrastructure services only (Neo4j, Postgres, Redis)"
 	@echo "docker-down - Stop all Docker services"
@@ -68,6 +70,9 @@ clean:
 dev:
 	uv run uvicorn server.main:app --reload --host 0.0.0.0 --port 8000
 
+dev-new:
+	uv run uvicorn src.infrastructure.adapters.primary.web.main:app --reload --host 0.0.0.0 --port 8000
+
 run-api:
 	RUN_BACKGROUND_WORKERS=False uv run uvicorn server.main:app --reload --host 0.0.0.0 --port 8000
 
@@ -76,6 +81,9 @@ run-worker:
 
 serve:
 	uv run uvicorn server.main:app --host 0.0.0.0 --port 8000 --workers 4
+
+serve-new:
+	uv run uvicorn src.infrastructure.adapters.primary.web.main:app --host 0.0.0.0 --port 8000 --workers 4
 
 docker-up:
 	docker-compose up -d

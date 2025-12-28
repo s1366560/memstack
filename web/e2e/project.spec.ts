@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 
 test.describe('Project Management', () => {
     // Assuming we need to login before accessing project management

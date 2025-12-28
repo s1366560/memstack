@@ -29,6 +29,7 @@ dependencies = [
     "greenlet>=3.3.0",
     "datasets>=4.4.1",
     "openai>=2.13.0",
+    "aiosqlite>=0.22.1",
 ]
 
 [project.optional-dependencies]

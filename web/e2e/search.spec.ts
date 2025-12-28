@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 
 test.describe('Search Functionality', () => {
     let projectName: string;
@@ -40,6 +40,9 @@ test.describe('Search Functionality', () => {
         await projectCard.waitFor({ state: 'visible' });
         await projectCard.click();
 
+        // 1. Navigate to Memories Tab explicitly
+        await page.getByRole('link', { name: /Memories/i }).click();
+
         // Add some memories to search for
         await page.getByRole('button', { name: /Add Memory/i }).click();
         await page.getByPlaceholder(/Start typing your memory/i).fill('The quick brown fox jumps over the lazy dog.');
@@ -57,38 +60,39 @@ test.describe('Search Functionality', () => {
 
     test('should perform search and display results', async ({ page }) => {
         // Mock search response
+        const mockResponse = {
+            results: [
+                {
+                    id: 'mock-uuid-1',
+                    title: 'Fox Memory',
+                    content: 'The quick brown fox jumps over the lazy dog.',
+                    score: 0.95,
+                    content_type: 'text',
+                    tags: ['test'],
+                    metadata: {
+                        type: 'episode',
+                        name: 'Fox Memory',
+                        uuid: 'mock-uuid-1',
+                        created_at: new Date().toISOString()
+                    },
+                    created_at: new Date().toISOString(),
+                    source: 'episode'
+                }
+            ],
+            total: 1,
+            query: 'fox'
+        };
+
         await page.route('**/api/v1/memory/search', async route => {
-            await route.fulfill({
-                status: 200,
-                contentType: 'application/json',
-                body: JSON.stringify({
-                    results: [
-                        {
-                            id: 'mock-uuid-1',
-                            title: 'Fox Memory',
-                            content: 'The quick brown fox jumps over the lazy dog.',
-                            score: 0.95,
-                            content_type: 'text',
-                            tags: ['test'],
-                            metadata: {
-                                type: 'episode',
-                                name: 'Fox Memory',
-                                uuid: 'mock-uuid-1',
-                                created_at: new Date().toISOString()
-                            },
-                            created_at: new Date().toISOString(),
-                            source: 'episode'
-                        }
-                    ],
-                    total: 1,
-                    query: 'fox'
-                })
-            });
+            await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(mockResponse) });
+        });
+        await page.route('**/api/v1/search-enhanced/advanced', async route => {
+            await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(mockResponse) });
         });
 
         // Navigate to Search page
         // Use exact name match or more specific selector to avoid matching "Advanced Search" or Project Name
-        await page.getByRole('link', { name: 'search Search' }).click();
+        await page.getByRole('link', { name: 'Deep Search' }).click();
 
         // Type query
         await page.getByPlaceholder(/Search memories by keyword/i).fill('fox');
@@ -109,37 +113,38 @@ test.describe('Search Functionality', () => {
 
     test('should filter search results', async ({ page }) => {
         // Mock filtered search response
+        const mockResponse = {
+            results: [
+                {
+                    id: 'mock-uuid-2',
+                    title: 'AI Memory',
+                    content: 'Artificial Intelligence is transforming the world.',
+                    score: 0.88,
+                    content_type: 'text',
+                    tags: ['ai'],
+                    metadata: {
+                        type: 'episode',
+                        name: 'AI Memory',
+                        uuid: 'mock-uuid-2',
+                        created_at: new Date().toISOString()
+                    },
+                    created_at: new Date().toISOString(),
+                    source: 'episode'
+                }
+            ],
+            total: 1,
+            query: 'world'
+        };
+
         await page.route('**/api/v1/memory/search', async route => {
-            await route.fulfill({
-                status: 200,
-                contentType: 'application/json',
-                body: JSON.stringify({
-                    results: [
-                        {
-                            id: 'mock-uuid-2',
-                            title: 'AI Memory',
-                            content: 'Artificial Intelligence is transforming the world.',
-                            score: 0.88,
-                            content_type: 'text',
-                            tags: ['ai'],
-                            metadata: {
-                                type: 'episode',
-                                name: 'AI Memory',
-                                uuid: 'mock-uuid-2',
-                                created_at: new Date().toISOString()
-                            },
-                            created_at: new Date().toISOString(),
-                            source: 'episode'
-                        }
-                    ],
-                    total: 1,
-                    query: 'world'
-                })
-            });
+            await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(mockResponse) });
+        });
+        await page.route('**/api/v1/search-enhanced/advanced', async route => {
+            await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(mockResponse) });
         });
 
         // Navigate to Search page
-        await page.getByRole('link', { name: 'search Search' }).click();
+        await page.getByRole('link', { name: 'Deep Search', exact: true }).click();
 
         // Type query
         await page.getByPlaceholder(/Search memories by keyword/i).fill('world');

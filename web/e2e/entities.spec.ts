@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 
 test.describe('Entities and Communities', () => {
     let projectName: string;
@@ -39,6 +39,9 @@ test.describe('Entities and Communities', () => {
         await projectCard.waitFor({ state: 'visible' });
         await projectCard.click();
 
+        // 1. Navigate to Memories Tab explicitly
+        await page.getByRole('link', { name: /Memories/i }).click();
+
         // Add Memory with Entities
         await page.getByRole('button', { name: /Add Memory/i }).click();
         await page.getByPlaceholder(/Start typing your memory/i).fill('Elon Musk is the CEO of Tesla and SpaceX.');
@@ -65,7 +68,7 @@ test.describe('Entities and Communities', () => {
 
         // Navigate to Entities
         // Link likely includes icon "category Entities"
-        await page.getByRole('link', { name: 'category Entities' }).click();
+        await page.getByRole('link', { name: 'Entities', exact: true }).click();
 
         // Check if Entities page loaded
         // Use exact match for h1 or filter by class to avoid matching breadcrumbs
@@ -107,7 +110,7 @@ test.describe('Entities and Communities', () => {
 
         // Navigate to Communities
         // Link likely includes icon "groups Communities"
-        await page.getByRole('link', { name: 'groups Communities' }).click();
+        await page.getByRole('link', { name: 'Communities', exact: true }).click();
 
         // Check header
         // Use exact match or look for h1 specifically to distinguish from "About Communities" h3
