@@ -4,7 +4,6 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-import graphiti_core.search.search_config_recipes as recipes
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from src.infrastructure.adapters.primary.web.dependencies import get_current_user
@@ -37,7 +36,11 @@ async def search_advanced(
     """
     Perform advanced search with configurable strategy and reranking.
     """
+    logger.info(f"search_advanced called: query='{query}', project_id='{project_id}'")
     try:
+        # Import recipes inside function (same as graphiti.py to avoid state issues)
+        import graphiti_core.search.search_config_recipes as recipes
+
         # Get recipe from strategy name
         search_config = getattr(recipes, strategy, None)
         if not search_config:
@@ -47,46 +50,57 @@ async def search_advanced(
         parsed_since = None
         if since:
             try:
-                parsed_since = datetime.fromisoformat(since)
+                parsed_since = datetime.fromisoformat(since.replace('Z', '+00:00'))
             except ValueError:
                 raise HTTPException(status_code=400, detail="Invalid 'since' datetime format")
 
-        # Prepare search parameters
-        group_ids = [project_id] if project_id else None
+        # Prepare search parameters (same as /memory/search)
+        group_id = project_id if project_id else None
+        group_ids = [group_id] if group_id else None
 
+        # Perform search (EXACT same as /memory/search)
         results = await graphiti_client.search_(
             query=query,
             config=search_config,
             group_ids=group_ids,
         )
 
-        # Convert results to dict format
+        # Convert results to dict format (EXACT same as /memory/search which works)
         formatted_results = []
         if hasattr(results, "episodes") and results.episodes:
             for ep in results.episodes:
                 formatted_results.append({
-                    "type": "episode",
                     "uuid": ep.uuid,
-                    "content": ep.content,
                     "name": getattr(ep, "name", ""),
+                    "content": ep.content,
+                    "type": "episode",
+                    "score": getattr(ep, "score", 0.0),
                     "created_at": getattr(ep, "created_at", None),
-                    "score": getattr(ep, "score", 0.0)
+                    "metadata": {
+                        "source": getattr(ep, "source", ""),
+                        "source_description": getattr(ep, "source_description", ""),
+                    }
                 })
 
         if hasattr(results, "nodes") and results.nodes:
             for node in results.nodes:
                 formatted_results.append({
-                    "type": "entity",
                     "uuid": node.uuid,
                     "name": node.name,
                     "summary": getattr(node, "summary", ""),
+                    "type": "entity",
                     "entity_type": getattr(node, "entity_type", "Unknown"),
+                    "score": getattr(node, "score", 0.0),
                     "created_at": getattr(node, "created_at", None),
-                    "score": getattr(node, "score", 0.0)
+                    "metadata": {}
                 })
 
+        # Sort by score and limit (same as /memory/search)
+        formatted_results.sort(key=lambda x: x.get("score", 0), reverse=True)
+        formatted_results = formatted_results[:limit]
+
         return {
-            "results": formatted_results[:limit],
+            "results": formatted_results,
             "total": len(formatted_results),
             "search_type": "advanced",
             "strategy": strategy,

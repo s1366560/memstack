@@ -26,6 +26,8 @@ from src.infrastructure.adapters.primary.web.routers import (
     memos,
     ai_tools,
 )
+# Solution 2 testing routers (isolated client)
+from src.infrastructure.adapters.primary.web.routers import episodes_isolated, enhanced_search_isolated
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -108,6 +110,10 @@ def create_app() -> FastAPI:
     app.include_router(tasks.router)
     app.include_router(memos.router)
     app.include_router(ai_tools.router)
+
+    # Solution 2 Testing Routers (isolated client - for performance comparison)
+    app.include_router(episodes_isolated.router)
+    app.include_router(enhanced_search_isolated.router)
     
     return app
 
