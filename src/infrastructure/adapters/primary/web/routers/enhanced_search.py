@@ -65,34 +65,69 @@ async def search_advanced(
             group_ids=group_ids,
         )
 
-        # Convert results to dict format (EXACT same as /memory/search which works)
+        # Convert results to dict format with enriched metadata for frontend compatibility
         formatted_results = []
         if hasattr(results, "episodes") and results.episodes:
             for ep in results.episodes:
+                # Extract tags if available in metadata, otherwise empty list
+                tags = []
+                if hasattr(ep, "metadata") and isinstance(ep.metadata, dict):
+                    tags = ep.metadata.get("tags", [])
+                
+                # Determine a better name for the episode
+                ep_name = getattr(ep, "name", "")
+                ep_source = getattr(ep, "source", "")
+                if not ep_name:
+                    if ep_source:
+                        ep_name = ep_source.split("/")[-1]  # Use filename if available
+                    else:
+                        # Truncate content for name if no other info
+                        content_preview = ep.content[:50].replace("\n", " ")
+                        ep_name = f"{content_preview}..." if len(ep.content) > 50 else content_preview
+
                 formatted_results.append({
-                    "uuid": ep.uuid,
-                    "name": getattr(ep, "name", ""),
                     "content": ep.content,
-                    "type": "episode",
                     "score": getattr(ep, "score", 0.0),
-                    "created_at": getattr(ep, "created_at", None),
+                    "source": getattr(ep, "source", "unknown"),
                     "metadata": {
-                        "source": getattr(ep, "source", ""),
+                        "uuid": ep.uuid,
+                        "name": ep_name,
+                        "type": "Episode",  # Capitalized for better display
+                        "created_at": getattr(ep, "created_at", None),
                         "source_description": getattr(ep, "source_description", ""),
+                        "tags": tags,
+                        # Preserve original metadata fields
+                        **(ep.metadata if hasattr(ep, "metadata") and isinstance(ep.metadata, dict) else {})
                     }
                 })
 
         if hasattr(results, "nodes") and results.nodes:
             for node in results.nodes:
+                # Use labels as tags for nodes
+                labels = getattr(node, "labels", [])
+                tags = labels
+                
+                # Extract specific entity type from labels (exclude 'Entity' and 'Node')
+                entity_type = "Entity"
+                ignored_labels = {"Entity", "Node", "BaseEntity"}
+                specific_labels = [l for l in labels if l not in ignored_labels]
+                if specific_labels:
+                    entity_type = specific_labels[0]
+
                 formatted_results.append({
-                    "uuid": node.uuid,
-                    "name": node.name,
-                    "summary": getattr(node, "summary", ""),
-                    "type": "entity",
-                    "entity_type": getattr(node, "entity_type", "Unknown"),
+                    "content": getattr(node, "summary", "") or getattr(node, "name", "No content"),
                     "score": getattr(node, "score", 0.0),
-                    "created_at": getattr(node, "created_at", None),
-                    "metadata": {}
+                    "source": "Knowledge Graph",
+                    "metadata": {
+                        "uuid": node.uuid,
+                        "name": node.name,
+                        "type": entity_type,  # Use specific type (e.g. Person, Organization)
+                        "entity_type": entity_type,
+                        "created_at": getattr(node, "created_at", None),
+                        "tags": tags,
+                        # Preserve attributes if available
+                        **(getattr(node, "attributes", {}) if hasattr(node, "attributes") else {})
+                    }
                 })
 
         # Sort by score and limit (same as /memory/search)

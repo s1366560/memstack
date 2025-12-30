@@ -165,9 +165,11 @@ export const EnhancedSearch: React.FC = () => {
         switch (type?.toLowerCase()) {
             case 'document':
             case 'pdf':
+            case 'file':
                 return <FileText className="w-5 h-5" />
             case 'thread':
             case 'slack':
+            case 'message':
                 return <MessageSquare className="w-5 h-5" />
             case 'asset':
             case 'img':
@@ -176,9 +178,30 @@ export const EnhancedSearch: React.FC = () => {
             case 'reference':
             case 'web':
             case 'jira':
+            case 'link':
                 return <LinkIcon className="w-5 h-5" />
+            case 'episode':
+            case 'memory':
+                return <MessageSquare className="w-5 h-5 text-blue-500" />
+            case 'person':
+            case 'user':
+                return <FileText className="w-5 h-5 text-purple-500" />
+            case 'organization':
+            case 'company':
+                return <Network className="w-5 h-5 text-indigo-500" />
+            case 'location':
+            case 'place':
+                return <Target className="w-5 h-5 text-red-500" />
+            case 'event':
+                return <Target className="w-5 h-5 text-amber-500" />
+            case 'concept':
+            case 'topic':
+                return <Folder className="w-5 h-5 text-emerald-500" />
+            case 'product':
+                return <FileText className="w-5 h-5 text-cyan-500" />
             default:
-                return <FileText className="w-5 h-5" />
+                // Fallback for unknown entity types - use a generic entity icon
+                return <Network className="w-5 h-5 text-slate-400" />
         }
     }
 
