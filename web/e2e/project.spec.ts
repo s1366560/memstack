@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 
 test.describe('Project Management', () => {
     // Assuming we need to login before accessing project management
@@ -7,7 +7,7 @@ test.describe('Project Management', () => {
         // Assuming auth state is preserved or we need to login each time. 
         // For simplicity, logging in each time. In a real setup, we might reuse auth state.
         await page.getByLabel(/邮箱地址/i).fill('admin@memstack.ai');
-        await page.getByLabel(/密码/i).fill('admin123');
+        await page.getByLabel(/密码/i).fill('adminpassword');
         await page.getByRole('button', { name: /登录/i }).click();
 
         // Wait for redirect to dashboard/tenant overview

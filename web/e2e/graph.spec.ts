@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 
 test.describe('Graph Visualization', () => {
     let projectName: string;
@@ -7,7 +7,7 @@ test.describe('Graph Visualization', () => {
         // Login
         await page.goto('/login');
         await page.getByLabel(/邮箱地址/i).fill('admin@memstack.ai');
-        await page.getByLabel(/密码/i).fill('admin123');
+        await page.getByLabel(/密码/i).fill('adminpassword');
         await page.getByRole('button', { name: /登录/i }).click();
 
         // Wait for login to complete and redirect
@@ -42,6 +42,9 @@ test.describe('Graph Visualization', () => {
         await projectCard.waitFor({ state: 'visible' });
         await projectCard.click();
 
+        // 1. Navigate to Memories Tab explicitly
+        await page.getByRole('link', { name: /Memories/i }).click();
+
         // Add Memory to generate graph data
         await page.getByRole('button', { name: /Add Memory/i }).click();
         await page.getByPlaceholder(/Start typing your memory/i).fill('Alice works at Google. Bob works at Microsoft. Alice knows Bob.');
@@ -68,7 +71,7 @@ test.describe('Graph Visualization', () => {
 
         // Navigate to Graph
         // The link text might include icon text "hub Graph"
-        await page.getByRole('link', { name: 'hub Graph' }).click();
+        await page.getByRole('link', { name: 'Knowledge Graph', exact: true }).click();
 
         // Check if graph container exists
         // The CytoscapeGraph component renders a div with ref=containerRef

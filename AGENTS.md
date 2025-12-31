@@ -1,110 +1,35 @@
-# MemStack Repository Guidelines
+# AGENTS.md
 
-## Project Structure & Module Organization
-MemStack is a knowledge graph-based memory system built on FastAPI and Graphiti. The project structure follows a three-tier architecture:
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-- **Server** (`server/`): FastAPI backend with authentication, API routes, and Graphiti service integration
-  - `api/`: REST endpoints for episodes and memory search
-  - `services/`: Graphiti service wrapper and dependency injection
-  - `models/`: Pydantic models for requests/responses (auth, episodes, memory, entities)
-  - `llm_clients/`: LLM provider integrations (Qwen, embeddings, rerankers)
-  - `auth.py`: API Key authentication middleware
-  - `config.py`: Environment-based configuration
-  - `main.py`: FastAPI application entry point
+## Repository Overview
 
-- **SDK** (`sdk/python/`): Python client library for programmatic access
-  - `memstack/client.py`: Synchronous HTTP client with retry logic
-  - `memstack/async_client.py`: Async/await client for high-performance applications  
-  - `memstack/models.py`: Request/response models mirroring server schemas
-  - `memstack/exceptions.py`: Client error hierarchy
+This is a documentation repository containing architectural standards and best practices for AI agents building Python backend services. It focuses on Domain Driven Design (DDD) and Hexagonal Architecture patterns.
 
-- **Web Console** (`web/`): React-based management interface
-  - Built with Vite, TypeScript, Ant Design
-  - Independent deployment via Nginx reverse proxy
-  - API authentication via localStorage token
+## Key Files
 
-- **Tests** (`tests/`): Comprehensive test suite covering authentication, APIs, SDK, and services
-  - Unit tests with mocking for isolated component testing
-  - Integration tests marked with `@pytest.mark.integration`
-  - Coverage targeting 50%+ with pytest-cov
+- `domain_driven_design_hexagonal_arhictecture_python_rules.md` - The main standards document containing 24 comprehensive rules for building backend services
+- `README.md` - Project philosophy, usage instructions, and contribution guidelines
 
-## Build, Test, and Development Commands
-- `uv sync --extra dev`: Install development environment with all dependencies
-- `make test`: Run full test suite with coverage (must pass 50% threshold)
-- `make test-unit`: Run unit tests only (fast, no external dependencies)
-- `make test-integration`: Run integration tests requiring live services
-- `make format`: Format code with ruff (imports + style)
-- `make lint`: Run ruff checks + mypy type validation
-- `make dev`: Start FastAPI server with hot reload on port 8000
-- `make serve`: Start production server with 4 workers
-- `make clean`: Remove caches, coverage reports, and generated files
-- `make docker-up`: Start Neo4j, PostgreSQL, Redis via Docker Compose
-- `make docker-down`: Stop all Docker services
+## Working with This Repository
 
-## Coding Style & Naming Conventions
-Python code uses 4-space indentation, 100-character lines, and single quotes (enforced by ruff). 
-- Modules and files: `snake_case` (e.g., `graphiti_service.py`)
-- Classes: `PascalCase` (e.g., `MemStackClient`, `APIKey`)
-- Functions and variables: `snake_case` (e.g., `verify_api_key`, `created_at`)
-- Constants: `UPPER_SNAKE_CASE` (e.g., `API_KEY_PREFIX`)
-- Pydantic models use explicit type hints with Field(...) descriptors
-- Async functions prefixed with `async def`, no special naming convention
-- Private attributes/methods use single underscore prefix (`_client`, `_make_request`)
+Since this is a documentation repository, there are no build, test, or lint commands. When making contributions:
 
-Run `make format` before committing to normalize imports, quotes, and line length. Use `make lint` to catch type errors and style violations.
+1. **Editing Standards**: Focus on clarity, practicality, and consistency with existing rules
+2. **File Naming**: Note that "arhictecture" in the main file name is a typo but should be preserved for compatibility
+3. **Rule Format**: Each rule follows the pattern "Rule N: [Title]" with clear explanations and examples
 
-## Testing Guidelines
-Write tests in `tests/` following the pattern `test_<module>.py`. Test classes group related tests:
-- Test functions: `test_<behavior>` (e.g., `test_generate_api_key`, `test_search_memory_success`)
-- Use `@pytest.mark.integration` for tests requiring database or external services
-- Mock external dependencies (Graphiti client, HTTP requests) using `unittest.mock` or `pytest-mock`
-- Parametrize tests with `@pytest.mark.parametrize` for multiple input scenarios
-- Fixtures in `tests/fixtures.py` provide reusable test data (users, API keys, mock services)
+## Architecture Principles
 
-Run `make test-unit` during development (fast feedback), `make test` before committing (full coverage check). Integration tests require Docker services: `make docker-up` then `make test-integration`.
+This repository documents:
+- **Domain Driven Design**: Entities, Value Objects, Aggregates, Domain Services, Repository pattern
+- **Hexagonal Architecture**: Ports & Adapters with clear separation between domain, application, and infrastructure layers
+- **Testing Strategy**: Unit tests for domain logic, integration tests for adapters, contract tests for boundaries
 
-Coverage targets:
-- Overall: 50%+ (enforced in CI via `--cov-fail-under=50`)
-- Core modules (auth, models, SDK client): 70%+
-- View coverage report: `open htmlcov/index.html` after running `make test`
+## Contributing
 
-## Commit & Pull Request Guidelines
-Commits use imperative mood, present tense (e.g., "Add API key authentication", "Fix memory search pagination"). Keep commits focused on single logical changes.
-
-Before committing:
-1. Run `make format` to auto-fix style issues
-2. Run `make lint` to catch errors
-3. Run `make test` to ensure tests pass with adequate coverage
-4. Update docs if changing public APIs or configuration
-
-Pull requests should include:
-- Clear title describing the change
-- Description linking to issue/ticket (if applicable)
-- Notes on breaking changes, new environment variables, or database migrations
-- Test coverage for new features
-- Updated README/docs if user-facing behavior changes
-
-Keep PRs focused and reasonably sized. For large refactors, break into incremental PRs that maintain functionality at each step.
-
-## Authentication & Security
-- API Key format: `ms_sk_<64-character-hex>`
-- Keys are SHA256 hashed before storage (never store plaintext)
-- Default dev key auto-generated on server startup (logged to console)
-- SDK clients automatically add `Authorization: Bearer <key>` header
-- Web console stores keys in localStorage, adds via Axios interceptor
-- Rate limiting and key rotation not yet implemented (future enhancements)
-
-## Development Workflow
-1. Clone repo and run `uv sync --extra dev` to install dependencies
-2. Start backing services: `make docker-up` (Neo4j, PostgreSQL, Redis)
-3. Configure environment: Copy `.env.example` to `.env`, set required variables
-4. Start dev server: `make dev` (FastAPI on http://localhost:8000)
-5. Run web console: `cd web && npm run dev` (Vite on http://localhost:5173)
-6. Make changes, write tests, run `make format && make lint && make test`
-7. Commit with clear message, push, open PR
-
-For SDK development:
-- Work in `sdk/python/memstack/`
-- Test with `make sdk-test` 
-- Build distribution: `make sdk-build`
-- SDK versioning follows semantic versioning (MAJOR.MINOR.PATCH)
+When adding or modifying rules:
+- Ensure rules are practical and battle-tested
+- Provide clear examples where helpful
+- Maintain consistency with existing rule numbering and format
+- Consider how AI agents will interpret and apply the rules

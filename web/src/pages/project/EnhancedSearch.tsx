@@ -3,6 +3,14 @@ import { useParams } from 'react-router-dom'
 import { graphitiService } from '../../services/graphitiService'
 import { CytoscapeGraph } from '../../components/CytoscapeGraph'
 import { useProjectStore } from '../../stores/project'
+
+// Type declarations for Web Speech API
+declare global {
+    interface Window {
+        SpeechRecognition: any
+        webkitSpeechRecognition: any
+    }
+}
 import {
     Search,
     Mic,
@@ -30,7 +38,8 @@ import {
     PanelRightClose,
     PanelRightOpen,
     Copy,
-    Check
+    Check,
+    Download
 } from 'lucide-react'
 
 interface SearchResult {
@@ -58,12 +67,16 @@ export const EnhancedSearch: React.FC = () => {
     const [error, setError] = useState<string | null>(null)
     const [isSearchFocused, setIsSearchFocused] = useState(false)
 
+    // Search Mode: 'semantic' | 'graphTraversal' | 'temporal' | 'faceted' | 'community'
+    const [searchMode, setSearchMode] = useState<'semantic' | 'graphTraversal' | 'temporal' | 'faceted' | 'community'>('semantic')
+
     // Configuration State
     const [retrievalMode, setRetrievalMode] = useState<'hybrid' | 'nodeDistance'>('hybrid')
     const [strategy, setStrategy] = useState('COMBINED_HYBRID_SEARCH_RRF')
     const [focalNode, setFocalNode] = useState('')
     const [crossEncoder, setCrossEncoder] = useState('bge')
     const [timeRange, setTimeRange] = useState('last30')
+    const [customTimeRange, setCustomTimeRange] = useState<{ since?: string; until?: string }>({})
     const [configTab, setConfigTab] = useState<'params' | 'filters'>('params')
     const [showMobileConfig, setShowMobileConfig] = useState(false)
     const [isConfigOpen, setIsConfigOpen] = useState(true)
@@ -72,6 +85,30 @@ export const EnhancedSearch: React.FC = () => {
     const [copiedId, setCopiedId] = useState<string | null>(null)
     const [isSubgraphMode, setIsSubgraphMode] = useState(false)
     const [selectedSubgraphIds, setSelectedSubgraphIds] = useState<string[]>([])
+
+    // Graph Traversal State
+    const [startEntityUuid, setStartEntityUuid] = useState('')
+    const [maxDepth, setMaxDepth] = useState(2)
+    const [relationshipTypes, setRelationshipTypes] = useState<string[]>([])
+
+    // Faceted Search State
+    const [selectedEntityTypes, setSelectedEntityTypes] = useState<string[]>([])
+    const [selectedTags, setSelectedTags] = useState<string[]>([])
+    const [availableTags, setAvailableTags] = useState<string[]>(['architecture', 'meeting', 'decisions', 'Q3'])
+
+    // Community Search State
+    const [communityUuid, setCommunityUuid] = useState('')
+    const [includeEpisodes, setIncludeEpisodes] = useState(true)
+
+    // Voice Search State
+    const [isListening, setIsListening] = useState(false)
+
+    // Search History
+    const [searchHistory, setSearchHistory] = useState<Array<{ query: string; mode: string; timestamp: number }>>([])
+    const [showHistory, setShowHistory] = useState(false)
+
+    // Help Tooltip State
+    const [showTooltip, setShowTooltip] = useState<string | null>(null)
 
     const handleCopyId = (id: string, e: React.MouseEvent) => {
         e.stopPropagation()
@@ -88,37 +125,112 @@ export const EnhancedSearch: React.FC = () => {
     }
 
     const handleSearch = async () => {
-        if (!query) return
+        // Validate based on search mode
+        if (searchMode === 'graphTraversal' && !startEntityUuid) {
+            setError('Please enter a start entity UUID')
+            return
+        }
+        if (searchMode === 'community' && !communityUuid) {
+            setError('Please enter a community UUID')
+            return
+        }
+        if ((searchMode === 'semantic' || searchMode === 'temporal' || searchMode === 'faceted') && !query) {
+            setError('Please enter a search query')
+            return
+        }
 
         setLoading(true)
         setError(null)
 
         try {
-            let since = undefined
-            if (timeRange === 'last30') {
-                const date = new Date()
-                date.setDate(date.getDate() - 30)
-                since = date.toISOString()
-            }
+            let data: any
 
-            const data = await graphitiService.advancedSearch({
-                query,
-                strategy,
-                project_id: projectId,
-                focal_node_uuid: retrievalMode === 'nodeDistance' ? focalNode : undefined,
-                reranker: crossEncoder,
-                since,
-            })
+            switch (searchMode) {
+                case 'semantic':
+                    let since = undefined
+                    if (timeRange === 'last30') {
+                        const date = new Date()
+                        date.setDate(date.getDate() - 30)
+                        since = date.toISOString()
+                    } else if (timeRange === 'custom' && customTimeRange.since) {
+                        since = customTimeRange.since
+                    }
+
+                    data = await graphitiService.advancedSearch({
+                        query,
+                        strategy,
+                        project_id: projectId,
+                        focal_node_uuid: retrievalMode === 'nodeDistance' ? focalNode : undefined,
+                        reranker: crossEncoder,
+                        since,
+                    })
+                    break
+
+                case 'graphTraversal':
+                    data = await graphitiService.searchByGraphTraversal({
+                        start_entity_uuid: startEntityUuid,
+                        max_depth: maxDepth,
+                        relationship_types: relationshipTypes.length > 0 ? relationshipTypes : undefined,
+                        limit: 50,
+                    })
+                    break
+
+                case 'temporal':
+                    data = await graphitiService.searchTemporal({
+                        query,
+                        since: timeRange === 'custom' ? customTimeRange.since : undefined,
+                        until: timeRange === 'custom' ? customTimeRange.until : undefined,
+                        limit: 50,
+                    })
+                    break
+
+                case 'faceted':
+                    data = await graphitiService.searchWithFacets({
+                        query,
+                        entity_types: selectedEntityTypes.length > 0 ? selectedEntityTypes : undefined,
+                        tags: selectedTags.length > 0 ? selectedTags : undefined,
+                        since: timeRange === 'custom' ? customTimeRange.since : undefined,
+                        limit: 50,
+                    })
+                    break
+
+                case 'community':
+                    data = await graphitiService.searchByCommunity({
+                        community_uuid: communityUuid,
+                        limit: 50,
+                        include_episodes: includeEpisodes,
+                    })
+                    break
+            }
 
             // Map the raw results to our display format
             const mappedResults = (data.results || []).map((item: any) => ({
-                content: item.content || item.text || 'No content',
+                content: item.content || item.summary || item.text || 'No content',
                 score: item.score || 0,
-                metadata: item.metadata || {},
+                metadata: {
+                    ...item.metadata,  // Spread original metadata first
+                    type: item.type || item.entity_type || 'Result',  // Then override with explicit type
+                    uuid: item.uuid || item.metadata?.uuid,
+                    name: item.name || item.metadata?.name,
+                    depth: item.depth,
+                    created_at: item.created_at || item.metadata?.created_at,
+                    tags: item.tags || item.metadata?.tags || [],
+                },
                 source: item.source || 'unknown'
             }))
 
             setResults(mappedResults)
+
+            // Add to search history
+            if (query || startEntityUuid || communityUuid) {
+                const historyItem = {
+                    query: query || startEntityUuid || communityUuid || '',
+                    mode: searchMode,
+                    timestamp: Date.now()
+                }
+                setSearchHistory(prev => [historyItem, ...prev.slice(0, 9)]) // Keep last 10
+            }
+
             // Expand results by default when search is done
             if (mappedResults.length > 0) {
                 setIsResultsCollapsed(false)
@@ -147,6 +259,84 @@ export const EnhancedSearch: React.FC = () => {
         return Array.from(ids)
     }, [results])
 
+    // Voice Search Handler
+    const handleVoiceSearch = () => {
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+            setError('Voice search is not supported in this browser')
+            return
+        }
+
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+        const recognition = new SpeechRecognition()
+
+        recognition.onstart = () => {
+            setIsListening(true)
+        }
+
+        recognition.onresult = (event: any) => {
+            const transcript = event.results[0][0].transcript
+            setQuery(transcript)
+            setIsListening(false)
+        }
+
+        recognition.onerror = () => {
+            setIsListening(false)
+            setError('Voice search failed. Please try again.')
+        }
+
+        recognition.onend = () => {
+            setIsListening(false)
+        }
+
+        recognition.start()
+    }
+
+    // Export Results Handler
+    const handleExportResults = () => {
+        const exportData = {
+            search_mode: searchMode,
+            query: query || startEntityUuid || communityUuid,
+            timestamp: new Date().toISOString(),
+            total_results: results.length,
+            results: results.map(r => ({
+                content: r.content,
+                score: r.score,
+                type: r.metadata.type,
+                uuid: r.metadata.uuid,
+                name: r.metadata.name,
+                created_at: r.metadata.created_at
+            }))
+        }
+
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `search-results-${Date.now()}.json`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+    }
+
+    // Toggle Tag Selection
+    const handleToggleTag = (tag: string) => {
+        setSelectedTags(prev =>
+            prev.includes(tag)
+                ? prev.filter(t => t !== tag)
+                : [...prev, tag]
+        )
+    }
+
+    // Toggle Entity Type Selection
+    const handleToggleEntityType = (type: string) => {
+        setSelectedEntityTypes(prev =>
+            prev.includes(type)
+                ? prev.filter(t => t !== type)
+                : [...prev, type]
+        )
+    }
+
     // Reset subgraph mode when no results
     React.useEffect(() => {
         if (highlightNodeIds.length === 0) {
@@ -165,9 +355,11 @@ export const EnhancedSearch: React.FC = () => {
         switch (type?.toLowerCase()) {
             case 'document':
             case 'pdf':
+            case 'file':
                 return <FileText className="w-5 h-5" />
             case 'thread':
             case 'slack':
+            case 'message':
                 return <MessageSquare className="w-5 h-5" />
             case 'asset':
             case 'img':
@@ -176,9 +368,30 @@ export const EnhancedSearch: React.FC = () => {
             case 'reference':
             case 'web':
             case 'jira':
+            case 'link':
                 return <LinkIcon className="w-5 h-5" />
+            case 'episode':
+            case 'memory':
+                return <MessageSquare className="w-5 h-5 text-blue-500" />
+            case 'person':
+            case 'user':
+                return <FileText className="w-5 h-5 text-purple-500" />
+            case 'organization':
+            case 'company':
+                return <Network className="w-5 h-5 text-indigo-500" />
+            case 'location':
+            case 'place':
+                return <Target className="w-5 h-5 text-red-500" />
+            case 'event':
+                return <Target className="w-5 h-5 text-amber-500" />
+            case 'concept':
+            case 'topic':
+                return <Folder className="w-5 h-5 text-emerald-500" />
+            case 'product':
+                return <FileText className="w-5 h-5 text-cyan-500" />
             default:
-                return <FileText className="w-5 h-5" />
+                // Fallback for unknown entity types - use a generic entity icon
+                return <Network className="w-5 h-5 text-slate-400" />
         }
     }
 
@@ -189,6 +402,111 @@ export const EnhancedSearch: React.FC = () => {
             <main className="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-[#121520]">
                 {/* Header */}
                 <header className="flex flex-col gap-4 px-6 pt-6 pb-2 shrink-0">
+                    {/* Search Mode Selector */}
+                    <div className="flex flex-wrap gap-2 items-center">
+                        <button
+                            onClick={() => setSearchMode('semantic')}
+                            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${searchMode === 'semantic'
+                                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                                : 'bg-white dark:bg-[#1e212b] text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800'
+                                }`}
+                        >
+                            <Search className="w-4 h-4" />
+                            Semantic Search
+                        </button>
+                        <button
+                            onClick={() => setSearchMode('graphTraversal')}
+                            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${searchMode === 'graphTraversal'
+                                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                                : 'bg-white dark:bg-[#1e212b] text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800'
+                                }`}
+                        >
+                            <Network className="w-4 h-4" />
+                            Graph Traversal
+                        </button>
+                        <button
+                            onClick={() => setSearchMode('temporal')}
+                            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${searchMode === 'temporal'
+                                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                                : 'bg-white dark:bg-[#1e212b] text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800'
+                                }`}
+                        >
+                            <ArrowUpDown className="w-4 h-4" />
+                            Temporal Search
+                        </button>
+                        <button
+                            onClick={() => setSearchMode('faceted')}
+                            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${searchMode === 'faceted'
+                                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                                : 'bg-white dark:bg-[#1e212b] text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800'
+                                }`}
+                        >
+                            <Filter className="w-4 h-4" />
+                            Faceted Search
+                        </button>
+                        <button
+                            onClick={() => setSearchMode('community')}
+                            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${searchMode === 'community'
+                                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                                : 'bg-white dark:bg-[#1e212b] text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800'
+                                }`}
+                        >
+                            <Grid className="w-4 h-4" />
+                            Community Search
+                        </button>
+                        <div className="flex-1"></div>
+                        {/* Search History & Export */}
+                        <div className="flex items-center gap-2">
+                            {searchHistory.length > 0 && (
+                                <button
+                                    onClick={() => setShowHistory(!showHistory)}
+                                    className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${showHistory
+                                        ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
+                                        : 'bg-white dark:bg-[#1e212b] text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800'
+                                        }`}
+                                >
+                                    <MessageSquare className="w-3.5 h-3.5" />
+                                    History ({searchHistory.length})
+                                </button>
+                            )}
+                            {results.length > 0 && (
+                                <button
+                                    onClick={handleExportResults}
+                                    className="px-3 py-2 rounded-lg text-xs font-semibold bg-white dark:bg-[#1e212b] text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-all flex items-center gap-1.5"
+                                >
+                                    <Download className="w-3.5 h-3.5" />
+                                    Export
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Search History Dropdown */}
+                    {showHistory && searchHistory.length > 0 && (
+                        <div className="bg-white dark:bg-[#1e212b] border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg p-3 max-h-64 overflow-y-auto">
+                            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Recent Searches</div>
+                            {searchHistory.map((item, idx) => (
+                                <button
+                                    key={idx}
+                                    onClick={() => {
+                                        setQuery(item.query)
+                                        setSearchMode(item.mode as any)
+                                        setShowHistory(false)
+                                    }}
+                                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-between group"
+                                >
+                                    <div className="flex flex-col">
+                                        <span className="text-sm text-slate-900 dark:text-white truncate max-w-md">{item.query}</span>
+                                        <span className="text-xs text-slate-500 capitalize">{item.mode.replace('graphTraversal', 'Graph Traversal')}</span>
+                                    </div>
+                                    <span className="text-xs text-slate-400">
+                                        {new Date(item.timestamp).toLocaleTimeString()}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
                     <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
                         <div className="flex-1 w-full flex gap-3">
                             <button
@@ -199,23 +517,50 @@ export const EnhancedSearch: React.FC = () => {
                             </button>
                             <label className="flex-1 relative group">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <Search className="w-5 h-5 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
+                                    {searchMode === 'graphTraversal' ? (
+                                        <Network className="w-5 h-5 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
+                                    ) : searchMode === 'community' ? (
+                                        <Grid className="w-5 h-5 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
+                                    ) : (
+                                        <Search className="w-5 h-5 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
+                                    )}
                                 </div>
                                 <input
                                     className="block w-full pl-10 pr-12 py-3 bg-white dark:bg-[#1e212b] border border-transparent focus:border-blue-600/50 ring-0 focus:ring-4 focus:ring-blue-600/10 rounded-xl text-sm placeholder-slate-400 text-slate-900 dark:text-white shadow-sm transition-all"
-                                    placeholder={isSearchFocused ? '' : "Search memories by keyword, concept, or ask a question..."}
+                                    placeholder={
+                                        searchMode === 'graphTraversal'
+                                            ? 'Enter start entity UUID...'
+                                            : searchMode === 'community'
+                                                ? 'Enter community UUID...'
+                                                : isSearchFocused
+                                                    ? ''
+                                                    : "Search memories by keyword, concept, or ask a question..."
+                                    }
                                     type="text"
-                                    value={query}
-                                    onChange={(e) => setQuery(e.target.value)}
+                                    value={searchMode === 'graphTraversal' ? startEntityUuid : searchMode === 'community' ? communityUuid : query}
+                                    onChange={(e) => {
+                                        if (searchMode === 'graphTraversal') setStartEntityUuid(e.target.value)
+                                        else if (searchMode === 'community') setCommunityUuid(e.target.value)
+                                        else setQuery(e.target.value)
+                                    }}
                                     onFocus={() => setIsSearchFocused(true)}
                                     onBlur={() => setIsSearchFocused(false)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                                 />
-                                <div className="absolute inset-y-0 right-0 pr-2 flex items-center">
-                                    <button className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" title="Voice Search">
-                                        <Mic className="w-5 h-5" />
-                                    </button>
-                                </div>
+                                {(searchMode === 'semantic' || searchMode === 'temporal' || searchMode === 'faceted') && (
+                                    <div className="absolute inset-y-0 right-0 pr-2 flex items-center">
+                                        <button
+                                            onClick={handleVoiceSearch}
+                                            className={`p-1.5 rounded-lg transition-colors ${isListening
+                                                ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 animate-pulse'
+                                                : 'text-slate-400 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-700'
+                                                }`}
+                                            title={isListening ? "Listening..." : "Voice Search"}
+                                        >
+                                            <Mic className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                )}
                             </label>
                             <button
                                 onClick={handleSearch}
@@ -292,9 +637,9 @@ export const EnhancedSearch: React.FC = () => {
                                 </button>
                             </div>
 
-                            {/* Tab Content */}
+                            {/* Tab Content - Shows different options based on search mode */}
                             <div className="flex-1 flex flex-col gap-6 overflow-y-auto custom-scrollbar pr-1">
-                                {configTab === 'params' ? (
+                                {searchMode === 'semantic' && configTab === 'params' && (
                                     <>
                                         {/* Retrieval Mode */}
                                         <div className="flex flex-col gap-2">
@@ -319,7 +664,19 @@ export const EnhancedSearch: React.FC = () => {
                                         <div className="flex flex-col gap-2">
                                             <div className="flex items-center justify-between">
                                                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Strategy Recipe</label>
-                                                <Info className="w-4 h-4 text-slate-400 cursor-help" />
+                                                <div className="relative">
+                                                    <Info
+                                                        className="w-4 h-4 text-slate-400 cursor-help hover:text-blue-600"
+                                                        onMouseEnter={() => setShowTooltip('strategy')}
+                                                        onMouseLeave={() => setShowTooltip(null)}
+                                                    />
+                                                    {showTooltip === 'strategy' && (
+                                                        <div className="absolute right-0 top-6 w-64 p-2 bg-slate-900 dark:bg-slate-700 text-white text-xs rounded-lg shadow-lg z-50">
+                                                            <p className="font-semibold mb-1">Search Strategy</p>
+                                                            <p>Combines different search techniques like hybrid retrieval, cross-encoder reranking, and MMR for diversity.</p>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                             <div className="relative">
                                                 <select
@@ -342,7 +699,19 @@ export const EnhancedSearch: React.FC = () => {
                                         <div className="flex flex-col gap-2">
                                             <div className="flex items-center justify-between">
                                                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Focal Node UUID</label>
-                                                <HelpCircle className="w-4 h-4 text-slate-400 cursor-help" />
+                                                <div className="relative">
+                                                    <HelpCircle
+                                                        className="w-4 h-4 text-slate-400 cursor-help hover:text-blue-600"
+                                                        onMouseEnter={() => setShowTooltip('focal')}
+                                                        onMouseLeave={() => setShowTooltip(null)}
+                                                    />
+                                                    {showTooltip === 'focal' && (
+                                                        <div className="absolute right-0 top-6 w-64 p-2 bg-slate-900 dark:bg-slate-700 text-white text-xs rounded-lg shadow-lg z-50">
+                                                            <p className="font-semibold mb-1">Focal Node</p>
+                                                            <p>A specific node UUID to use as the center for node-distance reranking. Results closer to this node will rank higher.</p>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                             <div className="relative group">
                                                 <input
@@ -376,13 +745,60 @@ export const EnhancedSearch: React.FC = () => {
                                             </div>
                                         </div>
                                     </>
-                                ) : (
+                                )}
+
+                                {searchMode === 'graphTraversal' && configTab === 'params' && (
                                     <>
-                                        {/* Time Range */}
+                                        {/* Max Depth */}
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Max Depth</label>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => setMaxDepth(Math.max(1, maxDepth - 1))}
+                                                    className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                                >
+                                                    <Minus className="w-4 h-4" />
+                                                </button>
+                                                <span className="flex-1 text-center font-bold text-slate-900 dark:text-white">{maxDepth}</span>
+                                                <button
+                                                    onClick={() => setMaxDepth(Math.min(5, maxDepth + 1))}
+                                                    className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                                >
+                                                    <Plus className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Relationship Types */}
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Relationship Types</label>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {['RELATES_TO', 'MENTIONS', 'PART_OF', 'CONTAINS', 'BELONGS_TO'].map(rel => (
+                                                    <button
+                                                        key={rel}
+                                                        onClick={() => setRelationshipTypes(prev =>
+                                                            prev.includes(rel) ? prev.filter(r => r !== rel) : [...prev, rel]
+                                                        )}
+                                                        className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors ${relationshipTypes.includes(rel)
+                                                            ? 'bg-blue-600 text-white'
+                                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                                            }`}
+                                                    >
+                                                        {rel}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+
+                                {searchMode === 'temporal' && (
+                                    <>
+                                        {/* Time Range Selector */}
                                         <div className="flex flex-col gap-3">
                                             <div className="flex items-center justify-between">
                                                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Time Range</h3>
-                                                <button onClick={() => setTimeRange('last30')} className="text-xs text-blue-600 hover:underline font-medium">Reset</button>
+                                                <button onClick={() => { setTimeRange('all'); setCustomTimeRange({}) }} className="text-xs text-blue-600 hover:underline font-medium">Reset</button>
                                             </div>
                                             <div className="flex flex-col gap-1.5">
                                                 <label className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer group transition-colors">
@@ -418,20 +834,100 @@ export const EnhancedSearch: React.FC = () => {
                                             </div>
                                         </div>
 
+                                        {/* Custom Date Pickers */}
+                                        {timeRange === 'custom' && (
+                                            <div className="flex flex-col gap-3">
+                                                <div>
+                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">From</label>
+                                                    <input
+                                                        type="datetime-local"
+                                                        value={customTimeRange.since || ''}
+                                                        onChange={(e) => setCustomTimeRange(prev => ({ ...prev, since: e.target.value ? new Date(e.target.value).toISOString() : undefined }))}
+                                                        className="w-full text-xs py-2.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-1 focus:ring-blue-600 text-slate-700 dark:text-slate-200"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">To</label>
+                                                    <input
+                                                        type="datetime-local"
+                                                        value={customTimeRange.until || ''}
+                                                        onChange={(e) => setCustomTimeRange(prev => ({ ...prev, until: e.target.value ? new Date(e.target.value).toISOString() : undefined }))}
+                                                        className="w-full text-xs py-2.5 px-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-1 focus:ring-blue-600 text-slate-700 dark:text-slate-200"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+
+                                {searchMode === 'faceted' && (
+                                    <>
+                                        {/* Entity Types */}
+                                        <div className="flex flex-col gap-3">
+                                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Entity Types</h3>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {['Person', 'Organization', 'Location', 'Event', 'Concept', 'Product'].map(type => (
+                                                    <button
+                                                        key={type}
+                                                        onClick={() => handleToggleEntityType(type)}
+                                                        className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors ${selectedEntityTypes.includes(type)
+                                                            ? 'bg-blue-600 text-white'
+                                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                                            }`}
+                                                    >
+                                                        {type}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
                                         <div className="h-px bg-slate-100 dark:bg-slate-700 my-1"></div>
 
                                         {/* Tags */}
                                         <div className="flex flex-col gap-3">
                                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tags</h3>
                                             <div className="flex flex-wrap gap-1.5">
-                                                <button className="px-2 py-1 rounded-md bg-blue-600/10 text-blue-600 border border-blue-600/10 text-[10px] font-semibold transition-colors">#architecture</button>
-                                                <button className="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 border border-transparent text-[10px] font-medium transition-colors">#meeting</button>
-                                                <button className="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 border border-transparent text-[10px] font-medium transition-colors">#decisions</button>
-                                                <button className="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 border border-transparent text-[10px] font-medium transition-colors">#Q3</button>
+                                                {availableTags.map(tag => (
+                                                    <button
+                                                        key={tag}
+                                                        onClick={() => handleToggleTag(tag)}
+                                                        className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors ${selectedTags.includes(tag)
+                                                            ? 'bg-blue-600/10 text-blue-600 border border-blue-600/10'
+                                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 border border-transparent'
+                                                            }`}
+                                                    >
+                                                        #{tag}
+                                                    </button>
+                                                ))}
                                                 <button className="px-2 py-1 rounded-md bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-dashed border-slate-300 dark:border-slate-600 hover:border-blue-600/50 hover:text-blue-600 text-[10px] font-medium transition-colors flex items-center gap-1">
                                                     <Plus className="w-3 h-3" /> Add
                                                 </button>
                                             </div>
+                                        </div>
+                                    </>
+                                )}
+
+                                {searchMode === 'community' && (
+                                    <>
+                                        {/* Include Episodes Toggle */}
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Results</label>
+                                            <label className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={includeEpisodes}
+                                                    onChange={(e) => setIncludeEpisodes(e.target.checked)}
+                                                    className="w-4 h-4 text-blue-600 focus:ring-blue-600 bg-white dark:bg-[#1e212b] border-slate-300 dark:border-slate-600 rounded"
+                                                />
+                                                <span className="text-xs text-slate-700 dark:text-slate-300">Include Episodes</span>
+                                            </label>
+                                        </div>
+
+                                        {/* Community Info */}
+                                        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                            <p className="text-xs text-blue-800 dark:text-blue-300">
+                                                Enter a Community UUID in the search box to find all entities and episodes within that community.
+                                            </p>
                                         </div>
                                     </>
                                 )}

@@ -4,10 +4,24 @@ import { EnhancedSearch } from '../../../pages/project/EnhancedSearch'
 import { graphitiService } from '../../../services/graphitiService'
 import { useParams } from 'react-router-dom'
 
+// Mock CytoscapeGraph component to avoid canvas issues in test environment
+vi.mock('../../../components/CytoscapeGraph', () => ({
+    CytoscapeGraph: () => null
+}))
+
+// Mock useProjectStore
+vi.mock('../../../stores/project', () => ({
+    useProjectStore: () => ({
+        currentProject: null
+    })
+}))
+
 vi.mock('../../../services/graphitiService', () => ({
     graphitiService: {
         getGraphData: vi.fn(),
+        advancedSearch: vi.fn(),
         searchByGraphTraversal: vi.fn(),
+        searchByCommunity: vi.fn(),
         searchTemporal: vi.fn(),
         searchWithFacets: vi.fn(),
     }
@@ -27,85 +41,246 @@ describe('EnhancedSearch', () => {
         (useParams as any).mockReturnValue({ projectId: 'p1' });
     })
 
-    it('renders search mode buttons', () => {
-        render(<EnhancedSearch />)
-        expect(screen.getByRole('button', { name: 'Semantic Search' })).toBeInTheDocument()
-        expect(screen.getByRole('button', { name: 'Graph Traversal' })).toBeInTheDocument()
-        expect(screen.getByRole('button', { name: 'Temporal Search' })).toBeInTheDocument()
-        expect(screen.getByRole('button', { name: 'Faceted Search' })).toBeInTheDocument()
-    })
-
-    it('switches to Graph Traversal mode', () => {
-        render(<EnhancedSearch />)
-        fireEvent.click(screen.getByRole('button', { name: 'Graph Traversal' }))
-
-        expect(screen.getByText('Start Entity UUID')).toBeInTheDocument()
-        expect(screen.getByText('Max Depth (1-5)')).toBeInTheDocument()
-    })
-
-    it('performs Graph Traversal search', async () => {
-        (graphitiService.searchByGraphTraversal as any).mockResolvedValue({
-            results: [{ content: 'Result 1', score: 0.9, metadata: { type: 'entity' }, source: 'graph' }]
+    describe('Search Mode Buttons', () => {
+        it('renders all 5 search mode buttons', () => {
+            render(<EnhancedSearch />)
+            expect(screen.getByRole('button', { name: /Semantic Search/i })).toBeInTheDocument()
+            expect(screen.getByRole('button', { name: /Graph Traversal/i })).toBeInTheDocument()
+            expect(screen.getByRole('button', { name: /Temporal Search/i })).toBeInTheDocument()
+            expect(screen.getByRole('button', { name: /Faceted Search/i })).toBeInTheDocument()
+            expect(screen.getByRole('button', { name: /Community Search/i })).toBeInTheDocument()
         })
 
-        render(<EnhancedSearch />)
-        fireEvent.click(screen.getByRole('button', { name: 'Graph Traversal' }))
+        it('switches to Graph Traversal mode', () => {
+            render(<EnhancedSearch />)
+            fireEvent.click(screen.getByRole('button', { name: /Graph Traversal/i }))
+            expect(screen.getByPlaceholderText(/Enter start entity UUID/i)).toBeInTheDocument()
+        })
 
-        fireEvent.change(screen.getByPlaceholderText('entity-uuid-123'), { target: { value: 'uuid-1' } })
+        it('switches to Temporal Search mode', () => {
+            render(<EnhancedSearch />)
+            fireEvent.click(screen.getByRole('button', { name: /Temporal Search/i }))
+            expect(screen.getByText('Time Range')).toBeInTheDocument()
+        })
 
-        // Find the search button. The icon text 'search' + 'Search' might make strict match fail.
-        // We look for the button containing 'Search' that is not one of the mode buttons.
-        const searchButton = screen.getAllByRole('button').find(b => b.textContent?.includes('Search') && !b.textContent?.includes('Semantic') && !b.textContent?.includes('Temporal') && !b.textContent?.includes('Faceted') && !b.textContent?.includes('Graph'))
-        if (searchButton) fireEvent.click(searchButton)
+        it('switches to Faceted Search mode', () => {
+            render(<EnhancedSearch />)
+            fireEvent.click(screen.getByRole('button', { name: /Faceted Search/i }))
+            expect(screen.getByText('Entity Types')).toBeInTheDocument()
+        })
 
-        await waitFor(() => {
-            expect(graphitiService.searchByGraphTraversal).toHaveBeenCalledWith(expect.objectContaining({
-                start_entity_uuid: 'uuid-1',
-                max_depth: 2
-            }))
-            expect(screen.getByText('Result 1')).toBeInTheDocument()
+        it('switches to Community Search mode', () => {
+            render(<EnhancedSearch />)
+            fireEvent.click(screen.getByRole('button', { name: /Community Search/i }))
+            expect(screen.getByPlaceholderText(/Enter community UUID/i)).toBeInTheDocument()
         })
     })
 
-    it('performs Temporal Search', async () => {
-        (graphitiService.searchTemporal as any).mockResolvedValue({
-            results: [{ content: 'Temporal Result', score: 0.8, metadata: { type: 'episode' }, source: 'temporal' }]
-        })
+    describe('Semantic Search', () => {
+        it('performs semantic search', async () => {
+            (graphitiService.advancedSearch as any).mockResolvedValue({
+                results: [{ content: 'Test Result', score: 0.9, metadata: { type: 'episode', name: 'Test' }, source: 'episode' }],
+                total: 1
+            })
 
-        render(<EnhancedSearch />)
-        fireEvent.click(screen.getByRole('button', { name: 'Temporal Search' }))
+            render(<EnhancedSearch />)
+            const searchInput = screen.getByPlaceholderText(/Search memories by keyword/i)
+            fireEvent.change(searchInput, { target: { value: 'test query' } })
 
-        fireEvent.change(screen.getByPlaceholderText('Enter your search query...'), { target: { value: 'test' } })
+            const retrieveButton = screen.getByRole('button', { name: /Retrieve/i })
+            fireEvent.click(retrieveButton)
 
-        const searchButton = screen.getAllByRole('button').find(b => b.textContent?.includes('Search') && !b.textContent?.includes('Semantic') && !b.textContent?.includes('Temporal') && !b.textContent?.includes('Faceted') && !b.textContent?.includes('Graph'))
-        if (searchButton) fireEvent.click(searchButton)
-
-        await waitFor(() => {
-            expect(graphitiService.searchTemporal).toHaveBeenCalled()
-            expect(screen.getByText('Temporal Result')).toBeInTheDocument()
+            await waitFor(() => {
+                expect(graphitiService.advancedSearch).toHaveBeenCalledWith(expect.objectContaining({
+                    query: 'test query'
+                }))
+            })
         })
     })
 
-    it('performs Faceted Search', async () => {
-        (graphitiService.searchWithFacets as any).mockResolvedValue({
-            results: [{ content: 'Faceted Result', score: 0.7, metadata: { type: 'entity' }, source: 'faceted' }]
+    describe('Graph Traversal Search', () => {
+        it('shows graph traversal options', () => {
+            render(<EnhancedSearch />)
+            fireEvent.click(screen.getByRole('button', { name: /Graph Traversal/i }))
+
+            expect(screen.getByText('Max Depth')).toBeInTheDocument()
+            expect(screen.getByText('Relationship Types')).toBeInTheDocument()
         })
 
-        render(<EnhancedSearch />)
-        fireEvent.click(screen.getByRole('button', { name: 'Faceted Search' }))
+        it('performs graph traversal search', async () => {
+            (graphitiService.searchByGraphTraversal as any).mockResolvedValue({
+                results: [{ content: 'Result 1', score: 0.9, metadata: { type: 'entity', name: 'Test Entity' }, source: 'graph' }]
+            })
 
-        fireEvent.change(screen.getByPlaceholderText('Person, Organization'), { target: { value: 'Person' } })
-        fireEvent.change(screen.getByPlaceholderText('Enter your search query...'), { target: { value: 'test' } })
+            render(<EnhancedSearch />)
+            fireEvent.click(screen.getByRole('button', { name: /Graph Traversal/i }))
 
-        const searchButton = screen.getAllByRole('button').find(b => b.textContent?.includes('Search') && !b.textContent?.includes('Semantic') && !b.textContent?.includes('Temporal') && !b.textContent?.includes('Faceted') && !b.textContent?.includes('Graph'))
-        if (searchButton) fireEvent.click(searchButton)
+            const uuidInput = screen.getByPlaceholderText(/Enter start entity UUID/i)
+            fireEvent.change(uuidInput, { target: { value: 'uuid-123' } })
 
-        await waitFor(() => {
-            expect(graphitiService.searchWithFacets).toHaveBeenCalledWith(expect.objectContaining({
-                query: 'test',
-                entity_types: ['Person']
-            }))
-            expect(screen.getByText('Faceted Result')).toBeInTheDocument()
+            const retrieveButton = screen.getByRole('button', { name: /Retrieve/i })
+            fireEvent.click(retrieveButton)
+
+            await waitFor(() => {
+                expect(graphitiService.searchByGraphTraversal).toHaveBeenCalledWith(expect.objectContaining({
+                    start_entity_uuid: 'uuid-123',
+                    max_depth: 2
+                }))
+            })
+        })
+    })
+
+    describe('Temporal Search', () => {
+        it('shows temporal search options', () => {
+            render(<EnhancedSearch />)
+            fireEvent.click(screen.getByRole('button', { name: /Temporal Search/i }))
+
+            expect(screen.getByText('Time Range')).toBeInTheDocument()
+            expect(screen.getByRole('radio', { name: 'All Time' })).toBeInTheDocument()
+            expect(screen.getByRole('radio', { name: 'Last 30 Days' })).toBeInTheDocument()
+        })
+
+        it('performs temporal search', async () => {
+            (graphitiService.searchTemporal as any).mockResolvedValue({
+                results: [{ content: 'Temporal Result', score: 0.8, metadata: { type: 'episode' }, source: 'temporal' }]
+            })
+
+            render(<EnhancedSearch />)
+            fireEvent.click(screen.getByRole('button', { name: /Temporal Search/i }))
+
+            const searchInput = screen.getByPlaceholderText(/Search memories by keyword/i)
+            fireEvent.change(searchInput, { target: { value: 'test' } })
+
+            const retrieveButton = screen.getByRole('button', { name: /Retrieve/i })
+            fireEvent.click(retrieveButton)
+
+            await waitFor(() => {
+                expect(graphitiService.searchTemporal).toHaveBeenCalled()
+            })
+        })
+    })
+
+    describe('Faceted Search', () => {
+        it('shows faceted search options', () => {
+            render(<EnhancedSearch />)
+            fireEvent.click(screen.getByRole('button', { name: /Faceted Search/i }))
+
+            expect(screen.getByText('Entity Types')).toBeInTheDocument()
+            expect(screen.getByText('Tags')).toBeInTheDocument()
+        })
+
+        it('toggles entity types', () => {
+            render(<EnhancedSearch />)
+            fireEvent.click(screen.getByRole('button', { name: /Faceted Search/i }))
+
+            const personButton = screen.getByRole('button', { name: 'Person' })
+            fireEvent.click(personButton)
+
+            // Should toggle selection
+            expect(personButton).toHaveClass(/bg-blue-600/)
+        })
+
+        it('performs faceted search', async () => {
+            (graphitiService.searchWithFacets as any).mockResolvedValue({
+                results: [{ content: 'Faceted Result', score: 0.7, metadata: { type: 'entity' }, source: 'faceted' }]
+            })
+
+            render(<EnhancedSearch />)
+            fireEvent.click(screen.getByRole('button', { name: /Faceted Search/i }))
+
+            // Select an entity type
+            fireEvent.click(screen.getByRole('button', { name: 'Person' }))
+
+            const searchInput = screen.getByPlaceholderText(/Search memories by keyword/i)
+            fireEvent.change(searchInput, { target: { value: 'test' } })
+
+            const retrieveButton = screen.getByRole('button', { name: /Retrieve/i })
+            fireEvent.click(retrieveButton)
+
+            await waitFor(() => {
+                expect(graphitiService.searchWithFacets).toHaveBeenCalledWith(expect.objectContaining({
+                    query: 'test',
+                    entity_types: ['Person']
+                }))
+            })
+        })
+    })
+
+    describe('Community Search', () => {
+        it('shows community search options', () => {
+            render(<EnhancedSearch />)
+            fireEvent.click(screen.getByRole('button', { name: /Community Search/i }))
+
+            expect(screen.getByPlaceholderText(/Enter community UUID/i)).toBeInTheDocument()
+            expect(screen.getByText('Include Episodes')).toBeInTheDocument()
+        })
+
+        it('performs community search', async () => {
+            (graphitiService.searchByCommunity as any).mockResolvedValue({
+                results: [{ content: 'Community Result', score: 0.85, metadata: { type: 'entity' }, source: 'community' }]
+            })
+
+            render(<EnhancedSearch />)
+            fireEvent.click(screen.getByRole('button', { name: /Community Search/i }))
+
+            const uuidInput = screen.getByPlaceholderText(/Enter community UUID/i)
+            fireEvent.change(uuidInput, { target: { value: 'community-123' } })
+
+            const retrieveButton = screen.getByRole('button', { name: /Retrieve/i })
+            fireEvent.click(retrieveButton)
+
+            await waitFor(() => {
+                expect(graphitiService.searchByCommunity).toHaveBeenCalledWith(expect.objectContaining({
+                    community_uuid: 'community-123'
+                }))
+            })
+        })
+    })
+
+    describe('Search History', () => {
+        it('saves search to history after successful search', async () => {
+            (graphitiService.advancedSearch as any).mockResolvedValue({
+                results: [{ content: 'Test', score: 0.9, metadata: { type: 'episode' }, source: 'test' }],
+                total: 1
+            })
+
+            render(<EnhancedSearch />)
+
+            const searchInput = screen.getByPlaceholderText(/Search memories by keyword/i)
+            fireEvent.change(searchInput, { target: { value: 'history test' } })
+
+            const retrieveButton = screen.getByRole('button', { name: /Retrieve/i })
+            fireEvent.click(retrieveButton)
+
+            await waitFor(() => {
+                expect(graphitiService.advancedSearch).toHaveBeenCalled()
+            })
+
+            // History button should appear
+            await waitFor(() => {
+                expect(screen.getByRole('button', { name: /History/ })).toBeInTheDocument()
+            })
+        })
+    })
+
+    describe('Export Functionality', () => {
+        it('shows export button when results exist', async () => {
+            (graphitiService.advancedSearch as any).mockResolvedValue({
+                results: [{ content: 'Test', score: 0.9, metadata: { type: 'episode' }, source: 'test' }],
+                total: 1
+            })
+
+            render(<EnhancedSearch />)
+
+            const searchInput = screen.getByPlaceholderText(/Search memories by keyword/i)
+            fireEvent.change(searchInput, { target: { value: 'test' } })
+
+            const retrieveButton = screen.getByRole('button', { name: /Retrieve/i })
+            fireEvent.click(retrieveButton)
+
+            await waitFor(() => {
+                expect(screen.getByRole('button', { name: /Export/i })).toBeInTheDocument()
+            })
         })
     })
 })

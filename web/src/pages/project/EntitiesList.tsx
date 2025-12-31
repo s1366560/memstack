@@ -10,13 +10,24 @@ interface Entity {
     created_at?: string
 }
 
+interface EntityType {
+    entity_type: string
+    count: number
+}
+
 interface Relationship {
-    uuid: string
-    source_uuid: string
-    target_uuid: string
+    edge_id: string
     relation_type: string
+    direction: string
     fact: string
     score: number
+    created_at?: string
+    related_entity: {
+        uuid: string
+        name: string
+        entity_type: string
+        summary: string
+    }
 }
 
 export const EntitiesList: React.FC = () => {
@@ -24,28 +35,73 @@ export const EntitiesList: React.FC = () => {
     const [entities, setEntities] = useState<Entity[]>([])
     const [selectedEntity, setSelectedEntity] = useState<Entity | null>(null)
     const [relationships, setRelationships] = useState<Relationship[]>([])
+    const [entityTypes, setEntityTypes] = useState<EntityType[]>([])
     const [loading, setLoading] = useState(true)
+    const [loadingTypes, setLoadingTypes] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [page, setPage] = useState(0)
     const [totalCount, setTotalCount] = useState(0)
     const limit = 20
-    const [entityTypeFilter, setEntityTypeFilter] = useState<string>('')
 
-    const entityTypeColors: Record<string, string> = {
+    // Filters
+    const [entityTypeFilter, setEntityTypeFilter] = useState<string>('')
+    const [searchQuery, setSearchQuery] = useState<string>('')
+    const [sortBy, setSortBy] = useState<'name' | 'created_at'>('created_at')
+
+    // Predefined colors for common entity types
+    const predefinedColors: Record<string, string> = {
         'Person': 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400',
         'Organization': 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400',
         'Product': 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
         'Location': 'bg-lime-100 text-lime-800 dark:bg-lime-900/30 dark:text-lime-400',
         'Event': 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
+        'Concept': 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
+        'Technology': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400',
         'Entity': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
     }
 
+    // Color palette for custom entity types
+    const customColorPalette = [
+        'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
+        'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400',
+        'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-400',
+        'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400',
+        'bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/30 dark:text-fuchsia-400',
+        'bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-400',
+        'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+    ]
+
+    // Generate consistent color for entity type (including custom schemas)
+    const getEntityTypeColor = (entityType: string): string => {
+        if (predefinedColors[entityType]) {
+            return predefinedColors[entityType]
+        }
+        // Generate a consistent color based on entity type name hash
+        const hash = entityType.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+        return customColorPalette[hash % customColorPalette.length]
+    }
+
+    // Load entity types
+    const loadEntityTypes = useCallback(async () => {
+        setLoadingTypes(true)
+        try {
+            const result = await graphitiService.getEntityTypes({ project_id: projectId })
+            setEntityTypes(result.entity_types)
+        } catch (err) {
+            console.error('Failed to load entity types:', err)
+        } finally {
+            setLoadingTypes(false)
+        }
+    }, [projectId])
+
+    // Load entities
     const loadEntities = useCallback(async () => {
         setLoading(true)
         setError(null)
         try {
             const result = await graphitiService.listEntities({
-                tenant_id: undefined, // Will use current tenant
+                tenant_id: undefined,
                 project_id: projectId,
                 entity_type: entityTypeFilter || undefined,
                 limit,
@@ -61,6 +117,7 @@ export const EntitiesList: React.FC = () => {
         }
     }, [projectId, entityTypeFilter, page])
 
+    // Load relationships
     const loadRelationships = async (entityUuid: string) => {
         try {
             const result = await graphitiService.getEntityRelationships(entityUuid, { limit: 50 })
@@ -71,12 +128,39 @@ export const EntitiesList: React.FC = () => {
     }
 
     useEffect(() => {
+        loadEntityTypes()
+    }, [loadEntityTypes])
+
+    useEffect(() => {
         loadEntities()
     }, [loadEntities])
+
+    // Filter entities by search query
+    const filteredEntities = entities.filter(entity =>
+        searchQuery === '' ||
+        entity.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (entity.summary && entity.summary.toLowerCase().includes(searchQuery.toLowerCase()))
+    )
+
+    // Sort entities
+    const sortedEntities = [...filteredEntities].sort((a, b) => {
+        if (sortBy === 'name') {
+            return a.name.localeCompare(b.name)
+        } else {
+            const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
+            const dateB = b.created_at ? new Date(b.created_at).getTime() : 0
+            return dateB - dateA // Descending
+        }
+    })
 
     const handleEntityClick = (entity: Entity) => {
         setSelectedEntity(entity)
         loadRelationships(entity.uuid)
+    }
+
+    const handleRefresh = () => {
+        loadEntities()
+        loadEntityTypes()
     }
 
     return (
@@ -93,10 +177,13 @@ export const EntitiesList: React.FC = () => {
                 </div>
                 <div className="flex gap-2">
                     <button
-                        onClick={loadEntities}
-                        className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                        onClick={handleRefresh}
+                        disabled={loading}
+                        className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
                     >
-                        <span className="material-symbols-outlined">refresh</span>
+                        <span className="material-symbols-outlined">
+                            {loading ? 'progress_activity' : 'refresh'}
+                        </span>
                         Refresh
                     </button>
                 </div>
@@ -104,28 +191,87 @@ export const EntitiesList: React.FC = () => {
 
             {/* Filters */}
             <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-                <div className="flex items-center gap-4">
-                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                        Entity Type:
-                    </label>
-                    <select
-                        value={entityTypeFilter}
-                        onChange={(e) => {
-                            setEntityTypeFilter(e.target.value)
-                            setPage(0)
-                        }}
-                        className="px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-sm text-slate-900 dark:text-white"
-                    >
-                        <option value="">All Types</option>
-                        <option value="Person">Person</option>
-                        <option value="Organization">Organization</option>
-                        <option value="Product">Product</option>
-                        <option value="Location">Location</option>
-                        <option value="Event">Event</option>
-                    </select>
-                    <div className="ml-auto text-sm text-slate-500">
-                        {totalCount.toLocaleString()} entities total
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {/* Entity Type Filter */}
+                    <div className="flex items-center gap-2">
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                            Type:
+                        </label>
+                        <select
+                            value={entityTypeFilter}
+                            onChange={(e) => {
+                                setEntityTypeFilter(e.target.value)
+                                setPage(0)
+                            }}
+                            disabled={loadingTypes}
+                            className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-sm text-slate-900 dark:text-white disabled:opacity-50"
+                        >
+                            <option value="">All Types ({totalCount})</option>
+                            {loadingTypes ? (
+                                <option disabled>Loading types...</option>
+                            ) : (
+                                entityTypes.map((et) => (
+                                    <option key={et.entity_type} value={et.entity_type}>
+                                        {et.entity_type} ({et.count})
+                                    </option>
+                                ))
+                            )}
+                        </select>
                     </div>
+
+                    {/* Search */}
+                    <div className="md:col-span-2 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-slate-400">search</span>
+                        <input
+                            type="text"
+                            placeholder="Search entities by name or summary..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-sm text-slate-900 dark:text-white placeholder:text-slate-400"
+                        />
+                    </div>
+
+                    {/* Sort */}
+                    <div className="flex items-center gap-2">
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                            Sort by:
+                        </label>
+                        <select
+                            value={sortBy}
+                            onChange={(e) => setSortBy(e.target.value as 'name' | 'created_at')}
+                            className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-sm text-slate-900 dark:text-white"
+                        >
+                            <option value="created_at">Latest</option>
+                            <option value="name">Name</option>
+                        </select>
+                    </div>
+                </div>
+
+                {/* Stats */}
+                <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <div className="flex gap-4 text-sm text-slate-600 dark:text-slate-400">
+                        <span>
+                            Showing {sortedEntities.length} of {totalCount.toLocaleString()} entities
+                        </span>
+                        {entityTypeFilter && (
+                            <span className="flex items-center gap-1">
+                                <span className="material-symbols-outlined text-base">filter_alt</span>
+                                Filtered by: <strong>{entityTypeFilter}</strong>
+                            </span>
+                        )}
+                    </div>
+                    {(entityTypeFilter || searchQuery) && (
+                        <button
+                            onClick={() => {
+                                setEntityTypeFilter('')
+                                setSearchQuery('')
+                                setPage(0)
+                            }}
+                            className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                            Clear filters
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -144,38 +290,55 @@ export const EntitiesList: React.FC = () => {
                             <span className="material-symbols-outlined text-4xl text-red-500">error</span>
                             <p className="text-slate-500 mt-2">{error}</p>
                             <button
-                                onClick={loadEntities}
+                                onClick={handleRefresh}
                                 className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-500"
                             >
                                 Retry
                             </button>
                         </div>
-                    ) : entities.length === 0 ? (
+                    ) : sortedEntities.length === 0 ? (
                         <div className="text-center py-12 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
                             <span className="material-symbols-outlined text-4xl text-slate-400">
                                 category
                             </span>
-                            <p className="text-slate-500 mt-2">No entities found</p>
+                            <p className="text-slate-500 mt-2">
+                                {searchQuery || entityTypeFilter
+                                    ? 'No entities match your filters'
+                                    : 'No entities found'}
+                            </p>
+                            {(searchQuery || entityTypeFilter) && (
+                                <button
+                                    onClick={() => {
+                                        setEntityTypeFilter('')
+                                        setSearchQuery('')
+                                    }}
+                                    className="mt-4 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600"
+                                >
+                                    Clear filters
+                                </button>
+                            )}
                         </div>
                     ) : (
                         <>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {entities.map((entity) => (
+                                {sortedEntities.map((entity) => (
                                     <div
                                         key={entity.uuid}
                                         onClick={() => handleEntityClick(entity)}
-                                        className={`bg-white dark:bg-slate-800 rounded-lg border p-4 cursor-pointer transition-all hover:shadow-md ${selectedEntity?.uuid === entity.uuid
-                                                ? 'border-blue-500 shadow-md'
+                                        className={`bg-white dark:bg-slate-800 rounded-lg border p-4 cursor-pointer transition-all hover:shadow-md ${
+                                            selectedEntity?.uuid === entity.uuid
+                                                ? 'border-blue-500 shadow-md ring-2 ring-blue-500 ring-opacity-20'
                                                 : 'border-slate-200 dark:border-slate-700'
-                                            }`}
+                                        }`}
                                     >
                                         <div className="flex items-start justify-between mb-2">
-                                            <h3 className="font-semibold text-slate-900 dark:text-white">
+                                            <h3 className="font-semibold text-slate-900 dark:text-white flex-1">
                                                 {entity.name}
                                             </h3>
-                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${entityTypeColors[entity.entity_type] || entityTypeColors['Entity']
-                                                }`}>
-                                                {entity.entity_type || 'Entity'}
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ml-2 ${
+                                                getEntityTypeColor(entity.entity_type || 'Unknown')
+                                            }`}>
+                                                {entity.entity_type || 'Unknown'}
                                             </span>
                                         </div>
                                         {entity.summary && (
@@ -220,27 +383,50 @@ export const EntitiesList: React.FC = () => {
                 <div className="lg:col-span-1">
                     {selectedEntity ? (
                         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6 sticky top-6">
-                            <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">
-                                Entity Details
-                            </h2>
+                            <div className="flex items-start justify-between mb-4">
+                                <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                                    Entity Details
+                                </h2>
+                                <button
+                                    onClick={() => {
+                                        setSelectedEntity(null)
+                                        setRelationships([])
+                                    }}
+                                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                                >
+                                    <span className="material-symbols-outlined">close</span>
+                                </button>
+                            </div>
+
                             <div className="space-y-4">
                                 <div>
                                     <label className="text-xs font-semibold text-slate-500 uppercase">Name</label>
                                     <p className="text-slate-900 dark:text-white font-medium">{selectedEntity.name}</p>
                                 </div>
+
                                 <div>
                                     <label className="text-xs font-semibold text-slate-500 uppercase">Type</label>
-                                    <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium mt-1 ${entityTypeColors[selectedEntity.entity_type] || entityTypeColors['Entity']
-                                        }`}>
-                                        {selectedEntity.entity_type || 'Entity'}
+                                    <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium mt-1 ${
+                                        getEntityTypeColor(selectedEntity.entity_type || 'Unknown')
+                                    }`}>
+                                        {selectedEntity.entity_type || 'Unknown'}
                                     </span>
                                 </div>
+
                                 {selectedEntity.summary && (
                                     <div>
                                         <label className="text-xs font-semibold text-slate-500 uppercase">Summary</label>
                                         <p className="text-sm text-slate-600 dark:text-slate-400">{selectedEntity.summary}</p>
                                     </div>
                                 )}
+
+                                <div>
+                                    <label className="text-xs font-semibold text-slate-500 uppercase">UUID</label>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 font-mono break-all">
+                                        {selectedEntity.uuid}
+                                    </p>
+                                </div>
+
                                 <div>
                                     <label className="text-xs font-semibold text-slate-500 uppercase">Created</label>
                                     <p className="text-sm text-slate-600 dark:text-slate-400">
@@ -250,32 +436,54 @@ export const EntitiesList: React.FC = () => {
 
                                 {/* Relationships */}
                                 <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-                                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">
+                                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-base">hub</span>
                                         Relationships ({relationships.length})
                                     </h3>
                                     {relationships.length > 0 ? (
-                                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                                        <div className="space-y-2 max-h-96 overflow-y-auto">
                                             {relationships.map((rel) => (
                                                 <div
-                                                    key={rel.uuid}
-                                                    className="p-2 bg-slate-50 dark:bg-slate-900 rounded-md text-xs"
+                                                    key={rel.edge_id}
+                                                    className="p-3 bg-slate-50 dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-700"
                                                 >
-                                                    <div className="font-medium text-blue-600 dark:text-blue-400">
-                                                        {rel.relation_type}
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                                                            rel.direction === 'outgoing'
+                                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                                                : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                                                        }`}>
+                                                            {rel.direction === 'outgoing' ? '→' : '←'}
+                                                        </span>
+                                                        <span className="font-medium text-blue-600 dark:text-blue-400 text-sm">
+                                                            {rel.relation_type}
+                                                        </span>
                                                     </div>
-                                                    <div className="text-slate-600 dark:text-slate-400 mt-1">
-                                                        {rel.fact}
-                                                    </div>
-                                                    {rel.score > 0 && (
-                                                        <div className="text-slate-500 mt-1">
-                                                            Score: {rel.score.toFixed(2)}
+                                                    {rel.fact && (
+                                                        <div className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                                                            {rel.fact}
                                                         </div>
                                                     )}
+                                                    <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                                                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                                                            Related: <span className="font-medium text-slate-700 dark:text-slate-300">
+                                                                {rel.related_entity.name}
+                                                            </span>
+                                                            <span className={`ml-1 px-1 py-0.5 rounded text-[10px] ${
+                                                                getEntityTypeColor(rel.related_entity.entity_type || 'Unknown')
+                                                            }`}>
+                                                                {rel.related_entity.entity_type}
+                                                            </span>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
                                     ) : (
-                                        <p className="text-sm text-slate-500">No relationships found</p>
+                                        <p className="text-sm text-slate-500 flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-base">link_off</span>
+                                            No relationships found
+                                        </p>
                                     )}
                                 </div>
                             </div>
@@ -286,6 +494,9 @@ export const EntitiesList: React.FC = () => {
                                 touch_app
                             </span>
                             <p className="text-slate-500 mt-2">Select an entity to view details</p>
+                            <p className="text-sm text-slate-400 mt-1">
+                                Click on any entity card to see its relationships
+                            </p>
                         </div>
                     )}
                 </div>

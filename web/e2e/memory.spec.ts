@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './base';
 
 test.describe('Memory Operations', () => {
     const projectName = `Test Project ${Date.now()}`;
@@ -7,87 +7,88 @@ test.describe('Memory Operations', () => {
         // Login
         await page.goto('/login');
         await page.getByLabel(/邮箱地址/i).fill('admin@memstack.ai');
-        await page.getByLabel(/密码/i).fill('admin123');
+        await page.getByLabel(/密码/i).fill('adminpassword');
         await page.getByRole('button', { name: /登录/i }).click();
         await expect(page).not.toHaveURL(/\/login/);
 
-        // Create a project for this test suite (or navigate to one)
-        // For reliability, creating a fresh project is better, but might be slow.
-        // Let's reuse a "Test Project" if it exists, or create it.
-        // Or just create one to be safe.
-
-        // Handle dialogs (confirm delete)
-        page.on('dialog', dialog => dialog.accept());
-
+        // Navigate to Projects
         const projectsLink = page.getByRole('link', { name: /Projects/i }).first();
         if (await projectsLink.isVisible()) {
             await projectsLink.click();
         }
 
-        // Cleanup existing projects if needed
-        const moreButton = page.locator('button:has(.material-symbols-outlined:text("more_vert"))').first();
-        if (await moreButton.isVisible()) {
-            await moreButton.click();
-            await page.getByText('Delete Project').click();
-            await page.waitForTimeout(1000);
-        }
-
         // Create new project
         await page.getByRole('button', { name: /Create New Project/i }).click();
-        // Use placeholder to match the input
         await page.getByPlaceholder(/e.g. Finance Knowledge Base/i).fill(projectName);
         await page.getByRole('button', { name: /Create Project/i }).click();
-
-        // Wait for navigation with increased timeout for this specific action
-        await page.waitForURL(/\/projects$/, { timeout: 15000 });
-
-        // Reload to ensure list is fresh
+        
+        // Wait for project creation and navigation
+        await page.waitForURL(/\/projects$/);
         await page.reload();
         await expect(page.getByRole('heading', { name: /Project Management/i })).toBeVisible();
 
         // Navigate into the project
-        // Search for the project to ensure it's visible even if there are many projects
         await page.getByPlaceholder(/Search by project name/i).fill(projectName);
-
-        // Wait for the project card to be stable and clickable
+        // Wait for search results to update
+        await page.waitForTimeout(1000); 
+        
         const projectCard = page.getByText(projectName).first();
-        await projectCard.waitFor({ state: 'visible' });
+        await projectCard.waitFor({ state: 'visible', timeout: 20000 });
         await projectCard.click();
+        
+        // Verify we are in the project details
+        await expect(page.getByRole('heading', { name: /Overview/i })).toBeVisible();
     });
 
     test('should create a new memory and visualize it', async ({ page }) => {
-        // Navigate to "Add Memory"
-        // Assuming there is an "Add Memory" button in the project overview or memory list
+        // 1. Navigate to Memories Tab explicitly
+        await page.getByRole('link', { name: /Memories/i }).click();
+        
+        // 2. Click "Add Memory"
         await page.getByRole('button', { name: /Add Memory/i }).click();
 
-        // Fill memory content
+        // 3. Fill memory content
         const memoryContent = 'Playwright E2E Test Memory: ' + Date.now();
-        // NewMemory.tsx uses a textarea with a placeholder
         await page.getByPlaceholder(/Start typing your memory/i).fill(memoryContent);
-
-        // Add title if available
         await page.getByPlaceholder(/e.g. Q3 Strategy/i).fill('E2E Memory Title');
 
-        // Save
+        // 4. Save
         await page.getByRole('button', { name: /Save Memory/i }).click();
 
-        // Verify redirect to memory list
-        // URL pattern: /project/:id/memories
+        // 5. Verify redirect to memory list and content visibility
         await expect(page).toHaveURL(/\/memories$/);
+        
+        // Wait for the memory to appear
+        const memoryItem = page.getByText('E2E Memory Title').first();
+        await memoryItem.waitFor({ state: 'visible' });
+        
+        // Check for status (optional, if UI shows it)
+        // If the UI shows "Processing" or "Completed", we can check it.
+        // For now, just ensuring it exists is good.
+        
+        // 6. Navigate to Graph view (Knowledge Graph)
+        await page.getByRole('link', { name: /Knowledge Graph/i }).click();
 
-        // Check if memory is listed
-        await expect(page.getByText('E2E Memory Title')).toBeVisible();
-
-        // Navigate to Graph view
-        // Assuming sidebar has "Graph" link
-        await page.getByRole('link', { name: /Graph/i }).click();
-
-        // Verify graph container is present
-        // CytoscapeGraph renders a canvas inside a div
-        const _graphContainer = page.locator('.cytoscape-container, canvas').first();
-        // Since canvas selectors can be tricky, check for the parent container or specific text
-        // The graph component has "Nodes:" and "Edges:" text in the toolbar
+        // 7. Verify graph elements
         await expect(page.getByText(/Nodes:/i)).toBeVisible();
         await expect(page.getByText(/Edges:/i)).toBeVisible();
+
+        // 8. Delete memory
+        // Navigate back to detail or use delete button if available in graph view (it's not usually)
+        // Go back to list or detail
+        await page.goBack(); // Back to detail
+        
+        // Click delete button in toolbar
+        await page.getByTitle('Delete').click();
+        
+        // Confirm deletion in modal
+        // Use class selector to be specific to the modal's primary action button
+        await page.locator('button.bg-red-600').click();
+        
+        // Verify redirect to list
+        await expect(page).toHaveURL(/\/memories$/);
+        
+        // Verify memory is gone
+        await expect(page.getByText('E2E Memory Title')).not.toBeVisible();
     });
 });

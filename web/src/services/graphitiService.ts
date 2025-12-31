@@ -134,6 +134,17 @@ export const graphitiService = {
         }
     },
 
+    async getEntityTypes(params: { project_id?: string } = {}): Promise<{
+        entity_types: Array<{ entity_type: string; count: number }>
+        total: number
+    }> {
+        const queryParams = new URLSearchParams()
+        if (params.project_id) queryParams.append('project_id', params.project_id)
+
+        const response = await apiClient.get(`/entities/types?${queryParams.toString()}`)
+        return response.data
+    },
+
     async getEntityRelationships(
         entityId: string,
         params: { relationship_type?: string; limit?: number } = {}
@@ -157,12 +168,14 @@ export const graphitiService = {
         project_id?: string
         min_members?: number
         limit?: number
-    }): Promise<{ communities: Community[]; total: number }> {
+        offset?: number
+    }): Promise<{ communities: Community[]; total: number; limit?: number; offset?: number }> {
         const queryParams = new URLSearchParams()
         if (params.tenant_id) queryParams.append('tenant_id', params.tenant_id)
         if (params.project_id) queryParams.append('project_id', params.project_id)
         if (params.min_members) queryParams.append('min_members', params.min_members.toString())
         if (params.limit) queryParams.append('limit', params.limit.toString())
+        if (params.offset) queryParams.append('offset', params.offset.toString())
 
         const response = await apiClient.get(`/communities/?${queryParams.toString()}`)
         return response.data
@@ -173,8 +186,27 @@ export const graphitiService = {
         return response.data
     },
 
-    async rebuildCommunities(): Promise<{ status: string; message: string }> {
-        const response = await apiClient.post('/communities/rebuild')
+    async rebuildCommunities(background = false): Promise<{ status: string; message: string; communities_count?: number; edges_count?: number; task_id?: string; task_url?: string }> {
+        const response = await apiClient.post('/communities/rebuild' + (background ? '?background=true' : ''))
+        return response.data
+    },
+
+    // Background Tasks
+    async getTaskStatus(taskId: string): Promise<any> {
+        const response = await apiClient.get(`/tasks/${taskId}`)
+        return response.data
+    },
+
+    async listTasks(status?: string): Promise<{ tasks: any[]; total: number }> {
+        const queryParams = new URLSearchParams()
+        if (status) queryParams.append('status', status)
+
+        const response = await apiClient.get(`/tasks/?${queryParams.toString()}`)
+        return response.data
+    },
+
+    async cancelTask(taskId: string): Promise<{ status: string; message: string; task_id: string }> {
+        const response = await apiClient.post(`/tasks/${taskId}/cancel`)
         return response.data
     },
 

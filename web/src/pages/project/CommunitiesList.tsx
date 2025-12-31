@@ -19,6 +19,19 @@ interface Entity {
     summary: string
 }
 
+interface BackgroundTask {
+    task_id: string
+    task_type: string
+    status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+    created_at: string
+    started_at?: string
+    completed_at?: string
+    progress: number
+    message: string
+    result?: any
+    error?: string
+}
+
 export const CommunitiesList: React.FC = () => {
     const { projectId } = useParams()
     const [communities, setCommunities] = useState<Community[]>([])
@@ -27,25 +40,47 @@ export const CommunitiesList: React.FC = () => {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [rebuilding, setRebuilding] = useState(false)
+    const [totalCount, setTotalCount] = useState(0)
+    const [page, setPage] = useState(0)
+    const limit = 20
+
+    // Background task state
+    const [currentTask, setCurrentTask] = useState<BackgroundTask | null>(null)
 
     const loadCommunities = useCallback(async () => {
         setLoading(true)
         setError(null)
         try {
+            console.log('Loading communities...', { projectId, limit, offset: page * limit })
+
             const result = await graphitiService.listCommunities({
                 tenant_id: undefined,
                 project_id: projectId,
                 min_members: 1,
-                limit: 100,
+                limit,
+                offset: page * limit,
             })
+
+            console.log('Communities loaded:', {
+                count: result.communities.length,
+                total: result.total,
+                communities: result.communities
+            })
+
             setCommunities(result.communities)
-        } catch (err) {
+            setTotalCount(result.total || result.communities.length)
+        } catch (err: any) {
             console.error('Failed to load communities:', err)
-            setError('Failed to load communities')
+            console.error('Error details:', {
+                message: err.message,
+                response: err.response?.data,
+                status: err.response?.status
+            })
+            setError(err.response?.data?.detail || err.message || 'Failed to load communities')
         } finally {
             setLoading(false)
         }
-    }, [projectId])
+    }, [projectId, page])
 
     const loadMembers = async (communityUuid: string) => {
         try {
@@ -56,16 +91,86 @@ export const CommunitiesList: React.FC = () => {
         }
     }
 
-    const handleRebuildCommunities = async () => {
-        setRebuilding(true)
+    const pollTaskStatus = useCallback(async (taskId: string) => {
         try {
-            await graphitiService.rebuildCommunities()
-            await loadCommunities()
-        } catch (err) {
-            console.error('Failed to rebuild communities:', err)
-            setError('Failed to rebuild communities')
-        } finally {
+            const task = await graphitiService.getTaskStatus(taskId)
+            setCurrentTask(task)
+
+            // If task is still running, continue polling
+            if (task.status === 'pending' || task.status === 'running') {
+                setTimeout(() => pollTaskStatus(taskId), 2000) // Poll every 2 seconds
+            } else {
+                // Task completed - stop polling
+                setRebuilding(false)
+
+                if (task.status === 'completed') {
+                    setError(null)
+                    console.log('Task completed, refreshing communities...')
+
+                    // Reload communities and wait for completion
+                    await loadCommunities()
+
+                    console.log(`Communities reloaded successfully. Result:`, task.result)
+
+                    // Clear task status after 5 seconds to show success briefly
+                    setTimeout(() => {
+                        setCurrentTask(null)
+                    }, 5000)
+                } else if (task.status === 'failed') {
+                    console.error('Task failed:', task.error)
+                    setError(task.error || 'Failed to rebuild communities')
+                    // Keep failed task visible so user can see the error
+                } else if (task.status === 'cancelled') {
+                    console.log('Task was cancelled')
+                    setCurrentTask(null)
+                }
+            }
+        } catch (err: any) {
+            console.error('Failed to poll task status:', err)
             setRebuilding(false)
+            setError(err.response?.data?.detail || err.message || 'Failed to track task status')
+        }
+    }, [loadCommunities])
+
+    const handleRebuildCommunities = async () => {
+        if (!confirm('This will rebuild all communities from scratch. This operation may take several minutes. The task will run in the background and you can track its progress here. Continue?')) {
+            return
+        }
+
+        setRebuilding(true)
+        setError(null)
+
+        try {
+            // Start background rebuild
+            const result = await graphitiService.rebuildCommunities(true) // background=true
+
+            if (result.task_id) {
+                // Start polling for task status
+                pollTaskStatus(result.task_id)
+            } else {
+                // Fallback to synchronous mode
+                await loadCommunities()
+                alert(`Success! ${result.message}`)
+                setRebuilding(false)
+            }
+        } catch (err: any) {
+            console.error('Failed to rebuild communities:', err)
+            setError(err.response?.data?.detail || 'Failed to rebuild communities')
+            setRebuilding(false)
+        }
+    }
+
+    const handleCancelTask = async () => {
+        if (!currentTask) return
+
+        try {
+            await graphitiService.cancelTask(currentTask.task_id)
+            setCurrentTask(null)
+            setRebuilding(false)
+            alert('Task cancelled')
+        } catch (err: any) {
+            console.error('Failed to cancel task:', err)
+            setError('Failed to cancel task')
         }
     }
 
@@ -105,7 +210,7 @@ export const CommunitiesList: React.FC = () => {
                     <button
                         onClick={handleRebuildCommunities}
                         disabled={rebuilding}
-                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-md transition-colors disabled:opacity-50"
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <span className="material-symbols-outlined">
                             {rebuilding ? 'progress_activity' : 'refresh'}
@@ -114,11 +219,103 @@ export const CommunitiesList: React.FC = () => {
                     </button>
                     <button
                         onClick={loadCommunities}
-                        className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                        disabled={loading}
+                        className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
                     >
                         <span className="material-symbols-outlined">refresh</span>
                         Refresh
                     </button>
+                </div>
+            </div>
+
+            {/* Background Task Status */}
+            {currentTask && (
+                <div className={`rounded-lg p-4 border ${
+                    currentTask.status === 'completed' ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' :
+                    currentTask.status === 'failed' ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' :
+                    currentTask.status === 'running' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' :
+                    'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+                }`}>
+                    <div className="flex items-start gap-3">
+                        <span className={`material-symbols-outlined text-2xl ${
+                            currentTask.status === 'completed' ? 'text-green-600 dark:text-green-400' :
+                            currentTask.status === 'failed' ? 'text-red-600 dark:text-red-400' :
+                            currentTask.status === 'running' ? 'text-blue-600 dark:text-blue-400 animate-spin' :
+                            'text-slate-400'
+                        }`}>
+                            {currentTask.status === 'running' ? 'progress_activity' :
+                             currentTask.status === 'completed' ? 'check_circle' :
+                             currentTask.status === 'failed' ? 'error' : 'schedule'}
+                        </span>
+                        <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                                <h3 className={`font-semibold ${
+                                    currentTask.status === 'completed' ? 'text-green-900 dark:text-green-300' :
+                                    currentTask.status === 'failed' ? 'text-red-900 dark:text-red-300' :
+                                    'text-slate-900 dark:text-white'
+                                }`}>
+                                    {currentTask.status === 'running' ? 'Rebuilding Communities...' :
+                                     currentTask.status === 'completed' ? 'Rebuild Completed' :
+                                     currentTask.status === 'failed' ? 'Rebuild Failed' :
+                                     'Rebuild Scheduled'}
+                                </h3>
+                                {(currentTask.status === 'running' || currentTask.status === 'pending') && (
+                                    <button
+                                        onClick={handleCancelTask}
+                                        className="px-3 py-1 text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                )}
+                            </div>
+                            <p className={`text-sm mt-1 ${
+                                currentTask.status === 'completed' ? 'text-green-800 dark:text-green-400' :
+                                currentTask.status === 'failed' ? 'text-red-800 dark:text-red-400' :
+                                'text-slate-600 dark:text-slate-400'
+                            }`}>
+                                {currentTask.message}
+                            </p>
+                            {currentTask.result && (
+                                <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                                    {currentTask.result.communities_count && `Built ${currentTask.result.communities_count} communities`}
+                                    {currentTask.result.edges_count && ` with ${currentTask.result.edges_count} connections`}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Error Message */}
+            {error && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-start gap-3">
+                    <span className="material-symbols-outlined text-red-600 dark:text-red-400">error</span>
+                    <div>
+                        <h3 className="font-semibold text-red-900 dark:text-red-300">Error</h3>
+                        <p className="text-sm text-red-800 dark:text-red-400">{error}</p>
+                    </div>
+                    <button
+                        onClick={() => setError(null)}
+                        className="ml-auto text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                    >
+                        <span className="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+            )}
+
+            {/* Stats Bar */}
+            <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+                <div className="flex items-center justify-between">
+                    <div className="flex gap-6 text-sm">
+                        <span className="text-slate-600 dark:text-slate-400">
+                            Showing <strong className="text-slate-900 dark:text-white">{communities.length}</strong> of <strong className="text-slate-900 dark:text-white">{totalCount.toLocaleString()}</strong> communities
+                        </span>
+                    </div>
+                    {totalCount > limit && (
+                        <div className="text-sm text-slate-500 dark:text-slate-400">
+                            Page {page + 1} of {Math.ceil(totalCount / limit)}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -132,54 +329,76 @@ export const CommunitiesList: React.FC = () => {
                             </span>
                             <p className="text-slate-500 mt-2">Loading communities...</p>
                         </div>
-                    ) : error ? (
-                        <div className="text-center py-12">
-                            <span className="material-symbols-outlined text-4xl text-red-500">error</span>
-                            <p className="text-slate-500 mt-2">{error}</p>
-                        </div>
                     ) : communities.length === 0 ? (
                         <div className="text-center py-12 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
                             <span className="material-symbols-outlined text-4xl text-slate-400">groups</span>
                             <p className="text-slate-500 mt-2">No communities found</p>
                             <p className="text-sm text-slate-400 mt-1">
-                                Add more episodes to enable community detection
+                                Add more episodes to enable community detection, or rebuild communities
                             </p>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {communities.map((community, index) => (
-                                <div
-                                    key={community.uuid}
-                                    onClick={() => handleCommunityClick(community)}
-                                    className={`bg-white dark:bg-slate-800 rounded-lg border p-5 cursor-pointer transition-all hover:shadow-md ${selectedCommunity?.uuid === community.uuid
-                                        ? 'border-purple-500 shadow-md'
-                                        : 'border-slate-200 dark:border-slate-700'
-                                        }`}
-                                >
-                                    <div className="flex items-start justify-between mb-3">
-                                        <div className={`p-3 rounded-lg bg-gradient-to-br ${getCommunityColor(index)} text-white`}>
-                                            <span className="material-symbols-outlined">groups</span>
+                        <>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {communities.map((community, index) => (
+                                    <div
+                                        key={community.uuid}
+                                        onClick={() => handleCommunityClick(community)}
+                                        className={`bg-white dark:bg-slate-800 rounded-lg border p-5 cursor-pointer transition-all hover:shadow-md ${selectedCommunity?.uuid === community.uuid
+                                            ? 'border-purple-500 shadow-md ring-2 ring-purple-500 ring-opacity-20'
+                                            : 'border-slate-200 dark:border-slate-700'
+                                            }`}
+                                    >
+                                        <div className="flex items-start justify-between mb-3">
+                                            <div className={`p-3 rounded-lg bg-gradient-to-br ${getCommunityColor(index)} text-white`}>
+                                                <span className="material-symbols-outlined">groups</span>
+                                            </div>
+                                            <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-400 px-2 py-1 rounded-full text-xs font-medium">
+                                                {community.member_count} members
+                                            </span>
                                         </div>
-                                        <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-400 px-2 py-1 rounded-full text-xs font-medium">
-                                            {community.member_count} members
-                                        </span>
+                                        <h3 className="font-semibold text-slate-900 dark:text-white mb-2">
+                                            {community.name || `Community ${index + 1}`}
+                                        </h3>
+                                        {community.summary && (
+                                            <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-2">
+                                                {community.summary}
+                                            </p>
+                                        )}
+                                        {community.created_at && (
+                                            <div className="mt-2 text-xs text-slate-500">
+                                                Created: {new Date(community.created_at).toLocaleDateString()}
+                                            </div>
+                                        )}
                                     </div>
-                                    <h3 className="font-semibold text-slate-900 dark:text-white mb-2">
-                                        {community.name || `Community ${index + 1}`}
-                                    </h3>
-                                    {community.summary && (
-                                        <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-2">
-                                            {community.summary}
-                                        </p>
-                                    )}
-                                    {community.formed_at && (
-                                        <div className="mt-2 text-xs text-slate-500">
-                                            Formed: {new Date(community.formed_at).toLocaleDateString()}
-                                        </div>
-                                    )}
+                                ))}
+                            </div>
+
+                            {/* Pagination */}
+                            {totalCount > limit && (
+                                <div className="flex items-center justify-center gap-4 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+                                    <button
+                                        onClick={() => setPage(p => Math.max(0, p - 1))}
+                                        disabled={page === 0}
+                                        className="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">chevron_left</span>
+                                        Previous
+                                    </button>
+                                    <span className="text-sm text-slate-600 dark:text-slate-400">
+                                        Page {page + 1} of {Math.ceil(totalCount / limit)}
+                                    </span>
+                                    <button
+                                        onClick={() => setPage(p => p + 1)}
+                                        disabled={(page + 1) * limit >= totalCount}
+                                        className="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                    >
+                                        Next
+                                        <span className="material-symbols-outlined text-sm">chevron_right</span>
+                                    </button>
                                 </div>
-                            ))}
-                        </div>
+                            )}
+                        </>
                     )}
                 </div>
 
@@ -187,44 +406,67 @@ export const CommunitiesList: React.FC = () => {
                 <div className="lg:col-span-1">
                     {selectedCommunity ? (
                         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6 sticky top-6">
-                            <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-4">
-                                Community Details
-                            </h2>
+                            <div className="flex items-start justify-between mb-4">
+                                <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                                    Community Details
+                                </h2>
+                                <button
+                                    onClick={() => {
+                                        setSelectedCommunity(null)
+                                        setMembers([])
+                                    }}
+                                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                                >
+                                    <span className="material-symbols-outlined">close</span>
+                                </button>
+                            </div>
+
                             <div className="space-y-4">
                                 <div>
-                                    <label className="text-xs font-semibold text-slate-500 uppercase">Tasks</label>
-                                    <div className="mt-2">
-                                        <TaskList entityId={selectedCommunity.uuid} entityType="community" embedded />
-                                    </div>
-                                </div>
-                                <div>
                                     <label className="text-xs font-semibold text-slate-500 uppercase">Name</label>
-                                    <p className="text-slate-900 dark:text-white font-medium">
+                                    <p className="text-slate-900 dark:text-white font-medium mt-1">
                                         {selectedCommunity.name || 'Unnamed Community'}
                                     </p>
                                 </div>
+
                                 <div>
                                     <label className="text-xs font-semibold text-slate-500 uppercase">Members</label>
                                     <p className="text-2xl font-bold text-purple-600">
                                         {selectedCommunity.member_count}
                                     </p>
                                 </div>
+
                                 {selectedCommunity.summary && (
                                     <div>
                                         <label className="text-xs font-semibold text-slate-500 uppercase">Summary</label>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400">
+                                        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
                                             {selectedCommunity.summary}
                                         </p>
                                     </div>
                                 )}
-                                {selectedCommunity.formed_at && (
+
+                                <div>
+                                    <label className="text-xs font-semibold text-slate-500 uppercase">UUID</label>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 font-mono break-all mt-1">
+                                        {selectedCommunity.uuid}
+                                    </p>
+                                </div>
+
+                                {selectedCommunity.created_at && (
                                     <div>
-                                        <label className="text-xs font-semibold text-slate-500 uppercase">Formed</label>
+                                        <label className="text-xs font-semibold text-slate-500 uppercase">Created</label>
                                         <p className="text-sm text-slate-600 dark:text-slate-400">
-                                            {new Date(selectedCommunity.formed_at).toLocaleString()}
+                                            {new Date(selectedCommunity.created_at).toLocaleString()}
                                         </p>
                                     </div>
                                 )}
+
+                                <div>
+                                    <label className="text-xs font-semibold text-slate-500 uppercase">Tasks</label>
+                                    <div className="mt-2">
+                                        <TaskList entityId={selectedCommunity.uuid} entityType="community" embedded />
+                                    </div>
+                                </div>
 
                                 {/* Members List */}
                                 <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
@@ -267,6 +509,9 @@ export const CommunitiesList: React.FC = () => {
                         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-12 text-center sticky top-6">
                             <span className="material-symbols-outlined text-4xl text-slate-400">groups</span>
                             <p className="text-slate-500 mt-2">Select a community to view details</p>
+                            <p className="text-sm text-slate-400 mt-1">
+                                Click on any community card to see its members
+                            </p>
                         </div>
                     )}
                 </div>
