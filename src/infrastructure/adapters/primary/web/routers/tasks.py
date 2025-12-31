@@ -96,6 +96,10 @@ def task_to_response(task) -> TaskLogResponse:
 
 # --- Endpoints ---
 
+# NOTE: Dynamic routes with path parameters must be defined AFTER specific routes
+# to avoid route matching conflicts (e.g., "/stats" should match before "/{task_id}")
+
+
 @router.get("/stats", response_model=TaskStatsResponse)
 async def get_task_stats(db: AsyncSession = Depends(get_db)):
     """Get task statistics."""
@@ -363,3 +367,32 @@ async def stop_task_endpoint(
     )
 
     return {"message": "Task marked as stopped"}
+
+
+# --- Dynamic Routes (must be last to avoid conflicts) ---
+
+@router.get("/{task_id}", response_model=TaskLogResponse)
+async def get_task_status(
+    task_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get a single task by ID."""
+    result = await db.execute(
+        select(DBTaskLog).where(DBTaskLog.id == task_id)
+    )
+    task = result.scalar_one_or_none()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    return task_to_response(task)
+
+
+@router.post("/{task_id}/cancel")
+async def cancel_task_endpoint(
+    task_id: str,
+    container: DIContainer = Depends(get_di_container),
+):
+    """Cancel a task (alias for stop)."""
+    # Reuse the stop logic
+    return await stop_task_endpoint(task_id, container)

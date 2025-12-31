@@ -71,3 +71,4 @@ web/test-results/
 web/coverage/
 web/playwright-report/
 web/.nyc_output/
+logs/

@@ -7,7 +7,7 @@ test.describe('Memory Operations', () => {
         // Login
         await page.goto('/login');
         await page.getByLabel(/邮箱地址/i).fill('admin@memstack.ai');
-        await page.getByLabel(/密码/i).fill('admin123');
+        await page.getByLabel(/密码/i).fill('adminpassword');
         await page.getByRole('button', { name: /登录/i }).click();
         await expect(page).not.toHaveURL(/\/login/);
 

@@ -15,7 +15,11 @@ from src.configuration.di_container import DIContainer
 
 logger = logging.getLogger(__name__)
 
+# Main router for enhanced search endpoints
 router = APIRouter(prefix="/api/v1/search-enhanced", tags=["search-enhanced"])
+
+# Secondary router for memory search compatibility (moved from graphiti.py)
+memory_router = APIRouter(prefix="/api/v1", tags=["memory-search"])
 
 
 # --- Endpoints ---
@@ -40,6 +44,7 @@ async def search_advanced(
     try:
         # Import recipes inside function (same as graphiti.py to avoid state issues)
         import graphiti_core.search.search_config_recipes as recipes
+        from graphiti_core.search.search_filters import ComparisonOperator, DateFilter, SearchFilters
 
         # Get recipe from strategy name
         search_config = getattr(recipes, strategy, None)
@@ -48,9 +53,18 @@ async def search_advanced(
             search_config = recipes.COMBINED_HYBRID_SEARCH_RRF
 
         parsed_since = None
+        search_filter = None
+        
         if since:
             try:
                 parsed_since = datetime.fromisoformat(since.replace('Z', '+00:00'))
+                
+                # Construct search filter for 'since'
+                search_filter = SearchFilters()
+                # created_at >= since (using greater_than_equal)
+                search_filter.created_at = [
+                    [DateFilter(date=parsed_since, comparison_operator=ComparisonOperator.greater_than_equal)]
+                ]
             except ValueError:
                 raise HTTPException(status_code=400, detail="Invalid 'since' datetime format")
 
@@ -58,22 +72,32 @@ async def search_advanced(
         group_id = project_id if project_id else None
         group_ids = [group_id] if group_id else None
 
-        # Perform search (EXACT same as /memory/search)
+        # Perform search with enhanced parameters
         results = await graphiti_client.search_(
             query=query,
             config=search_config,
             group_ids=group_ids,
+            search_filter=search_filter,
+            center_node_uuid=focal_node_uuid,
         )
 
         # Convert results to dict format with enriched metadata for frontend compatibility
         formatted_results = []
+
+        # Get reranker scores from SearchResults
+        episode_scores = getattr(results, "episode_reranker_scores", [])
+        node_scores = getattr(results, "node_reranker_scores", [])
+
         if hasattr(results, "episodes") and results.episodes:
-            for ep in results.episodes:
+            for idx, ep in enumerate(results.episodes):
                 # Extract tags if available in metadata, otherwise empty list
                 tags = []
                 if hasattr(ep, "metadata") and isinstance(ep.metadata, dict):
                     tags = ep.metadata.get("tags", [])
-                
+
+                # Get score from the reranker scores list
+                score = episode_scores[idx] if idx < len(episode_scores) else 0.0
+
                 # Determine a better name for the episode
                 ep_name = getattr(ep, "name", "")
                 ep_source = getattr(ep, "source", "")
@@ -87,12 +111,12 @@ async def search_advanced(
 
                 formatted_results.append({
                     "content": ep.content,
-                    "score": getattr(ep, "score", 0.0),
+                    "score": score,
                     "source": getattr(ep, "source", "unknown"),
+                    "type": "Episode",  # Place type at root level for frontend
                     "metadata": {
                         "uuid": ep.uuid,
                         "name": ep_name,
-                        "type": "Episode",  # Capitalized for better display
                         "created_at": getattr(ep, "created_at", None),
                         "source_description": getattr(ep, "source_description", ""),
                         "tags": tags,
@@ -101,30 +125,81 @@ async def search_advanced(
                     }
                 })
 
+        # Debug: Check what results we got
+        print(f"=== DEBUG: hasattr(results, 'nodes') = {hasattr(results, 'nodes')}")
+        if hasattr(results, "nodes"):
+            print(f"=== DEBUG: results.nodes = {results.nodes}")
+            print(f"=== DEBUG: len(results.nodes) = {len(results.nodes) if results.nodes else 0}")
+        if hasattr(results, "episodes"):
+            print(f"=== DEBUG: results.episodes count = {len(results.episodes) if results.episodes else 0}")
+
         if hasattr(results, "nodes") and results.nodes:
-            for node in results.nodes:
-                # Use labels as tags for nodes
+            for idx, node in enumerate(results.nodes):
+                # Get labels from the node
                 labels = getattr(node, "labels", [])
+
+                # Get score from the reranker scores list
+                score = node_scores[idx] if idx < len(node_scores) else 0.0
+
+                # Debug to console
+                print(f"=== DEBUG [{idx}]: Node {node.uuid} ({node.name}) ===")
+                print(f"=== labels attribute: {labels}")
+                print(f"=== labels type: {type(labels)}")
+                print(f"=== node has labels attr: {hasattr(node, 'labels')}")
+                print(f"=== node score: {score}")
+
+                # Use labels as tags for nodes
                 tags = labels
-                
-                # Extract specific entity type from labels (exclude 'Entity' and 'Node')
-                entity_type = "Entity"
+
+                # Extract specific entity type from labels (exclude base labels)
+                # The ignored_labels should match what graphiti uses: 'Entity', 'Node', 'BaseEntity'
+                entity_type = "Entity"  # Default fallback
                 ignored_labels = {"Entity", "Node", "BaseEntity"}
-                specific_labels = [l for l in labels if l not in ignored_labels]
+
+                # Filter out ignored labels to find specific entity type
+                specific_labels = [l for l in labels if l and l not in ignored_labels]
+
                 if specific_labels:
+                    # Use the first specific label as the entity type
                     entity_type = specific_labels[0]
+                    logger.debug(f"Node {node.uuid}: Using entity_type '{entity_type}' from labels {specific_labels}")
+                else:
+                    # No specific labels found, node only has base labels
+                    # Check if labels list is empty or only contains ignored labels
+                    if not labels or all(l in ignored_labels for l in labels):
+                        logger.warning(f"Node {node.uuid} ({node.name}) has no specific entity type labels. Labels: {labels}")
+                        # Keep default "Entity"
+                    else:
+                        # Fallback: use first non-ignored label
+                        entity_type = labels[0]
+                        logger.debug(f"Node {node.uuid}: Using fallback entity_type '{entity_type}' from labels {labels}")
+
+                # DEBUG: Add debug_info to response
+                debug_info = {
+                    "node_uuid": str(node.uuid),
+                    "node_name": str(node.name),
+                    "raw_labels": labels,
+                    "labels_type": str(type(labels)),
+                    "has_labels_attr": hasattr(node, 'labels'),
+                    "specific_labels": specific_labels,
+                    "entity_type": entity_type,
+                    "score": score,
+                    "score_idx": idx,
+                    "node_scores_length": len(node_scores)
+                }
 
                 formatted_results.append({
                     "content": getattr(node, "summary", "") or getattr(node, "name", "No content"),
-                    "score": getattr(node, "score", 0.0),
+                    "score": score,
                     "source": "Knowledge Graph",
+                    "type": entity_type,  # Place type at root level for frontend
                     "metadata": {
                         "uuid": node.uuid,
                         "name": node.name,
-                        "type": entity_type,  # Use specific type (e.g. Person, Organization)
                         "entity_type": entity_type,
                         "created_at": getattr(node, "created_at", None),
                         "tags": tags,
+                        "debug_info": debug_info,  # Temporary debug info
                         # Preserve attributes if available
                         **(getattr(node, "attributes", {}) if hasattr(node, "attributes") else {})
                     }
@@ -189,15 +264,27 @@ async def search_by_graph_traversal(
         for r in result.records:
             props = r["props"]
             labels = r["labels"]
-            label = labels[0] if labels else "Unknown"
+
+            # Extract specific entity type from labels (exclude base labels)
+            ignored_labels = {"Entity", "Node", "BaseEntity"}
+            specific_labels = [l for l in labels if l and l not in ignored_labels]
+            entity_type = specific_labels[0] if specific_labels else (labels[0] if labels else "Entity")
+
+            logger.debug(f"Graph traversal - Node {props.get('uuid')} with labels: {labels} -> entity_type: {entity_type}")
 
             items.append({
                 "uuid": props.get("uuid", ""),
                 "name": props.get("name", ""),
-                "type": label,
+                "type": entity_type,  # At root level
                 "summary": props.get("summary", ""),
                 "content": props.get("content", ""),
-                "created_at": props.get("created_at")
+                "created_at": props.get("created_at"),
+                "metadata": {
+                    "uuid": props.get("uuid", ""),
+                    "name": props.get("name", ""),
+                    "type": entity_type,  # Also in metadata for consistency
+                    "created_at": props.get("created_at")
+                }
             })
 
         return {
@@ -428,15 +515,27 @@ async def search_with_facets(
         for r in result.records:
             props = r["props"]
             labels = r["labels"]
-            entity_type = next((l for l in labels if l != "Entity"), "Unknown")
+
+            # Extract specific entity type from labels (exclude base labels)
+            ignored_labels = {"Entity", "Node", "BaseEntity"}
+            specific_labels = [l for l in labels if l and l not in ignored_labels]
+            entity_type = specific_labels[0] if specific_labels else "Entity"
+
+            logger.debug(f"Faceted search - Node {props.get('uuid')} with labels: {labels} -> entity_type: {entity_type}")
 
             items.append({
                 "uuid": props.get("uuid", ""),
                 "name": props.get("name", ""),
-                "type": "entity",
+                "type": entity_type,  # Use actual entity type at root level
                 "entity_type": entity_type,
                 "summary": props.get("summary", ""),
-                "created_at": props.get("created_at")
+                "created_at": props.get("created_at"),
+                "metadata": {
+                    "uuid": props.get("uuid", ""),
+                    "name": props.get("name", ""),
+                    "type": entity_type,
+                    "created_at": props.get("created_at")
+                }
             })
 
         # Compute facets
@@ -446,7 +545,7 @@ async def search_with_facets(
         }
 
         for item in items:
-            et = item.get("entity_type", "Unknown")
+            et = item.get("entity_type", "Entity")
             facets["entity_types"][et] = facets["entity_types"].get(et, 0) + 1
 
         return {
@@ -549,3 +648,99 @@ async def get_search_capabilities(
             ],
         },
     }
+
+
+# --- Memory Search Endpoint (moved from graphiti.py) ---
+
+@memory_router.post("/memory/search")
+async def memory_search(
+    params: dict,
+    current_user: User = Depends(get_current_user),
+    graphiti_client = Depends(get_graphiti_client)
+):
+    """
+    Search memories using Graphiti's hybrid search.
+
+    This endpoint was moved from graphiti.py to consolidate search functionality.
+    Supports semantic search, keyword search, and graph traversal.
+    """
+    try:
+        query = params.get("query", "")
+        limit = params.get("limit", 10)
+        group_id = params.get("project_id") or params.get("tenant_id")
+
+        if not query:
+            raise HTTPException(status_code=400, detail="Query is required")
+
+        # Build group_ids list
+        group_ids = [group_id] if group_id else None
+
+        # Perform search using Graphiti's search_ method
+        import graphiti_core.search.search_config_recipes as recipes
+
+        search_config = recipes.COMBINED_HYBRID_SEARCH_RRF
+
+        results = await graphiti_client.search_(
+            query=query,
+            config=search_config,
+            group_ids=group_ids,
+        )
+
+        # Convert results to response format
+        formatted_results = []
+
+        # Get reranker scores from SearchResults
+        episode_scores = getattr(results, "episode_reranker_scores", [])
+        node_scores = getattr(results, "node_reranker_scores", [])
+
+        if hasattr(results, "episodes") and results.episodes:
+            for idx, ep in enumerate(results.episodes):
+                score = episode_scores[idx] if idx < len(episode_scores) else 0.0
+                formatted_results.append({
+                    "uuid": ep.uuid,
+                    "name": getattr(ep, "name", ""),
+                    "content": ep.content,
+                    "type": "episode",
+                    "score": score,
+                    "created_at": getattr(ep, "created_at", None),
+                    "metadata": {
+                        "source": getattr(ep, "source", ""),
+                        "source_description": getattr(ep, "source_description", ""),
+                    }
+                })
+
+        if hasattr(results, "nodes") and results.nodes:
+            for idx, node in enumerate(results.nodes):
+                score = node_scores[idx] if idx < len(node_scores) else 0.0
+                formatted_results.append({
+                    "uuid": node.uuid,
+                    "name": node.name,
+                    "summary": getattr(node, "summary", ""),
+                    "content": getattr(node, "summary", ""),
+                    "type": "entity",
+                    "entity_type": getattr(node, "entity_type", "Unknown"),
+                    "score": score,
+                    "created_at": getattr(node, "created_at", None),
+                    "metadata": {}
+                })
+
+        # Sort by score and limit
+        formatted_results.sort(key=lambda x: x.get("score", 0), reverse=True)
+        formatted_results = formatted_results[:limit]
+
+        return {
+            "results": formatted_results,
+            "total": len(formatted_results),
+            "query": query,
+            "filters_applied": {"group_id": group_id} if group_id else {},
+            "search_metadata": {
+                "strategy": "COMBINED_HYBRID_SEARCH_RRF",
+                "limit": limit
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Search failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+

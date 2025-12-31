@@ -5,7 +5,7 @@ import json
 import logging
 import socket
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Awaitable, Callable, Optional
 from uuid import uuid4
 
@@ -386,8 +386,8 @@ class QueueService:
         logger.info(f"Task {task_id} added to queue {queue_key}")
         return await self._redis.llen(queue_key)
 
-    async def rebuild_communities(self, group_id: str = "global") -> int:
-        """Add a rebuild communities task to the queue."""
+    async def rebuild_communities(self, group_id: str = "global") -> str:
+        """Add a rebuild communities task to the queue and return task_id."""
         if not self._redis:
             raise RuntimeError("Queue service not initialized")
 
@@ -412,7 +412,7 @@ class QueueService:
         await self._redis.rpush(queue_key, json.dumps(payload))
 
         logger.info(f"Task {task_id} (rebuild_communities) added to queue {queue_key}")
-        return await self._redis.llen(queue_key)
+        return task_id
 
     async def _worker_loop(self, worker_index: int) -> None:
         """Worker loop to process tasks from Redis."""
@@ -515,7 +515,7 @@ class QueueService:
         logger.info(f"Worker {worker_index} stopped")
 
     async def _recovery_loop(self) -> None:
-        """Background loop to recover stalled tasks."""
+        """Background loop to recover stalled and orphaned tasks."""
         logger.info("Recovery task started")
         processing_queue = "queue:processing:global"
 
@@ -524,6 +524,7 @@ class QueueService:
 
         while not self._shutdown_event.is_set():
             try:
+                # 1. Recover stalled tasks from processing queue
                 tasks = await self._redis.lrange(processing_queue, 0, -1)
                 now = time.time()
 
@@ -564,6 +565,45 @@ class QueueService:
 
                     except Exception as e:
                         logger.error(f"Error checking task for recovery: {e}")
+
+                # 2. Recover orphaned PENDING tasks from database
+                try:
+                    async with async_session_factory() as session:
+                        async with session.begin():
+                            # Find PENDING tasks that haven't been updated in a while (orphaned)
+                            # These are tasks that are PENDING in DB but not in Redis
+                            result = await session.execute(
+                                select(TaskLog).where(
+                                    TaskLog.status == "PENDING",
+                                    TaskLog.created_at < datetime.now(timezone.utc) - timedelta(seconds=60)
+                                ).limit(10)
+                            )
+                            orphaned_tasks = result.scalars().all()
+
+                            for task in orphaned_tasks:
+                                try:
+                                    task_id = str(task.id)
+                                    group_id = task.group_id
+                                    payload = task.payload
+
+                                    if not isinstance(payload, dict):
+                                        payload = json.loads(payload) if isinstance(payload, str) else {}
+
+                                    # Update timestamp
+                                    payload["timestamp"] = now
+                                    payload["task_id"] = task_id
+                                    raw_task = json.dumps(payload)
+
+                                    # Add to Redis
+                                    await self._redis.sadd("queue:active_groups", group_id)
+                                    await self._redis.rpush(f"queue:group:{group_id}", raw_task)
+
+                                    logger.info(f"Recovered orphaned PENDING task {task_id} from database")
+                                except Exception as e:
+                                    logger.error(f"Error recovering orphaned task {task.id}: {e}")
+
+                except Exception as e:
+                    logger.error(f"Error checking database for orphaned tasks: {e}")
 
                 await asyncio.sleep(60)  # Check every minute
 

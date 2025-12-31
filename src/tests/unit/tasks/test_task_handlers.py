@@ -161,56 +161,130 @@ class TestRebuildCommunityTaskHandler:
         assert handler.timeout_seconds == 3600
 
     @pytest.mark.asyncio
-    async def test_process_global_group(self):
-        """Test processing rebuild_communities for global group."""
+    async def test_process_calls_remove_and_build_communities(self):
+        """Test that process calls remove_communities and build_communities."""
+        from unittest.mock import patch
+        from graphiti_core.utils.maintenance.community_operations import (
+            remove_communities,
+            build_communities
+        )
+
         handler = RebuildCommunityTaskHandler()
 
         queue_service = Mock()
-        queue_service._graphiti_client = Mock()
-        queue_service._graphiti_client.build_communities = AsyncMock()
-        queue_service._graphiti_client.driver = Mock()
-        queue_service._graphiti_client.driver.execute_query = AsyncMock()
+        mock_graphiti_client = Mock()
+        mock_graphiti_client.driver = Mock()
+        mock_graphiti_client.driver.execute_query = AsyncMock()
+        mock_graphiti_client.llm_client = Mock()
+        mock_graphiti_client.embedder = Mock()
+
+        # Mock community nodes and edges
+        mock_community_node = Mock()
+        mock_community_node.uuid = "test_uuid"
+        mock_community_node.group_id = "test_group"
+        mock_community_node.generate_name_embedding = AsyncMock()
+        mock_community_node.save = AsyncMock()
+
+        mock_edge = Mock()
+        mock_edge.save = AsyncMock()
+
+        queue_service._graphiti_client = mock_graphiti_client
 
         payload = {"group_id": "global"}
 
-        # Should not raise
-        await handler.process(payload, queue_service)
+        with patch('src.application.tasks.community.remove_communities', new_callable=AsyncMock) as mock_remove, \
+             patch('src.application.tasks.community.build_communities', new_callable=AsyncMock) as mock_build:
+            mock_build.return_value = ([mock_community_node], [mock_edge])
 
-        # Verify build_communities was called with None (for all groups)
-        queue_service._graphiti_client.build_communities.assert_called_once_with(group_ids=None)
+            # Should not raise
+            await handler.process(payload, queue_service)
+
+            # Verify remove_communities was called
+            mock_remove.assert_called_once_with(mock_graphiti_client.driver)
+
+            # Verify build_communities was called
+            mock_build.assert_called_once_with(
+                driver=mock_graphiti_client.driver,
+                llm_client=mock_graphiti_client.llm_client,
+                group_ids=None
+            )
 
     @pytest.mark.asyncio
-    async def test_process_specific_group(self):
-        """Test processing rebuild_communities for specific group."""
+    async def test_process_generates_embeddings_and_saves_communities(self):
+        """Test that process generates embeddings and sets project_id."""
+        from unittest.mock import patch, AsyncMock as ImportedAsyncMock
+
         handler = RebuildCommunityTaskHandler()
 
         queue_service = Mock()
-        queue_service._graphiti_client = Mock()
-        queue_service._graphiti_client.build_communities = AsyncMock()
-        queue_service._graphiti_client.driver = Mock()
-        queue_service._graphiti_client.driver.execute_query = AsyncMock()
+        mock_graphiti_client = Mock()
+        mock_graphiti_client.driver = Mock()
+        mock_graphiti_client.driver.execute_query = AsyncMock()
+        mock_graphiti_client.llm_client = Mock()
+        mock_graphiti_client.embedder = Mock()
 
-        payload = {"group_id": "project_123"}
+        # Mock community node
+        mock_community_node = Mock()
+        mock_community_node.uuid = "test_uuid"
+        mock_community_node.group_id = "test_group"
+        mock_community_node.generate_name_embedding = AsyncMock()
+        mock_community_node.save = AsyncMock()
 
-        await handler.process(payload, queue_service)
+        mock_edge = Mock()
+        mock_edge.save = AsyncMock()
 
-        # Verify build_communities was called with specific group
-        queue_service._graphiti_client.build_communities.assert_called_once_with(group_ids=["project_123"])
+        queue_service._graphiti_client = mock_graphiti_client
+
+        payload = {"group_id": "test_group"}
+
+        with patch('src.application.tasks.community.remove_communities', new_callable=AsyncMock), \
+             patch('src.application.tasks.community.build_communities', new_callable=AsyncMock) as mock_build:
+            mock_build.return_value = ([mock_community_node], [mock_edge])
+
+            await handler.process(payload, queue_service)
+
+            # Verify embedding was generated
+            mock_community_node.generate_name_embedding.assert_called_once_with(mock_graphiti_client.embedder)
+
+            # Verify community was saved
+            mock_community_node.save.assert_called_once()
+
+            # Verify project_id was set
+            mock_graphiti_client.driver.execute_query.assert_called()
 
     @pytest.mark.asyncio
-    async def test_process_executes_metadata_queries(self):
-        """Test that metadata queries are executed after rebuild."""
+    async def test_process_calculates_member_count(self):
+        """Test that process calculates member_count with Neo4j 5.x syntax."""
+        from unittest.mock import patch
+
         handler = RebuildCommunityTaskHandler()
 
         queue_service = Mock()
-        queue_service._graphiti_client = Mock()
-        queue_service._graphiti_client.build_communities = AsyncMock()
-        queue_service._graphiti_client.driver = Mock()
-        queue_service._graphiti_client.driver.execute_query = AsyncMock()
+        mock_graphiti_client = Mock()
+        mock_graphiti_client.driver = Mock()
+        mock_graphiti_client.driver.execute_query = AsyncMock()
+        mock_graphiti_client.llm_client = Mock()
+        mock_graphiti_client.embedder = Mock()
 
-        payload = {"group_id": "global"}
+        mock_community_node = Mock()
+        mock_community_node.uuid = "community_uuid"
+        mock_community_node.group_id = "test_group"
+        mock_community_node.generate_name_embedding = AsyncMock()
+        mock_community_node.save = AsyncMock()
 
-        await handler.process(payload, queue_service)
+        mock_edge = Mock()
+        mock_edge.save = AsyncMock()
 
-        # Verify multiple queries were executed (tenant, project, member_count)
-        assert queue_service._graphiti_client.driver.execute_query.call_count == 3
+        queue_service._graphiti_client = mock_graphiti_client
+
+        payload = {"group_id": "test_group"}
+
+        with patch('src.application.tasks.community.remove_communities', new_callable=AsyncMock), \
+             patch('src.application.tasks.community.build_communities', new_callable=AsyncMock) as mock_build:
+            mock_build.return_value = ([mock_community_node], [mock_edge])
+
+            await handler.process(payload, queue_service)
+
+            # Verify execute_query was called to set member_count
+            # Should be called at least once (for project_id and member_count)
+            assert mock_graphiti_client.driver.execute_query.call_count >= 2

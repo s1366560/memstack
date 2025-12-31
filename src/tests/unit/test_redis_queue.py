@@ -116,7 +116,9 @@ class TestQueueService:
             # Verify redis calls were made
             mock_client.sadd.assert_called_once()
             mock_client.rpush.assert_called_once()
-            assert result == 1
+            # result should be a task_id (UUID string), not queue length
+            assert isinstance(result, str)
+            assert len(result) == 36  # UUID format
 
     @pytest.mark.asyncio
     async def test_retry_task_no_redis(self):

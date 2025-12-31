@@ -1,19 +1,22 @@
+"""Graphiti graph API routes.
+
+This router provides endpoints for accessing and manipulating the knowledge graph structure,
+including communities, entities, and graph visualizations. Search functionality has been
+moved to enhanced_search.py to avoid duplication.
+"""
+
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 import logging
-from datetime import datetime
 
-from src.infrastructure.adapters.primary.web.dependencies import get_current_user
+from src.infrastructure.adapters.primary.web.dependencies import get_current_user, get_graphiti_client, get_queue_service
 from src.infrastructure.adapters.secondary.persistence.models import User
-from src.infrastructure.adapters.primary.web.dependencies import get_graphiti_client
-
-# Use Cases & DI Container
-from src.configuration.di_container import DIContainer
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["graphiti"])
+
 
 # --- Schemas ---
 
@@ -26,6 +29,7 @@ class Entity(BaseModel):
     project_id: Optional[str] = None
     created_at: Optional[str] = None
 
+
 class Community(BaseModel):
     uuid: str
     name: str
@@ -36,14 +40,10 @@ class Community(BaseModel):
     formed_at: Optional[str] = None
     created_at: Optional[str] = None
 
-class SearchResult(BaseModel):
-    results: List[dict]
-    total: int
-    search_type: str
-    strategy: Optional[str] = None
 
 class GraphData(BaseModel):
     elements: dict
+
 
 class SubgraphRequest(BaseModel):
     node_uuids: List[str]
@@ -52,119 +52,62 @@ class SubgraphRequest(BaseModel):
     tenant_id: Optional[str] = None
     project_id: Optional[str] = None
 
-# --- Endpoints ---
 
-@router.post("/search-enhanced/advanced")
-async def advanced_search(
-    params: dict,
-    current_user: User = Depends(get_current_user),
-    graphiti_client = Depends(get_graphiti_client)
-):
-    """Advanced search."""
-    try:
-        query = params.get("query", "")
-        project_id = params.get("project_id")
-        limit = params.get("limit", 50)
-        
-        if not query:
-            return {
-                "results": [],
-                "total": 0,
-                "search_type": "hybrid",
-                "strategy": params.get("strategy", "hybrid")
-            }
-            
-        # Use Graphiti's search_ method
-        import graphiti_core.search.search_config_recipes as recipes
-        
-        # Determine search config based on strategy if needed, but RRF is good default for deep search
-        search_config = recipes.COMBINED_HYBRID_SEARCH_RRF
-        
-        group_ids = [project_id] if project_id else None
-        
-        results = await graphiti_client.search_(
-            query=query,
-            config=search_config,
-            group_ids=group_ids,
-        )
-        
-        # Format results
-        formatted_results = []
-        
-        # Process Episodes
-        if hasattr(results, "episodes") and results.episodes:
-            for ep in results.episodes:
-                formatted_results.append({
-                    "uuid": ep.uuid,
-                    "name": getattr(ep, "name", "Memory"),
-                    "content": ep.content,
-                    "type": "episode",
-                    "score": getattr(ep, "score", 0.0),
-                    "created_at": getattr(ep, "created_at", None),
-                    "metadata": {
-                        "source": getattr(ep, "source", "user"),
-                        "source_description": getattr(ep, "source_description", ""),
-                    }
-                })
-
-        # Process Nodes
-        if hasattr(results, "nodes") and results.nodes:
-            for node in results.nodes:
-                formatted_results.append({
-                    "uuid": node.uuid,
-                    "name": node.name,
-                    "summary": getattr(node, "summary", ""),
-                    "content": getattr(node, "summary", ""), # Fallback for UI
-                    "type": "entity",
-                    "entity_type": getattr(node, "entity_type", "Unknown"),
-                    "score": getattr(node, "score", 0.0),
-                    "created_at": getattr(node, "created_at", None),
-                    "metadata": {}
-                })
-                
-        # Sort and Limit
-        formatted_results.sort(key=lambda x: x.get("score", 0), reverse=True)
-        formatted_results = formatted_results[:limit]
-        
-        return {
-            "results": formatted_results,
-            "total": len(formatted_results),
-            "search_type": "hybrid",
-            "strategy": params.get("strategy", "hybrid")
-        }
-    except Exception as e:
-        logger.error(f"Search failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+# --- Graph Structure Endpoints ---
 
 @router.get("/communities/")
 async def list_communities(
     project_id: Optional[str] = None,
-    limit: int = 50,
+    min_members: Optional[int] = Query(None, description="Minimum member count"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum items to return"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
     current_user: User = Depends(get_current_user),
     graphiti_client = Depends(get_graphiti_client)
 ):
-    """List communities."""
+    """
+    List communities in the knowledge graph with filtering and pagination.
+
+    Note: Communities are now associated with projects via project_id (which equals group_id).
+    If project_id is provided, filters by that project. Otherwise, returns all communities.
+    """
     try:
-        conditions = ["coalesce(c.member_count, 0) >= 0"]
+        conditions = ["coalesce(c.member_count, 0) >= 0"]  # Always include base condition
+        params = {"limit": limit, "offset": offset}
+
+        # Filter by project_id if provided
         if project_id:
             conditions.append("c.project_id = $project_id")
-            
-        where_clause = " AND ".join(conditions)
-        
-        query = f"""
+            params["project_id"] = project_id
+
+        if min_members is not None:
+            conditions.append("coalesce(c.member_count, 0) >= $min_members")
+            params["min_members"] = min_members
+
+        where_clause = "WHERE " + " AND ".join(conditions)
+
+        # Count query
+        count_query = f"""
         MATCH (c:Community)
-        WHERE {where_clause}
+        {where_clause}
+        RETURN count(c) as total
+        """
+        logger.info(f"Counting communities with project_id={project_id}")
+        count_result = await graphiti_client.driver.execute_query(count_query, **params)
+        total = count_result.records[0]["total"] if count_result.records else 0
+        logger.info(f"Found {total} communities")
+
+        # List query
+        list_query = f"""
+        MATCH (c:Community)
+        {where_clause}
         RETURN properties(c) as props
         ORDER BY coalesce(c.member_count, 0) DESC
+        SKIP $offset
         LIMIT $limit
         """
-        
-        result = await graphiti_client.driver.execute_query(
-            query,
-            project_id=project_id,
-            limit=limit
-        )
-        
+
+        result = await graphiti_client.driver.execute_query(list_query, **params)
+
         communities = []
         for r in result.records:
             props = r["props"]
@@ -178,26 +121,34 @@ async def list_communities(
                 "formed_at": props.get("formed_at"),
                 "created_at": props.get("created_at")
             })
-            
+
+        logger.info(f"Returning {len(communities)} communities (offset={offset}, limit={limit})")
+
         return {
             "communities": communities,
-            "total": len(communities)
+            "total": total,
+            "limit": limit,
+            "offset": offset
         }
     except Exception as e:
-        logger.error(f"Failed to list communities: {e}")
+        logger.error(f"Failed to list communities: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/entities/")
 async def list_entities(
     project_id: Optional[str] = None,
-    limit: int = 50,
-    offset: int = 0,
+    entity_type: Optional[str] = Query(None, description="Filter by entity type"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum items to return"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
     current_user: User = Depends(get_current_user),
     graphiti_client = Depends(get_graphiti_client)
 ):
-    """List entities."""
+    """List entities in the knowledge graph with filtering and pagination."""
     try:
         conditions = []
+        params = {"limit": limit, "offset": offset}
+
         if project_id:
             project_condition = """
             (
@@ -209,14 +160,20 @@ async def list_entities(
             )
             """
             conditions.append(project_condition)
-            
+            params["project_id"] = project_id
+
+        if entity_type:
+            # Filter by entity type using label filtering
+            conditions.append("'$entity_type' IN labels(e)")
+            params["entity_type"] = entity_type
+
         where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
-        
+
         # Count
         count_query = f"MATCH (e:Entity) {where_clause} RETURN count(e) as total"
-        count_result = await graphiti_client.driver.execute_query(count_query, project_id=project_id)
+        count_result = await graphiti_client.driver.execute_query(count_query, **params)
         total = count_result.records[0]["total"] if count_result.records else 0
-        
+
         # List
         list_query = f"""
         MATCH (e:Entity)
@@ -226,20 +183,15 @@ async def list_entities(
         SKIP $offset
         LIMIT $limit
         """
-        
-        result = await graphiti_client.driver.execute_query(
-            list_query,
-            project_id=project_id,
-            offset=offset,
-            limit=limit
-        )
-        
+
+        result = await graphiti_client.driver.execute_query(list_query, **params)
+
         entities = []
         for r in result.records:
             props = r["props"]
             labels = r["labels"]
             e_type = next((l for l in labels if l != "Entity"), "Unknown")
-            
+
             entities.append({
                 "uuid": props.get("uuid", ""),
                 "name": props.get("name", ""),
@@ -249,14 +201,211 @@ async def list_entities(
                 "project_id": props.get("project_id"),
                 "created_at": props.get("created_at")
             })
-            
+
         return {
             "entities": entities,
-            "total": total
+            "total": total,
+            "limit": limit,
+            "offset": offset
         }
     except Exception as e:
         logger.error(f"Failed to list entities: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/entities/types")
+async def get_entity_types(
+    project_id: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    graphiti_client = Depends(get_graphiti_client)
+):
+    """
+    Get all available entity types with their counts.
+
+    Useful for populating filter dropdowns with dynamic entity types.
+    """
+    try:
+        conditions = []
+        params = {}
+
+        if project_id:
+            conditions.append("(e.project_id = $project_id OR EXISTS { MATCH (e)<-[:MENTIONS]-(ep:Episodic) WHERE ep.project_id = $project_id })")
+            params["project_id"] = project_id
+
+        where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
+
+        query = f"""
+        MATCH (e:Entity)
+        {where_clause}
+        UNWIND labels(e) as label
+        WITH label, count(e) as entity_count
+        WHERE label <> 'Entity' AND label <> 'Node' AND label <> 'BaseEntity'
+        RETURN label as entity_type, entity_count
+        ORDER BY entity_count DESC
+        """
+
+        result = await graphiti_client.driver.execute_query(query, **params)
+
+        entity_types = []
+        for r in result.records:
+            entity_types.append({
+                "entity_type": r["entity_type"],
+                "count": r["entity_count"]
+            })
+
+        return {
+            "entity_types": entity_types,
+            "total": len(entity_types)
+        }
+    except Exception as e:
+        logger.error(f"Failed to get entity types: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/entities/{entity_id}")
+async def get_entity(
+    entity_id: str,
+    current_user: User = Depends(get_current_user),
+    graphiti_client = Depends(get_graphiti_client)
+):
+    """
+    Get entity details by UUID.
+
+    Args:
+        entity_id: Entity UUID
+
+    Returns:
+        Entity details with properties
+    """
+    try:
+        query = """
+        MATCH (e:Entity {uuid: $uuid})
+        RETURN properties(e) as props, labels(e) as labels
+        """
+
+        result = await graphiti_client.driver.execute_query(query, uuid=entity_id)
+
+        if not result.records:
+            raise HTTPException(status_code=404, detail="Entity not found")
+
+        props = result.records[0]["props"]
+        labels = result.records[0]["labels"]
+
+        # Extract entity type from labels
+        e_type = next((l for l in labels if l != "Entity"), "Unknown")
+
+        return {
+            "uuid": props.get("uuid", ""),
+            "name": props.get("name", ""),
+            "entity_type": e_type,
+            "summary": props.get("summary", ""),
+            "description": props.get("description", ""),
+            "tenant_id": props.get("tenant_id"),
+            "project_id": props.get("project_id"),
+            "created_at": props.get("created_at"),
+            "updated_at": props.get("updated_at"),
+            "properties": {
+                k: v for k, v in props.items()
+                if k not in ["uuid", "name", "summary", "description", "tenant_id", "project_id", "created_at", "updated_at"]
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get entity {entity_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/entities/{entity_id}/relationships")
+async def get_entity_relationships(
+    entity_id: str,
+    relationship_type: Optional[str] = Query(None, description="Filter by relationship type"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum relationships to return"),
+    current_user: User = Depends(get_current_user),
+    graphiti_client = Depends(get_graphiti_client)
+):
+    """
+    Get relationships for an entity.
+
+    Returns both outgoing and incoming relationships for the specified entity.
+
+    Args:
+        entity_id: Entity UUID
+        relationship_type: Optional relationship type filter
+        limit: Maximum relationships to return
+
+    Returns:
+        List of relationships with source and target entities
+    """
+    try:
+        # Build relationship type filter
+        rel_filter = ""
+        params = {"uuid": entity_id, "limit": limit}
+
+        if relationship_type:
+            rel_filter = "AND type(r) = $relationship_type"
+            params["relationship_type"] = relationship_type
+
+        # Query for both outgoing and incoming relationships
+        query = f"""
+        MATCH (e:Entity {{uuid: $uuid}})
+        OPTIONAL MATCH (e)-[r]-(related:Entity)
+        WHERE related IS NOT NULL {rel_filter}
+        RETURN
+            elementId(r) as edge_id,
+            type(r) as relation_type,
+            properties(r) as edge_props,
+            startNode(r) as start_node,
+            endNode(r) as end_node,
+            properties(related) as related_props,
+            labels(related) as related_labels,
+            CASE
+                WHEN startNode(r).uuid = $uuid THEN 'outgoing'
+                ELSE 'incoming'
+            END as direction
+        LIMIT $limit
+        """
+
+        result = await graphiti_client.driver.execute_query(query, **params)
+
+        relationships = []
+        for r in result.records:
+            edge_props = r["edge_props"] or {}
+            related_props = r["related_props"]
+            related_labels = r["related_labels"]
+
+            # Get related entity type
+            related_type = next((l for l in related_labels if l != "Entity"), "Unknown")
+
+            # Clean up edge properties (remove embeddings)
+            if "fact_embedding" in edge_props:
+                edge_props = {k: v for k, v in edge_props.items() if k != "fact_embedding"}
+
+            relationships.append({
+                "edge_id": r["edge_id"],
+                "relation_type": r["relation_type"],
+                "direction": r["direction"],
+                "fact": edge_props.get("fact", ""),
+                "score": edge_props.get("score", 0.0),
+                "created_at": edge_props.get("created_at"),
+                "updated_at": edge_props.get("updated_at"),
+                "related_entity": {
+                    "uuid": related_props.get("uuid", ""),
+                    "name": related_props.get("name", ""),
+                    "entity_type": related_type,
+                    "summary": related_props.get("summary", ""),
+                    "created_at": related_props.get("created_at"),
+                }
+            })
+
+        return {
+            "relationships": relationships,
+            "total": len(relationships)
+        }
+    except Exception as e:
+        logger.error(f"Failed to get relationships for entity {entity_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/memory/graph")
 async def get_graph(
@@ -265,38 +414,37 @@ async def get_graph(
     current_user: User = Depends(get_current_user),
     graphiti_client = Depends(get_graphiti_client)
 ):
-    """Get graph data."""
+    """Get graph data for visualization."""
     try:
-        # Simple graph query
         query = """
         MATCH (n)
         WHERE ('Entity' IN labels(n) OR 'Episodic' IN labels(n) OR 'Community' IN labels(n))
         AND ($project_id IS NULL OR n.project_id = $project_id)
-        
+
         OPTIONAL MATCH (n)-[r]->(m)
         WHERE ('Entity' IN labels(m) OR 'Episodic' IN labels(m) OR 'Community' IN labels(m))
-        
-        RETURN 
+
+        RETURN
             elementId(n) as source_id, labels(n) as source_labels, properties(n) as source_props,
             elementId(r) as edge_id, type(r) as edge_type, properties(r) as edge_props,
             elementId(m) as target_id, labels(m) as target_labels, properties(m) as target_props
         LIMIT $limit
         """
-        
+
         result = await graphiti_client.driver.execute_query(
             query,
             project_id=project_id,
             limit=limit
         )
-        
+
         nodes_map = {}
         edges_list = []
-        
+
         for r in result.records:
             s_id = r["source_id"]
             s_props = r["source_props"]
             if "name_embedding" in s_props: del s_props["name_embedding"]
-            
+
             if s_id not in nodes_map:
                 nodes_map[s_id] = {
                     "data": {
@@ -306,12 +454,12 @@ async def get_graph(
                         **s_props
                     }
                 }
-                
+
             if r["target_id"]:
                 t_id = r["target_id"]
                 t_props = r["target_props"]
                 if "name_embedding" in t_props: del t_props["name_embedding"]
-                
+
                 if t_id not in nodes_map:
                     nodes_map[t_id] = {
                         "data": {
@@ -321,11 +469,11 @@ async def get_graph(
                             **t_props
                         }
                     }
-                    
+
                 if r["edge_id"]:
                     e_props = r["edge_props"]
                     if "fact_embedding" in e_props: del e_props["fact_embedding"]
-                    
+
                     edges_list.append({
                         "data": {
                             "id": r["edge_id"],
@@ -335,7 +483,7 @@ async def get_graph(
                             **e_props
                         }
                     })
-        
+
         return {
             "elements": {
                 "nodes": list(nodes_map.values()),
@@ -346,6 +494,7 @@ async def get_graph(
         logger.error(f"Failed to get graph: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.post("/memory/graph/subgraph")
 async def get_subgraph(
     params: SubgraphRequest,
@@ -355,21 +504,20 @@ async def get_subgraph(
     """Get subgraph for specific nodes."""
     try:
         project_id = params.project_id
-        
-        # Build query to fetch nodes and optional neighbors
+
         query = """
         MATCH (n)
         WHERE n.uuid IN $node_uuids
         AND ($project_id IS NULL OR n.project_id = $project_id)
-        
+
         WITH n
         """
-        
+
         if params.include_neighbors:
             query += """
             OPTIONAL MATCH (n)-[r]-(m)
             WHERE ('Entity' IN labels(m) OR 'Episodic' IN labels(m) OR 'Community' IN labels(m))
-            RETURN 
+            RETURN
                 elementId(n) as source_id, labels(n) as source_labels, properties(n) as source_props,
                 elementId(r) as edge_id, type(r) as edge_type, properties(r) as edge_props,
                 elementId(m) as target_id, labels(m) as target_labels, properties(m) as target_props
@@ -377,30 +525,30 @@ async def get_subgraph(
             """
         else:
             query += """
-            RETURN 
+            RETURN
                 elementId(n) as source_id, labels(n) as source_labels, properties(n) as source_props,
                 null as edge_id, null as edge_type, null as edge_props,
                 null as target_id, null as target_labels, null as target_props
             LIMIT $limit
             """
-            
+
         result = await graphiti_client.driver.execute_query(
             query,
             node_uuids=params.node_uuids,
             project_id=project_id,
             limit=params.limit
         )
-        
+
         nodes_map = {}
         edges_list = []
-        
+
         for r in result.records:
             # Process source node
             s_id = r["source_id"]
             if s_id:
                 s_props = r["source_props"]
                 if "name_embedding" in s_props: del s_props["name_embedding"]
-                
+
                 if s_id not in nodes_map:
                     nodes_map[s_id] = {
                         "data": {
@@ -410,13 +558,13 @@ async def get_subgraph(
                             **s_props
                         }
                     }
-            
+
             # Process target node and edge if available
             if r.get("target_id"):
                 t_id = r["target_id"]
                 t_props = r["target_props"]
                 if "name_embedding" in t_props: del t_props["name_embedding"]
-                
+
                 if t_id not in nodes_map:
                     nodes_map[t_id] = {
                         "data": {
@@ -426,15 +574,11 @@ async def get_subgraph(
                             **t_props
                         }
                     }
-                    
+
                 if r.get("edge_id"):
                     e_props = r["edge_props"] or {}
                     if "fact_embedding" in e_props: del e_props["fact_embedding"]
-                    
-                    # Determine direction based on cypher pattern
-                    # We used (n)-[r]-(m), so we need to check start/end node of relationship if we care about direction
-                    # But for now, let's just use source/target from query result row
-                    
+
                     edges_list.append({
                         "data": {
                             "id": r["edge_id"],
@@ -444,7 +588,7 @@ async def get_subgraph(
                             **e_props
                         }
                     })
-        
+
         return {
             "elements": {
                 "nodes": list(nodes_map.values()),
@@ -455,85 +599,155 @@ async def get_subgraph(
         logger.error(f"Failed to get subgraph: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/memory/search")
-async def memory_search(
-    params: dict,
+
+# --- Community Detail Endpoints ---
+
+@router.get("/communities/{community_id}")
+async def get_community(
+    community_id: str,
     current_user: User = Depends(get_current_user),
     graphiti_client = Depends(get_graphiti_client)
 ):
     """
-    Search memories using Graphiti's hybrid search.
+    Get community details by UUID.
 
-    Supports semantic search, keyword search, and graph traversal.
+    Args:
+        community_id: Community UUID
+
+    Returns:
+        Community details with properties
     """
     try:
-        query = params.get("query", "")
-        limit = params.get("limit", 10)
-        group_id = params.get("project_id") or params.get("tenant_id")
+        query = """
+        MATCH (c:Community {uuid: $uuid})
+        RETURN properties(c) as props
+        """
 
-        if not query:
-            raise HTTPException(status_code=400, detail="Query is required")
+        result = await graphiti_client.driver.execute_query(query, uuid=community_id)
 
-        # Build group_ids list
-        group_ids = [group_id] if group_id else None
+        if not result.records:
+            raise HTTPException(status_code=404, detail="Community not found")
 
-        # Perform search using Graphiti's search_ method
-        import graphiti_core.search.search_config_recipes as recipes
-
-        search_config = recipes.COMBINED_HYBRID_SEARCH_RRF
-
-        results = await graphiti_client.search_(
-            query=query,
-            config=search_config,
-            group_ids=group_ids,
-        )
-
-        # Convert results to response format
-        formatted_results = []
-        if hasattr(results, "episodes") and results.episodes:
-            for ep in results.episodes:
-                formatted_results.append({
-                    "uuid": ep.uuid,
-                    "name": getattr(ep, "name", ""),
-                    "content": ep.content,
-                    "type": "episode",
-                    "score": getattr(ep, "score", 0.0),
-                    "created_at": getattr(ep, "created_at", None),
-                    "metadata": {
-                        "source": getattr(ep, "source", ""),
-                        "source_description": getattr(ep, "source_description", ""),
-                    }
-                })
-
-        if hasattr(results, "nodes") and results.nodes:
-            for node in results.nodes:
-                formatted_results.append({
-                    "uuid": node.uuid,
-                    "name": node.name,
-                    "summary": getattr(node, "summary", ""),
-                    "type": "entity",
-                    "entity_type": getattr(node, "entity_type", "Unknown"),
-                    "score": getattr(node, "score", 0.0),
-                    "created_at": getattr(node, "created_at", None),
-                    "metadata": {}
-                })
-
-        # Sort by score and limit
-        formatted_results.sort(key=lambda x: x.get("score", 0), reverse=True)
-        formatted_results = formatted_results[:limit]
+        props = result.records[0]["props"]
 
         return {
-            "results": formatted_results,
-            "total": len(formatted_results),
-            "query": query,
-            "filters_applied": {"group_id": group_id} if group_id else {},
-            "search_metadata": {
-                "strategy": "COMBINED_HYBRID_SEARCH_RRF",
-                "limit": limit
-            }
+            "uuid": props.get("uuid", ""),
+            "name": props.get("name", ""),
+            "summary": props.get("summary", ""),
+            "member_count": props.get("member_count", 0),
+            "tenant_id": props.get("tenant_id"),
+            "project_id": props.get("project_id"),
+            "formed_at": props.get("formed_at"),
+            "created_at": props.get("created_at"),
+            "updated_at": props.get("updated_at")
         }
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Search failed: {e}")
+        logger.error(f"Failed to get community {community_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/communities/{community_id}/members")
+async def get_community_members(
+    community_id: str,
+    limit: int = Query(100, ge=1, le=500, description="Maximum members to return"),
+    current_user: User = Depends(get_current_user),
+    graphiti_client = Depends(get_graphiti_client)
+):
+    """
+    Get members (entities) of a community.
+
+    Args:
+        community_id: Community UUID
+        limit: Maximum members to return
+
+    Returns:
+        List of community members with their details
+    """
+    try:
+        query = """
+        MATCH (c:Community {uuid: $uuid})-[:HAS_MEMBER]->(e:Entity)
+        RETURN properties(e) as props, labels(e) as labels
+        LIMIT $limit
+        """
+
+        result = await graphiti_client.driver.execute_query(query, uuid=community_id, limit=limit)
+
+        members = []
+        for r in result.records:
+            props = r["props"]
+            labels = r["labels"]
+            e_type = next((l for l in labels if l != "Entity"), "Unknown")
+
+            members.append({
+                "uuid": props.get("uuid", ""),
+                "name": props.get("name", ""),
+                "entity_type": e_type,
+                "summary": props.get("summary", ""),
+                "created_at": props.get("created_at")
+            })
+
+        return {
+            "members": members,
+            "total": len(members)
+        }
+    except Exception as e:
+        logger.error(f"Failed to get members for community {community_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/communities/rebuild")
+async def rebuild_communities(
+    background: bool = Query(False, description="Run in background mode"),
+    current_user: User = Depends(get_current_user),
+    graphiti_client = Depends(get_graphiti_client),
+    queue_service = Depends(get_queue_service)
+):
+    """
+    Rebuild communities using the Louvain algorithm.
+
+    This will:
+    1. Remove all existing community nodes and relationships
+    2. Detect new communities using label propagation
+    3. Generate community summaries using LLM
+    4. Generate embeddings for community nodes
+    5. Set project_id = group_id for proper project association
+    6. Calculate member_count using Neo4j 5.x compatible syntax
+
+    Warning: This is an expensive operation that may take several minutes
+    depending on the size of your graph.
+
+    Set background=true to run asynchronously and return a task ID for tracking.
+    The task can then be monitored via GET /api/v1/tasks/{task_id}
+    """
+    # Execute either synchronously or submit to background queue
+    if background:
+        # Submit to QueueService and return task ID for tracking
+        task_id = await queue_service.rebuild_communities(group_id="global")
+        logger.info(f"Submitted community rebuild task {task_id} for background execution")
+
+        return {
+            "status": "submitted",
+            "message": "Community rebuild started in background",
+            "task_id": task_id,
+            "task_url": f"/api/v1/tasks/{task_id}"
+        }
+    else:
+        # For synchronous execution, import and call RebuildCommunityTaskHandler directly
+        # This maintains backward compatibility for non-background requests
+        from src.application.tasks.community import RebuildCommunityTaskHandler
+
+        handler = RebuildCommunityTaskHandler()
+        try:
+            # Execute the handler directly (synchronous)
+            await handler.process({"group_id": "global"}, queue_service)
+
+            return {
+                "status": "success",
+                "message": "Communities rebuilt successfully"
+            }
+        except Exception as e:
+            logger.error(f"Failed to rebuild communities: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to rebuild communities: {str(e)}")
+

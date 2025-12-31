@@ -25,9 +25,8 @@ from src.infrastructure.adapters.primary.web.routers import (
     tasks,
     memos,
     ai_tools,
+    background_tasks,
 )
-# Solution 2 testing routers (isolated client)
-from src.infrastructure.adapters.primary.web.routers import episodes_isolated, enhanced_search_isolated
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -36,14 +35,14 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting MemStack (Hexagonal) application...")
-    
+
     # Initialize Database
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        
+
     # Initialize Default Credentials (Admin/User/Tenant)
     await initialize_default_credentials()
-    
+
     # Initialize Graphiti
     graphiti_client = create_graphiti_client()
     try:
@@ -57,18 +56,23 @@ async def lifespan(app: FastAPI):
         graphiti_client=graphiti_client,
         run_workers=False
     )
-    
+
+    # Initialize Background Task Manager
+    from src.infrastructure.adapters.secondary.background_tasks import task_manager
+    task_manager.start_cleanup()
+    logger.info("Background task manager started")
+
     # Initialize Container
     container = DIContainer(
         session_factory=async_session_factory,
         graphiti_client=graphiti_client
     )
-    
+
     app.state.container = container
     app.state.queue_service = queue_service
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down...")
     await queue_service.close()
@@ -92,7 +96,7 @@ def create_app() -> FastAPI:
     @app.get("/health")
     async def health_check():
         return {"status": "ok", "version": "0.2.0"}
-        
+
     # Register Routers
     app.include_router(auth.router, prefix="/api/v1")
     app.include_router(tenants.router)
@@ -105,16 +109,14 @@ def create_app() -> FastAPI:
     app.include_router(episodes.router)
     app.include_router(recall.router)
     app.include_router(enhanced_search.router)
+    app.include_router(enhanced_search.memory_router)
     app.include_router(data_export.router)
     app.include_router(maintenance.router)
     app.include_router(tasks.router)
     app.include_router(memos.router)
     app.include_router(ai_tools.router)
+    app.include_router(background_tasks.router)
 
-    # Solution 2 Testing Routers (isolated client - for performance comparison)
-    app.include_router(episodes_isolated.router)
-    app.include_router(enhanced_search_isolated.router)
-    
     return app
 
 app = create_app()
