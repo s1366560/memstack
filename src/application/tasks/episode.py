@@ -114,7 +114,8 @@ class EpisodeTaskHandler(TaskHandler):
                         query = """
                         MATCH (ep:Episodic {uuid: $uuid})-[:MENTIONS]->(e:Entity)-[:BELONGS_TO]->(c:Community)
                         SET c.tenant_id = $tenant_id,
-                            c.project_id = $project_id
+                            c.project_id = $project_id,
+                            c.member_count = coalesce(c.member_count, 0)
                         """
                         await queue_service._graphiti_client.driver.execute_query(
                             query, uuid=uuid, tenant_id=tenant_id, project_id=project_id

@@ -1,15 +1,16 @@
 import logging
-from typing import Any, Dict
 from asyncio import gather
+from typing import Any, Dict
 
 from graphiti_core.utils.maintenance.community_operations import (
+    build_communities,
     remove_communities,
-    build_communities
 )
 
 from src.domain.tasks.base import TaskHandler
 
 logger = logging.getLogger(__name__)
+
 
 class RebuildCommunityTaskHandler(TaskHandler):
     @property
@@ -46,7 +47,7 @@ class RebuildCommunityTaskHandler(TaskHandler):
             community_nodes, community_edges = await build_communities(
                 driver=graphiti_client.driver,
                 llm_client=graphiti_client.llm_client,
-                group_ids=None  # Rebuild all groups
+                group_ids=None,  # Rebuild all groups
             )
 
             # Step 3: Generate embeddings and save communities with project_id
@@ -59,22 +60,26 @@ class RebuildCommunityTaskHandler(TaskHandler):
                 await community_node.save(graphiti_client.driver)
 
                 # CRITICAL: Set project_id = group_id for proper project association
+                # Also initialize member_count to avoid "property key does not exist" warnings
                 await graphiti_client.driver.execute_query(
                     """
                     MATCH (c:Community {uuid: $uuid})
-                    SET c.project_id = c.group_id
+                    SET c.project_id = c.group_id,
+                        c.member_count = 0
                     """,
-                    uuid=community_node.uuid
+                    uuid=community_node.uuid,
                 )
 
-                logger.debug(f"Saved community {community_node.uuid} with project_id={community_node.group_id}")
+                logger.debug(
+                    f"Saved community {community_node.uuid} with project_id={community_node.group_id}"
+                )
                 return community_node
 
             # Save all communities with embeddings
             logger.info("Saving communities to database...")
-            saved_communities = await gather(*[
-                generate_and_save_community(node) for node in community_nodes
-            ])
+            saved_communities = await gather(
+                *[generate_and_save_community(node) for node in community_nodes]
+            )
 
             # Step 4: Save all edges (HAS_MEMBER relationships)
             logger.info("Saving community edges...")
@@ -97,11 +102,13 @@ class RebuildCommunityTaskHandler(TaskHandler):
                         RETURN count(e)
                     )
                     """,
-                    uuid=community_node.uuid
+                    uuid=community_node.uuid,
                 )
                 logger.debug(f"Set member_count for community {community_node.uuid}")
 
-            logger.info(f"Successfully rebuilt {len(saved_communities)} communities with {len(saved_edges)} edges")
+            logger.info(
+                f"Successfully rebuilt {len(saved_communities)} communities with {len(saved_edges)} edges"
+            )
 
         except Exception as e:
             logger.error(f"Failed to rebuild communities: {e}")
