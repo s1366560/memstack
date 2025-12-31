@@ -162,11 +162,11 @@ class TestRebuildCommunityTaskHandler:
 
     @pytest.mark.asyncio
     async def test_process_calls_remove_and_build_communities(self):
-        """Test that process calls remove_communities and build_communities."""
+        """Test that process calls remove_communities and build_communities with project isolation."""
         from unittest.mock import patch
         from graphiti_core.utils.maintenance.community_operations import (
             remove_communities,
-            build_communities
+            build_communities,
         )
 
         handler = RebuildCommunityTaskHandler()
@@ -181,7 +181,7 @@ class TestRebuildCommunityTaskHandler:
         # Mock community nodes and edges
         mock_community_node = Mock()
         mock_community_node.uuid = "test_uuid"
-        mock_community_node.group_id = "test_group"
+        mock_community_node.group_id = "global"
         mock_community_node.generate_name_embedding = AsyncMock()
         mock_community_node.save = AsyncMock()
 
@@ -192,21 +192,27 @@ class TestRebuildCommunityTaskHandler:
 
         payload = {"group_id": "global"}
 
-        with patch('src.application.tasks.community.remove_communities', new_callable=AsyncMock) as mock_remove, \
-             patch('src.application.tasks.community.build_communities', new_callable=AsyncMock) as mock_build:
+        with (
+            patch(
+                "src.application.tasks.community.remove_communities", new_callable=AsyncMock
+            ) as mock_remove,
+            patch(
+                "src.application.tasks.community.build_communities", new_callable=AsyncMock
+            ) as mock_build,
+        ):
             mock_build.return_value = ([mock_community_node], [mock_edge])
 
             # Should not raise
             await handler.process(payload, queue_service)
 
-            # Verify remove_communities was called
-            mock_remove.assert_called_once_with(mock_graphiti_client.driver)
+            # Verify remove_communities was called with group_ids for project isolation
+            mock_remove.assert_called_once_with(mock_graphiti_client.driver, group_ids=["global"])
 
-            # Verify build_communities was called
+            # Verify build_communities was called with group_ids for project isolation
             mock_build.assert_called_once_with(
                 driver=mock_graphiti_client.driver,
                 llm_client=mock_graphiti_client.llm_client,
-                group_ids=None
+                group_ids=["global"],
             )
 
     @pytest.mark.asyncio
@@ -237,14 +243,20 @@ class TestRebuildCommunityTaskHandler:
 
         payload = {"group_id": "test_group"}
 
-        with patch('src.application.tasks.community.remove_communities', new_callable=AsyncMock), \
-             patch('src.application.tasks.community.build_communities', new_callable=AsyncMock) as mock_build:
+        with (
+            patch("src.application.tasks.community.remove_communities", new_callable=AsyncMock),
+            patch(
+                "src.application.tasks.community.build_communities", new_callable=AsyncMock
+            ) as mock_build,
+        ):
             mock_build.return_value = ([mock_community_node], [mock_edge])
 
             await handler.process(payload, queue_service)
 
             # Verify embedding was generated
-            mock_community_node.generate_name_embedding.assert_called_once_with(mock_graphiti_client.embedder)
+            mock_community_node.generate_name_embedding.assert_called_once_with(
+                mock_graphiti_client.embedder
+            )
 
             # Verify community was saved
             mock_community_node.save.assert_called_once()
@@ -279,8 +291,12 @@ class TestRebuildCommunityTaskHandler:
 
         payload = {"group_id": "test_group"}
 
-        with patch('src.application.tasks.community.remove_communities', new_callable=AsyncMock), \
-             patch('src.application.tasks.community.build_communities', new_callable=AsyncMock) as mock_build:
+        with (
+            patch("src.application.tasks.community.remove_communities", new_callable=AsyncMock),
+            patch(
+                "src.application.tasks.community.build_communities", new_callable=AsyncMock
+            ) as mock_build,
+        ):
             mock_build.return_value = ([mock_community_node], [mock_edge])
 
             await handler.process(payload, queue_service)

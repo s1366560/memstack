@@ -700,16 +700,17 @@ async def get_community_members(
 @router.post("/communities/rebuild")
 async def rebuild_communities(
     background: bool = Query(False, description="Run in background mode"),
+    project_id: Optional[str] = Query(None, description="Project ID to rebuild communities for"),
     current_user: User = Depends(get_current_user),
     graphiti_client = Depends(get_graphiti_client),
     queue_service = Depends(get_queue_service)
 ):
     """
-    Rebuild communities using the Louvain algorithm.
+    Rebuild communities using the Louvain algorithm for the specified project.
 
     This will:
-    1. Remove all existing community nodes and relationships
-    2. Detect new communities using label propagation
+    1. Remove all existing community nodes and relationships for the current project
+    2. Detect new communities using label propagation (scoped to project)
     3. Generate community summaries using LLM
     4. Generate embeddings for community nodes
     5. Set project_id = group_id for proper project association
@@ -721,11 +722,14 @@ async def rebuild_communities(
     Set background=true to run asynchronously and return a task ID for tracking.
     The task can then be monitored via GET /api/v1/tasks/{task_id}
     """
+    # Get project_id from query parameter, or fall back to user's default project
+    target_project_id = project_id or getattr(current_user, 'project_id', None) or "neo4j"
+
     # Execute either synchronously or submit to background queue
     if background:
         # Submit to QueueService and return task ID for tracking
-        task_id = await queue_service.rebuild_communities(group_id="global")
-        logger.info(f"Submitted community rebuild task {task_id} for background execution")
+        task_id = await queue_service.rebuild_communities(task_group_id=target_project_id)
+        logger.info(f"Submitted community rebuild task {task_id} for background execution (project: {target_project_id})")
 
         return {
             "status": "submitted",
@@ -741,7 +745,7 @@ async def rebuild_communities(
         handler = RebuildCommunityTaskHandler()
         try:
             # Execute the handler directly (synchronous)
-            await handler.process({"group_id": "global"}, queue_service)
+            await handler.process({"task_group_id": target_project_id}, queue_service)
 
             return {
                 "status": "success",

@@ -111,7 +111,7 @@ class TestQueueService:
             service = QueueService()
             await service.initialize(graphiti_client=mock_graphiti, run_workers=False)
 
-            result = await service.rebuild_communities(group_id="group_123")
+            result = await service.rebuild_communities(task_group_id="group_123")
 
             # Verify redis calls were made
             mock_client.sadd.assert_called_once()

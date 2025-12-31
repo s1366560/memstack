@@ -1,7 +1,15 @@
-import React, { useState } from 'react'
+import React, { useState, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { graphitiService } from '../../services/graphitiService'
 import { memoryAPI } from '../../services/api'
+
+interface TaskStatus {
+    task_id: string
+    status: string
+    progress: number
+    message: string
+    result?: any
+}
 
 export const NewMemory: React.FC = () => {
     const { projectId } = useParams()
@@ -13,6 +21,86 @@ export const NewMemory: React.FC = () => {
     const [newTag, setNewTag] = useState('')
     const [isSaving, setIsSaving] = useState(false)
     const [isOptimizing, setIsOptimizing] = useState(false)
+    const [currentTask, setCurrentTask] = useState<TaskStatus | null>(null)
+    const [error, setError] = useState<string | null>(null)
+
+    const streamTaskStatus = useCallback((taskId: string) => {
+        console.log(`📡 Connecting to SSE stream for task: ${taskId}`)
+
+        // Use absolute URL - EventSource doesn't support custom headers
+        const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+        const streamUrl = `${apiBaseUrl}/tasks/${taskId}/stream`
+        console.log(`📡 SSE URL: ${streamUrl}`)
+
+        const eventSource = new EventSource(streamUrl)
+
+        eventSource.onopen = () => {
+            console.log('✅ SSE connection opened - waiting for events...')
+        }
+
+        // Listen for progress events
+        eventSource.addEventListener('progress', (e: MessageEvent) => {
+            const data = JSON.parse(e.data)
+            console.log('📊 Progress event:', data)
+
+            // Map status: processing -> running
+            const statusMap: { [key: string]: string } = {
+                'processing': 'running',
+                'pending': 'pending',
+                'completed': 'completed',
+                'failed': 'failed'
+            }
+            const normalizedStatus = statusMap[data.status?.toLowerCase()] || data.status?.toLowerCase()
+
+            setCurrentTask({
+                task_id: data.id,
+                status: normalizedStatus,
+                progress: data.progress || 0,
+                message: data.message || 'Processing...',
+            })
+        })
+
+        // Listen for completion
+        eventSource.addEventListener('completed', (e: MessageEvent) => {
+            const task = JSON.parse(e.data)
+            console.log('✅ Completed event:', task)
+            setCurrentTask({
+                task_id: task.id,
+                status: 'completed',
+                progress: 100,
+                message: task.message || 'Completed',
+                result: task.result,
+            })
+
+            // Close connection and navigate after a short delay
+            setTimeout(() => {
+                eventSource.close()
+                navigate(`/project/${projectId}/memories`)
+            }, 1500)
+        })
+
+        // Listen for failed event
+        eventSource.addEventListener('failed', (e: MessageEvent) => {
+            const task = JSON.parse(e.data)
+            console.error('❌ Failed event:', task)
+            setError(task.message || 'Processing failed')
+            eventSource.close()
+            setIsSaving(false)
+            setCurrentTask(null)
+        })
+
+        // Error handling
+        eventSource.onerror = (e) => {
+            console.error('❌ SSE connection error:', e)
+            if (eventSource.readyState === 2) { // CLOSED
+                setError('Failed to connect to task updates. Please check if the task completed.')
+                setIsSaving(false)
+                setCurrentTask(null)
+            }
+        }
+
+        return eventSource
+    }, [navigate, projectId])
 
     const handleAddTag = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && newTag.trim()) {
@@ -62,8 +150,11 @@ export const NewMemory: React.FC = () => {
         if (!projectId || !content) return
 
         setIsSaving(true)
+        setError(null)
+        setCurrentTask(null)
+
         try {
-            await memoryAPI.create(projectId, {
+            const response = await memoryAPI.create(projectId, {
                 title,
                 content,
                 project_id: projectId,
@@ -74,10 +165,20 @@ export const NewMemory: React.FC = () => {
                     source: 'web_console'
                 }
             })
-            navigate(`/project/${projectId}/memories`)
-        } catch (error) {
-            console.error('Failed to create memory:', error)
-        } finally {
+
+            // If response contains task_id, start SSE streaming
+            if (response.task_id) {
+                console.log('✅ Memory created with task:', response.task_id)
+                streamTaskStatus(response.task_id)
+            } else {
+                // Fallback: no task ID, navigate directly
+                console.log('⚠️ No task_id returned, navigating directly')
+                navigate(`/project/${projectId}/memories`)
+                setIsSaving(false)
+            }
+        } catch (err: any) {
+            console.error('Failed to create memory:', err)
+            setError(err?.response?.data?.detail || 'Failed to create memory')
             setIsSaving(false)
         }
     }
@@ -118,6 +219,69 @@ export const NewMemory: React.FC = () => {
                         <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">New Memory Entry</h1>
                         <p className="mt-1 text-slate-500 dark:text-slate-400">Create and format your intelligent memory with AI assistance.</p>
                     </div>
+
+                    {/* Progress Status Card */}
+                    {currentTask && (
+                        <div className="rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 p-6">
+                            <div className="flex items-start justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="rounded-full bg-indigo-100 dark:bg-indigo-900/50 p-2">
+                                        {currentTask.status === 'completed' ? (
+                                            <span className="material-symbols-outlined text-indigo-600 dark:text-indigo-400 text-[24px]">check_circle</span>
+                                        ) : (
+                                            <span className="material-symbols-outlined text-indigo-600 dark:text-indigo-400 text-[24px] animate-spin">progress_activity</span>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                                            {currentTask.status === 'completed' ? 'Memory Processing Completed!' : 'Processing Memory...'}
+                                        </h3>
+                                        <p className="text-sm text-slate-600 dark:text-slate-400">{currentTask.message}</p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{currentTask.progress}%</div>
+                                    <div className="text-xs text-slate-500 dark:text-slate-400">Complete</div>
+                                </div>
+                            </div>
+
+                            {/* Progress Bar */}
+                            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                                <div
+                                    className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-300 ease-out"
+                                    style={{ width: `${currentTask.progress}%` }}
+                                />
+                            </div>
+
+                            {currentTask.status === 'completed' && (
+                                <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">
+                                    Redirecting to memories list...
+                                </p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Error Message */}
+                    {error && (
+                        <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4">
+                            <div className="flex items-center gap-3">
+                                <span className="material-symbols-outlined text-red-600 dark:text-red-400 text-[24px]">error</span>
+                                <div className="flex-1">
+                                    <h4 className="font-semibold text-red-900 dark:text-red-100">Processing Error</h4>
+                                    <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setError(null)
+                                        setCurrentTask(null)
+                                    }}
+                                    className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
+                                >
+                                    <span className="material-symbols-outlined">close</span>
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Main Entry Card */}
                     <div className="flex flex-col rounded-2xl border border-slate-200 dark:border-slate-800 bg-surface-light dark:bg-surface-dark shadow-sm overflow-hidden">

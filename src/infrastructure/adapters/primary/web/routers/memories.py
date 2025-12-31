@@ -75,6 +75,7 @@ class MemoryResponse(BaseModel):
     meta: dict = Field(serialization_alias="metadata")
     created_at: datetime
     updated_at: Optional[datetime]
+    task_id: Optional[str] = None  # Task ID for SSE streaming
 
     class Config:
         from_attributes = True
@@ -186,7 +187,7 @@ async def create_memory(
                 memory_id=memory.id,
             )
 
-            await queue_service.add_episode(
+            task_id = await queue_service.add_episode(
                 group_id=project_id,
                 name=memory.title or str(memory.id),
                 content=memory.content,
@@ -199,13 +200,16 @@ async def create_memory(
                 user_id=current_user.id,
                 memory_id=memory.id,
             )
-            logger.info(f"Memory {memory.id} added to processing queue")
+            logger.info(f"Memory {memory.id} added to processing queue with task {task_id}")
+
+            # Add task_id to memory object for response
+            memory.task_id = task_id
         except Exception as e:
             logger.error(f"Failed to add memory to queue: {e}")
-    
+
         await db.commit()
         await db.refresh(memory)
-    
+
         return MemoryResponse.from_orm(memory)
     except HTTPException:
         raise

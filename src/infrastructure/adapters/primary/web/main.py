@@ -8,6 +8,7 @@ from src.configuration.container import DIContainer
 from src.configuration.factories import create_graphiti_client
 from src.infrastructure.adapters.secondary.persistence.database import async_session_factory, engine
 from src.infrastructure.adapters.secondary.persistence.models import Base
+from src.infrastructure.adapters.secondary.persistence.alembic_migrations import run_alembic_migrations
 from src.infrastructure.adapters.secondary.queue.redis_queue import QueueService
 from src.infrastructure.adapters.primary.web.dependencies import initialize_default_credentials
 from src.infrastructure.adapters.primary.web.routers import (
@@ -36,9 +37,10 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting MemStack (Hexagonal) application...")
 
-    # Initialize Database
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Run Alembic migrations
+    logger.info("Applying database migrations with Alembic...")
+    await run_alembic_migrations()
+    logger.info("Database migrations completed")
 
     # Initialize Default Credentials (Admin/User/Tenant)
     await initialize_default_credentials()

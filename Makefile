@@ -60,6 +60,9 @@ help: ## Show this help message
 	@echo "  make db-init          - Initialize database (create if not exists)"
 	@echo "  make db-reset         - Reset database (WARNING: deletes all data)"
 	@echo "  make db-shell         - Open PostgreSQL shell"
+	@echo "  make db-migrate       - Run Alembic migrations (upgrade to latest)"
+	@echo "  make db-status        - Show Alembic migration status"
+	@echo "  make db-history       - Show migration history"
 	@echo ""
 	@echo "Docker:"
 	@echo "  make docker-up        - Start all Docker services"
@@ -77,6 +80,7 @@ help: ## Show this help message
 	@echo "  make clean            - Remove all generated files and caches"
 	@echo "  make clean-backend    - Clean backend build artifacts"
 	@echo "  make clean-web        - Clean web build artifacts"
+	@echo "  make clean-docker     - Clean Docker volumes"
 	@echo "  make clean-logs       - Clean log files"
 	@echo "  make shell            - Open Python shell in project environment"
 	@echo "  make get-api-key      - Show API key information"
@@ -148,8 +152,8 @@ dev-backend: ## Start backend development server with hot reload (API only, fore
 	uv run uvicorn src.infrastructure.adapters.primary.web.main:app --reload --host 0.0.0.0 --port 8000
 
 dev-worker: ## Start worker service only (foreground)
-	@echo "🔧 Starting worker service..."
-	uv run python src/worker.py
+	@echo "🔧 Starting worker service with hot reload..."
+	uv run watchmedo auto-restart --directory src --pattern "*.py" --recursive -- python src/worker.py
 
 dev-web: ## Start web development server
 	@echo "🚀 Starting web development server..."
@@ -268,6 +272,21 @@ db-shell: ## Open PostgreSQL shell
 	@echo "🐚 Opening PostgreSQL shell..."
 	docker-compose exec postgres psql -U postgres vip_memory
 
+db-migrate: ## Run Alembic migrations (upgrade to latest)
+	@echo "🔄 Running Alembic migrations..."
+	@PYTHONPATH=. uv run python -c \
+		"import asyncio; from src.infrastructure.adapters.secondary.persistence.alembic_migrations import run_alembic_migrations; asyncio.run(run_alembic_migrations())"
+	@echo "✅ Migrations completed"
+
+db-status: ## Show Alembic migration status
+	@echo "📊 Migration status:"
+	@PYTHONPATH=. uv run python -c \
+		"from src.infrastructure.adapters.secondary.persistence.alembic_migrations import get_migration_status; status = get_migration_status(); print(f\"Current: {status['current_revision']}\"); print(f\"Head: {status['head_revision']}\"); print(f\"Total: {status['total_revisions']}\"); print(f\"Needs upgrade: {status['needs_upgrade']}\")"
+
+db-history: ## Show migration history
+	@echo "📜 Migration history:"
+	@ls -lt alembic/versions/*.py | head -10
+
 # =============================================================================
 # Docker
 # =============================================================================
@@ -320,7 +339,7 @@ serve: ## Start production server
 # Utilities
 # =============================================================================
 
-clean: clean-backend clean-web ## Remove all generated files and caches
+clean: clean-backend clean-web clean-docker ## Remove all generated files and caches
 	@echo "✅ All cleaned up"
 
 clean-backend: ## Clean backend build artifacts
@@ -344,6 +363,11 @@ clean-web: ## Clean web build artifacts
 	cd web && rm -rf node_modules/.vite
 	cd web && rm -rf dist
 	@echo "✅ Web artifacts cleaned"
+
+clean-docker: ## Clean Docker volumes
+	@echo "🧹 Cleaning Docker volumes..."
+	@docker-compose down -v 2>/dev/null || echo "No Docker volumes to clean"
+	@echo "✅ Docker volumes cleaned"
 
 clean-logs: ## Clean log files
 	@echo "🧹 Cleaning logs..."

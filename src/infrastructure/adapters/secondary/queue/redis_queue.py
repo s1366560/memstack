@@ -72,9 +72,13 @@ class QueueService:
             # OR we can import them here inside the method.
             from src.application.tasks.episode import EpisodeTaskHandler
             from src.application.tasks.community import RebuildCommunityTaskHandler
-            
+            from src.application.tasks.incremental_refresh import IncrementalRefreshTaskHandler
+            from src.application.tasks.deduplicate_entities import DeduplicateEntitiesTaskHandler
+
             self._task_registry.register(EpisodeTaskHandler())
             self._task_registry.register(RebuildCommunityTaskHandler())
+            self._task_registry.register(IncrementalRefreshTaskHandler())
+            self._task_registry.register(DeduplicateEntitiesTaskHandler())
 
             # Start workers
             num_workers = self._settings.max_async_workers
@@ -175,8 +179,11 @@ class QueueService:
         worker_id: Optional[str] = None,
         error_message: Optional[str] = None,
         increment_retry: bool = False,
+        progress: Optional[int] = None,
+        result: Optional[dict] = None,
+        message: Optional[str] = None,
     ) -> None:
-        """Update task log status."""
+        """Update task log status, progress, and result."""
         try:
             async with async_session_factory() as session:
                 async with session.begin():
@@ -198,6 +205,12 @@ class QueueService:
                     if increment_retry:
                         # SQLAlchemy supports expression: TaskLog.retry_count + 1
                         stmt = stmt.values(retry_count=TaskLog.retry_count + 1)
+                    if progress is not None:
+                        stmt = stmt.values(progress=progress)
+                    if result is not None:
+                        stmt = stmt.values(result=result)
+                    if message is not None:
+                        stmt = stmt.values(message=message)
 
                     await session.execute(stmt)
         except Exception as e:
@@ -351,8 +364,8 @@ class QueueService:
         memory_id: Optional[str] = None,
         edge_types: Optional[Any] = None,
         edge_type_map: Optional[Any] = None,
-    ) -> int:
-        """Add an episode processing task to the queue."""
+    ) -> str:
+        """Add an episode processing task to the queue. Returns task_id."""
         if not self._redis:
             raise RuntimeError("Queue service not initialized")
 
@@ -384,34 +397,109 @@ class QueueService:
         await self._redis.rpush(queue_key, json.dumps(payload))
 
         logger.info(f"Task {task_id} added to queue {queue_key}")
-        return await self._redis.llen(queue_key)
+        return task_id
 
-    async def rebuild_communities(self, group_id: str = "global") -> str:
-        """Add a rebuild communities task to the queue and return task_id."""
+    async def rebuild_communities(self, task_group_id: str = "global") -> str:
+        """Add a rebuild communities task to the queue and return task_id.
+
+        Args:
+            task_group_id: The project ID (renamed to avoid conflict with graphiti's group_id)
+        """
         if not self._redis:
             raise RuntimeError("Queue service not initialized")
 
         payload = {
-            "group_id": group_id,
+            "task_group_id": task_group_id,  # Renamed from group_id
             "task_type": "rebuild_communities",
             "timestamp": time.time(),
         }
 
         # Create Task Log
-        entity_id = group_id if group_id != "global" else None
+        entity_id = task_group_id if task_group_id != "global" else None
         entity_type = "group" if entity_id else None
 
         task_id = await self._create_task_log(
-            group_id, "rebuild_communities", payload, entity_id=entity_id, entity_type=entity_type
+            task_group_id, "rebuild_communities", payload, entity_id=entity_id, entity_type=entity_type
         )
         payload["task_id"] = task_id
 
         # Add to Redis
+        await self._redis.sadd("queue:active_groups", task_group_id)
+        queue_key = f"queue:group:{task_group_id}"
+        await self._redis.rpush(queue_key, json.dumps(payload))
+
+        logger.info(f"Task {task_id} (rebuild_communities) added to queue {queue_key}")
+        return task_id
+
+    async def incremental_refresh(
+        self,
+        group_id: str = "global",
+        episode_uuids: list[str] | None = None,
+        rebuild_communities: bool = False,
+        tenant_id: str | None = None,
+        project_id: str | None = None,
+        user_id: str | None = None
+    ) -> str:
+        """Add an incremental refresh task to the queue and return task_id."""
+        if not self._redis:
+            raise RuntimeError("Queue service not initialized")
+
+        payload = {
+            "group_id": group_id,
+            "task_type": "incremental_refresh",
+            "episode_uuids": episode_uuids,
+            "rebuild_communities": rebuild_communities,
+            "tenant_id": tenant_id,
+            "project_id": project_id,
+            "user_id": user_id,
+            "timestamp": time.time(),
+        }
+
+        entity_id = f"{group_id}:{len(episode_uuids) if episode_uuids else 'recent'}"
+        task_id = await self._create_task_log(
+            group_id, "incremental_refresh", payload,
+            entity_id=entity_id, entity_type="refresh"
+        )
+        payload["task_id"] = task_id
+
         await self._redis.sadd("queue:active_groups", group_id)
         queue_key = f"queue:group:{group_id}"
         await self._redis.rpush(queue_key, json.dumps(payload))
 
-        logger.info(f"Task {task_id} (rebuild_communities) added to queue {queue_key}")
+        logger.info(f"Task {task_id} (incremental_refresh) added to queue {queue_key}")
+        return task_id
+
+    async def deduplicate_entities(
+        self,
+        group_id: str = "global",
+        similarity_threshold: float = 0.9,
+        dry_run: bool = True,
+        project_id: str | None = None
+    ) -> str:
+        """Add a deduplication task to the queue and return task_id."""
+        if not self._redis:
+            raise RuntimeError("Queue service not initialized")
+
+        payload = {
+            "group_id": group_id,
+            "task_type": "deduplicate_entities",
+            "similarity_threshold": similarity_threshold,
+            "dry_run": dry_run,
+            "project_id": project_id,
+            "timestamp": time.time(),
+        }
+
+        task_id = await self._create_task_log(
+            group_id, "deduplicate_entities", payload,
+            entity_id=group_id, entity_type="deduplication"
+        )
+        payload["task_id"] = task_id
+
+        await self._redis.sadd("queue:active_groups", group_id)
+        queue_key = f"queue:group:{group_id}"
+        await self._redis.rpush(queue_key, json.dumps(payload))
+
+        logger.info(f"Task {task_id} (deduplicate_entities) added to queue")
         return task_id
 
     async def _worker_loop(self, worker_index: int) -> None:
@@ -486,7 +574,29 @@ class QueueService:
                             await self._redis.lrem(processing_queue, 1, raw_task)
 
                             if task_id:
-                                await self._update_task_log(task_id, "COMPLETED")
+                                # Check if handler already set the result (for tasks with custom progress tracking)
+                                # If not, mark as completed
+                                async with async_session_factory() as session:
+                                    async with session.begin():
+                                        stmt = select(TaskLog).where(TaskLog.id == task_id)
+                                        result = await session.execute(stmt)
+                                        task_log = result.scalar_one_or_none()
+
+                                        # Only update to COMPLETED if not already set by handler
+                                        # (RebuildCommunityTaskHandler sets its own result)
+                                        if task_log and task_log.progress != 100:
+                                            await self._update_task_log(task_id, "COMPLETED")
+                                        elif task_log and task_log.progress == 100:
+                                            # Already at 100%, set to COMPLETED with existing result
+                                            await self._update_task_log(
+                                                task_id,
+                                                "COMPLETED",
+                                                progress=task_log.progress,
+                                                result=task_log.result,
+                                                message=task_log.message
+                                            )
+                                        else:
+                                            await self._update_task_log(task_id, "COMPLETED")
 
                         except Exception as e:
                             logger.error(f"Error processing task {task_id}: {e}")

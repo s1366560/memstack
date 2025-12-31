@@ -4,11 +4,12 @@ import logging
 from typing import Optional
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from pydantic import BaseModel
 
 from src.infrastructure.adapters.primary.web.dependencies import get_current_user
 from src.infrastructure.adapters.primary.web.dependencies import get_graphiti_client
+from src.infrastructure.adapters.primary.web.dependencies import get_queue_service
 from src.infrastructure.adapters.secondary.persistence.models import User
 
 # Use Cases & DI Container
@@ -39,6 +40,7 @@ class EpisodeResponse(BaseModel):
     status: str
     created_at: Optional[str] = None
     message: Optional[str] = None
+    task_id: Optional[str] = None  # Task ID for SSE streaming
 
 
 class EpisodeDetail(BaseModel):
@@ -59,8 +61,10 @@ class EpisodeDetail(BaseModel):
 @router.post("/", response_model=EpisodeResponse, status_code=status.HTTP_202_ACCEPTED)
 async def create_episode(
     episode: EpisodeCreate,
+    background: bool = Query(False, description="Process in background (returns task_id for SSE streaming)"),
     current_user: User = Depends(get_current_user),
-    graphiti_client = Depends(get_graphiti_client)
+    graphiti_client = Depends(get_graphiti_client),
+    queue_service = Depends(get_queue_service),  # Inject queue service
 ):
     """
     Create a new episode and ingest it into the knowledge graph.
@@ -69,9 +73,12 @@ async def create_episode(
     1. Entity extraction
     2. Relationship identification
     3. Community detection and updates
+
+    Set background=true for SSE streaming of task progress.
     """
     try:
         from uuid import uuid4
+        from src.infrastructure.adapters.secondary.queue.redis_queue import QueueService
 
         # Auto-generate name if missing
         if not episode.name:
@@ -80,39 +87,75 @@ async def create_episode(
         # Create episode in Graphiti (let Graphiti generate the UUID)
         group_id = episode.project_id or "neo4j"  # Use "neo4j" for CE
 
-        # SOLUTION 1: Save and restore driver state to avoid global state mutation
-        original_driver = graphiti_client.driver
-        original_database = graphiti_client.driver._database
+        if background:
+            # Background mode: Create task and return task_id for SSE streaming
+            episode_uuid = str(uuid4())
 
-        try:
-            result = await graphiti_client.add_episode(
-                group_id=group_id,
-                name=episode.name,
-                episode_body=episode.content,  # Graphiti expects 'episode_body' not 'content'
-                source_description=episode.source_description or "text",
-                reference_time=datetime.utcnow(),  # Required parameter
+            # Create task payload
+            task_payload = {
+                "uuid": episode_uuid,
+                "group_id": group_id,
+                "project_id": episode.project_id,
+                "tenant_id": episode.tenant_id,
+                "user_id": episode.user_id or str(current_user.id),
+                "name": episode.name,
+                "content": episode.content,
+                "source_description": episode.source_description,
+                "episode_type": episode.episode_type,
+            }
+
+            # Enqueue background task
+            task_id = await queue_service.add_episode(
+                task_payload=task_payload,
+                task_group_id=group_id,
             )
 
-            episode_uuid = result.episode.uuid if result.episode else str(uuid4())
-
-            logger.info(f"Episode created by user {current_user.id}: {episode_uuid}")
+            logger.info(f"Background episode task {task_id} created for episode {episode_uuid}")
 
             return EpisodeResponse(
                 id=episode_uuid,
                 name=episode.name,
                 content=episode.content,
-                status="processing",
-                message="Episode queued for ingestion",
+                status="queued",
+                message="Episode queued for background processing",
                 created_at=datetime.utcnow().isoformat(),
+                task_id=task_id,
             )
-        finally:
-            # CRITICAL: Always restore original driver state
-            # This prevents add_episode's internal driver switching from affecting global client
-            graphiti_client.driver = original_driver
-            graphiti_client.clients.driver = original_driver
-            if graphiti_client.driver._database != original_database:
-                logger.info(f"Restored driver database from '{graphiti_client.driver._database}' to '{original_database}'")
-                graphiti_client.driver._database = original_database
+        else:
+            # Synchronous mode: Process immediately (old behavior)
+            # SOLUTION 1: Save and restore driver state to avoid global state mutation
+            original_driver = graphiti_client.driver
+            original_database = graphiti_client.driver._database
+
+            try:
+                result = await graphiti_client.add_episode(
+                    group_id=group_id,
+                    name=episode.name,
+                    episode_body=episode.content,  # Graphiti expects 'episode_body' not 'content'
+                    source_description=episode.source_description or "text",
+                    reference_time=datetime.utcnow(),  # Required parameter
+                )
+
+                episode_uuid = result.episode.uuid if result.episode else str(uuid4())
+
+                logger.info(f"Episode created by user {current_user.id}: {episode_uuid}")
+
+                return EpisodeResponse(
+                    id=episode_uuid,
+                    name=episode.name,
+                    content=episode.content,
+                    status="processing",
+                    message="Episode queued for ingestion",
+                    created_at=datetime.utcnow().isoformat(),
+                )
+            finally:
+                # CRITICAL: Always restore original driver state
+                # This prevents add_episode's internal driver switching from affecting global client
+                graphiti_client.driver = original_driver
+                graphiti_client.clients.driver = original_driver
+                if graphiti_client.driver._database != original_database:
+                    logger.info(f"Restored driver database from '{graphiti_client.driver._database}' to '{original_database}'")
+                    graphiti_client.driver._database = original_database
 
     except Exception as e:
         logger.error(f"Failed to create episode: {e}")

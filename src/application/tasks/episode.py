@@ -20,15 +20,27 @@ class EpisodeTaskHandler(TaskHandler):
         """Process add_episode task."""
         # Context is expected to be the QueueService instance
         queue_service = context
-        
+
         uuid = payload.get("uuid")
         group_id = payload.get("group_id")
         memory_id = payload.get("memory_id")
         project_id = payload.get("project_id")
+        task_id = payload.get("task_id")  # Get task_id for progress updates
+
+        async def update_progress(progress: int, message: str = None):
+            """Helper to update task progress."""
+            if task_id:
+                await queue_service._update_task_log(
+                    task_id, "PROCESSING",
+                    progress=progress,
+                    message=message
+                )
 
         try:
             if memory_id:
                 await queue_service._update_memory_status(memory_id, ProcessingStatus.PROCESSING)
+
+            await update_progress(10, "Starting episode ingestion...")
 
             # Re-fetch schema if possible
             entity_types = None
@@ -37,9 +49,12 @@ class EpisodeTaskHandler(TaskHandler):
 
             if queue_service._schema_loader and project_id:
                 try:
+                    await update_progress(20, f"Loading schema for project {project_id}...")
                     entity_types, edge_types, edge_type_map = await queue_service._schema_loader(project_id)
                 except Exception as e:
                     logger.warning(f"Failed to load schema for project {project_id}: {e}")
+
+            await update_progress(30, "Extracting entities and relationships...")
 
             # Call Graphiti
             add_result = await queue_service._graphiti_client.add_episode(
@@ -55,6 +70,8 @@ class EpisodeTaskHandler(TaskHandler):
                 edge_type_map=edge_type_map,
                 uuid=uuid,
             )
+
+            await update_progress(50, "Syncing schema...")
 
             # Sync Schema from Graphiti result
             if add_result and project_id:
@@ -93,6 +110,8 @@ class EpisodeTaskHandler(TaskHandler):
                 """
                 await queue_service._graphiti_client.driver.execute_query(query, uuid=uuid)
 
+            await update_progress(75, "Updating communities...")
+
             # Community updates
             if add_result and add_result.nodes:
                 try:
@@ -122,6 +141,8 @@ class EpisodeTaskHandler(TaskHandler):
                         )
                 except Exception as e:
                     logger.warning(f"Failed to update communities for episode {uuid}: {e}")
+
+            await update_progress(100, "Episode ingestion completed")
 
             if memory_id:
                 await queue_service._update_memory_status(memory_id, ProcessingStatus.COMPLETED)

@@ -29,11 +29,7 @@ export const Maintenance: React.FC = () => {
 
     const loadMaintenanceStatus = async () => {
         try {
-            const status = await fetch('/api/v1/maintenance/status', {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('apiKey')}`,
-                },
-            }).then(res => res.json())
+            const status = await graphitiService.getMaintenanceStatus()
             setMaintenanceStatus(status)
         } catch (err) {
             console.error('Failed to load maintenance status:', err)
@@ -44,18 +40,11 @@ export const Maintenance: React.FC = () => {
         setRefreshing(true)
         setMessage(null)
         try {
-            const result = await fetch('/api/v1/maintenance/refresh/incremental', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('apiKey')}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    rebuild_communities: false,
-                }),
-            }).then(res => res.json())
+            const result = await graphitiService.incrementalRefresh({
+                rebuild_communities: false,
+            })
 
-            setMessage({ type: 'success', text: `Refreshed ${result.episodes_processed} episodes` })
+            setMessage({ type: 'success', text: `Refreshed ${result.episodes_to_process} episodes` })
             await loadStats()
             await loadMaintenanceStatus()
         } catch (err) {
@@ -70,22 +59,15 @@ export const Maintenance: React.FC = () => {
         setDeduplicating(true)
         setMessage(null)
         try {
-            const result = await fetch('/api/v1/maintenance/deduplicate', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('apiKey')}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    similarity_threshold: 0.9,
-                    dry_run: dryRun,
-                }),
-            }).then(res => res.json())
+            const result = await graphitiService.deduplicateEntities({
+                similarity_threshold: 0.9,
+                dry_run: dryRun,
+            })
 
             if (dryRun) {
                 setMessage({ type: 'success', text: `Found ${result.duplicates_found} potential duplicates` })
             } else {
-                setMessage({ type: 'success', text: `Merged ${result.merged} duplicate entities` })
+                setMessage({ type: 'success', text: `Deduplication task queued (Task ID: ${result.task_id})` })
             }
             await loadStats()
         } catch (err) {
@@ -100,17 +82,10 @@ export const Maintenance: React.FC = () => {
         setCleaningEdges(true)
         setMessage(null)
         try {
-            const result = await fetch('/api/v1/maintenance/invalidate-edges', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('apiKey')}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    days_since_update: 30,
-                    dry_run: dryRun,
-                }),
-            }).then(res => res.json())
+            const result = await graphitiService.invalidateStaleEdges({
+                days_since_update: 30,
+                dry_run: dryRun,
+            })
 
             if (dryRun) {
                 setMessage({ type: 'success', text: `Found ${result.stale_edges_found} stale edges` })

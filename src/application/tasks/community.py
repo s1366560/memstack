@@ -2,10 +2,7 @@ import logging
 from asyncio import gather
 from typing import Any, Dict
 
-from graphiti_core.utils.maintenance.community_operations import (
-    build_communities,
-    remove_communities,
-)
+from graphiti_core.utils.maintenance.community_operations import build_communities
 
 from src.domain.tasks.base import TaskHandler
 
@@ -25,33 +22,70 @@ class RebuildCommunityTaskHandler(TaskHandler):
         """Process rebuild_communities task using full rebuild logic.
 
         This mirrors the do_rebuild() function from graphiti.py, including:
-        1. Remove existing communities
-        2. Detect new communities using Louvain algorithm
+        1. Remove existing communities for the specified project
+        2. Detect new communities using Louvain algorithm (scoped to project)
         3. Generate community summaries and embeddings
         4. Set project_id = group_id for proper project association
         5. Calculate member_count using Neo4j 5.x compatible syntax
+
+        Project Isolation:
+        - Only processes communities for the specified project_id
+        - Does not affect communities from other projects
+
+        Args:
+            payload: Contains task_group_id (project UUID) - renamed to avoid conflict with graphiti's group_id
+            context: Queue service context
         """
         queue_service = context
-        group_id = payload.get("group_id")
+        # task_group_id is the project_id from our application domain
+        # It maps to group_id in graphiti's data model
+        task_group_id = payload.get("task_group_id")
+        task_id = payload.get("task_id")  # Get task_id for progress updates
         graphiti_client = queue_service._graphiti_client
 
+        async def update_progress(progress: int, message: str = None):
+            """Helper to update task progress."""
+            if task_id:
+                await queue_service._update_task_log(
+                    task_id, "PROCESSING", progress=progress, message=message
+                )
+
+        if not task_group_id:
+            logger.error("task_group_id (project_id) is required for rebuild_communities task")
+            raise ValueError("task_group_id (project_id) is required")
+
         try:
-            logger.info("Starting community rebuild...")
+            logger.info(f"Starting community rebuild for project: {task_group_id}")
+            await update_progress(10, "Removing existing communities...")
 
-            # Step 1: Remove existing communities
-            logger.info("Removing existing communities...")
-            await remove_communities(graphiti_client.driver)
+            # Step 1: Remove existing communities for this project only
+            logger.info(f"Removing existing communities for project: {task_group_id}...")
+            # Directly remove communities for this project (since installed graphiti doesn't support group_ids)
+            await graphiti_client.driver.execute_query(
+                """
+                MATCH (c:Community)
+                WHERE c.group_id = $group_id
+                DETACH DELETE c
+                """,
+                group_id=task_group_id,
+            )
 
-            # Step 2: Build new communities using Louvain algorithm
-            logger.info("Building new communities...")
+            await update_progress(30, "Detecting communities using Louvain algorithm...")
+
+            # Step 2: Build new communities using Louvain algorithm (scoped to this project)
+            logger.info(f"Building new communities for project: {task_group_id}...")
             community_nodes, community_edges = await build_communities(
                 driver=graphiti_client.driver,
                 llm_client=graphiti_client.llm_client,
-                group_ids=None,  # Rebuild all groups
+                group_ids=[task_group_id],  # Map task_group_id to graphiti's group_ids parameter
             )
 
+            await update_progress(50, f"Found {len(community_nodes)} communities. Generating embeddings...")
+
             # Step 3: Generate embeddings and save communities with project_id
-            logger.info(f"Generating embeddings for {len(community_nodes)} communities...")
+            logger.info(
+                f"Generating embeddings for {len(community_nodes)} communities for project: {task_group_id}"
+            )
 
             async def generate_and_save_community(community_node):
                 """Generate embedding and save community with project_id."""
@@ -76,19 +110,25 @@ class RebuildCommunityTaskHandler(TaskHandler):
                 return community_node
 
             # Save all communities with embeddings
-            logger.info("Saving communities to database...")
+            logger.info(
+                f"Saving {len(community_nodes)} communities to database for project: {task_group_id}..."
+            )
             saved_communities = await gather(
                 *[generate_and_save_community(node) for node in community_nodes]
             )
 
+            await update_progress(75, "Saving community relationships...")
+
             # Step 4: Save all edges (HAS_MEMBER relationships)
-            logger.info("Saving community edges...")
+            logger.info(f"Saving {len(community_edges)} community edges for project: {task_group_id}...")
 
             async def save_edge(community_edge):
                 """Save community edge."""
                 return await community_edge.save(graphiti_client.driver)
 
             saved_edges = await gather(*[save_edge(edge) for edge in community_edges])
+
+            await update_progress(90, "Calculating member counts...")
 
             # Step 5: Calculate and set member_count for all communities (after edges are created)
             # Use Neo4j 5.x compatible syntax (COUNT instead of size() with pattern expression)
@@ -97,19 +137,38 @@ class RebuildCommunityTaskHandler(TaskHandler):
                 await graphiti_client.driver.execute_query(
                     """
                     MATCH (c:Community {uuid: $uuid})
-                    SET c.member_count = (
-                        MATCH (c)-[:HAS_MEMBER]->(e:Entity)
-                        RETURN count(e)
-                    )
+                    OPTIONAL MATCH (c)-[:HAS_MEMBER]->(e:Entity)
+                    WITH c, count(e) as member_count
+                    SET c.member_count = member_count
                     """,
                     uuid=community_node.uuid,
                 )
                 logger.debug(f"Set member_count for community {community_node.uuid}")
 
+            # Final update with result
+            await update_progress(100, "Community rebuild completed")
+
+            # Set final result
+            if task_id:
+                await queue_service._update_task_log(
+                    task_id,
+                    "PROCESSING",
+                    progress=100,
+                    message="Community rebuild completed successfully",
+                    result={
+                        "communities_count": len(saved_communities),
+                        "edges_count": len(saved_edges),
+                    }
+                )
+
             logger.info(
-                f"Successfully rebuilt {len(saved_communities)} communities with {len(saved_edges)} edges"
+                f"Successfully rebuilt {len(saved_communities)} communities with {len(saved_edges)} edges for project: {task_group_id}"
             )
 
         except Exception as e:
             logger.error(f"Failed to rebuild communities: {e}")
+            if task_id:
+                await queue_service._update_task_log(
+                    task_id, "FAILED", error_message=str(e)
+                )
             raise e
