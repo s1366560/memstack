@@ -186,8 +186,15 @@ export const graphitiService = {
         return response.data
     },
 
-    async rebuildCommunities(background = false): Promise<{ status: string; message: string; communities_count?: number; edges_count?: number; task_id?: string; task_url?: string }> {
-        const response = await apiClient.post('/communities/rebuild' + (background ? '?background=true' : ''))
+    async rebuildCommunities(background = false, projectId?: string): Promise<{ status: string; message: string; communities_count?: number; edges_count?: number; task_id?: string; task_url?: string }> {
+        const params = new URLSearchParams()
+        if (background) params.append('background', 'true')
+        if (projectId) params.append('project_id', projectId)
+
+        const queryString = params.toString()
+        const url = `/communities/rebuild${queryString ? '?' + queryString : ''}`
+
+        const response = await apiClient.post(url)
         return response.data
     },
 
@@ -312,7 +319,7 @@ export const graphitiService = {
     },
 
     async getEpisode(episodeName: string): Promise<any> {
-        const response = await apiClient.get(`/episodes-enhanced/${encodeURIComponent(episodeName)}`)
+        const response = await apiClient.get(`/episodes/${encodeURIComponent(episodeName)}`)
         return response.data
     },
 
@@ -334,7 +341,7 @@ export const graphitiService = {
         if (params.sort_by) queryParams.append('sort_by', params.sort_by)
         if (params.sort_desc !== undefined) queryParams.append('sort_desc', params.sort_desc.toString())
 
-        const response = await apiClient.get(`/episodes-enhanced/?${queryParams.toString()}`)
+        const response = await apiClient.get(`/episodes/?${queryParams.toString()}`)
         // Map backend 'episodes' to frontend 'items'
         return {
             ...response.data,
@@ -343,7 +350,85 @@ export const graphitiService = {
     },
 
     async deleteEpisode(episodeName: string): Promise<{ status: string; message: string }> {
-        const response = await apiClient.delete(`/episodes-enhanced/${encodeURIComponent(episodeName)}`)
+        const response = await apiClient.delete(`/episodes/${encodeURIComponent(episodeName)}`)
+        return response.data
+    },
+
+    // Maintenance
+    async getMaintenanceStatus(): Promise<{
+        stats: {
+            entities: number
+            episodes: number
+            communities: number
+            old_episodes: number
+        }
+        recommendations: Array<{
+            type: string
+            priority: 'low' | 'medium' | 'high'
+            message: string
+        }>
+        last_checked: string
+    }> {
+        const response = await apiClient.get('/maintenance/status')
+        return response.data
+    },
+
+    async incrementalRefresh(params: {
+        episode_uuids?: string[]
+        rebuild_communities?: boolean
+    }): Promise<{
+        status: string
+        message: string
+        task_id: string
+        episodes_to_process: number | string
+    }> {
+        const response = await apiClient.post('/maintenance/refresh/incremental', params)
+        return response.data
+    },
+
+    async deduplicateEntities(params: {
+        similarity_threshold?: number
+        dry_run?: boolean
+    }): Promise<{
+        status?: string
+        message: string
+        task_id?: string
+        dry_run: boolean
+        duplicates_found?: number
+        duplicate_groups?: any[]
+        merged?: number
+    }> {
+        const response = await apiClient.post('/maintenance/deduplicate', params)
+        return response.data
+    },
+
+    async invalidateStaleEdges(params: {
+        days_since_update?: number
+        dry_run?: boolean
+    }): Promise<{
+        dry_run: boolean
+        stale_edges_found?: number
+        deleted?: number
+        cutoff_date: string
+        message: string
+        stale_by_type?: Record<string, number>
+    }> {
+        const response = await apiClient.post('/maintenance/invalidate-edges', params)
+        return response.data
+    },
+
+    async optimizeGraph(params: {
+        operations: string[]
+        dry_run?: boolean
+    }): Promise<{
+        operations_run: Array<{
+            operation: string
+            result: any
+        }>
+        dry_run: boolean
+        timestamp: string
+    }> {
+        const response = await apiClient.post('/maintenance/optimize', params)
         return response.data
     },
 

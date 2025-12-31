@@ -29,6 +29,7 @@ dependencies = [
     "greenlet>=3.3.0",
     "openai>=2.13.0",
     "aiosqlite>=0.22.1",
+    "sse-starlette>=1.8.0",
 ]
 
 [project.optional-dependencies]
@@ -94,4 +95,9 @@ markers = [
     "integration: marks tests as integration tests",
     "slow: marks tests as slow running",
     "unit: marks tests as unit tests",
+]
+
+[dependency-groups]
+dev = [
+    "watchdog>=6.0.0",
 ]

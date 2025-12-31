@@ -91,45 +91,156 @@ export const CommunitiesList: React.FC = () => {
         }
     }
 
-    const pollTaskStatus = useCallback(async (taskId: string) => {
-        try {
-            const task = await graphitiService.getTaskStatus(taskId)
-            setCurrentTask(task)
+    const streamTaskStatus = useCallback((taskId: string) => {
+        console.log(`📡 Connecting to SSE stream for task: ${taskId}`)
 
-            // If task is still running, continue polling
-            if (task.status === 'pending' || task.status === 'running') {
-                setTimeout(() => pollTaskStatus(taskId), 2000) // Poll every 2 seconds
-            } else {
-                // Task completed - stop polling
-                setRebuilding(false)
+        // Create EventSource connection to SSE endpoint
+        // Note: EventSource doesn't support custom headers, so URL must be absolute
+        const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+        const streamUrl = `${apiBaseUrl}/tasks/${taskId}/stream`
+        console.log(`📡 Connecting to SSE: ${streamUrl}`)
 
-                if (task.status === 'completed') {
-                    setError(null)
-                    console.log('Task completed, refreshing communities...')
+        const eventSource = new EventSource(streamUrl)
 
-                    // Reload communities and wait for completion
-                    await loadCommunities()
-
-                    console.log(`Communities reloaded successfully. Result:`, task.result)
-
-                    // Clear task status after 5 seconds to show success briefly
-                    setTimeout(() => {
-                        setCurrentTask(null)
-                    }, 5000)
-                } else if (task.status === 'failed') {
-                    console.error('Task failed:', task.error)
-                    setError(task.error || 'Failed to rebuild communities')
-                    // Keep failed task visible so user can see the error
-                } else if (task.status === 'cancelled') {
-                    console.log('Task was cancelled')
-                    setCurrentTask(null)
-                }
-            }
-        } catch (err: any) {
-            console.error('Failed to poll task status:', err)
-            setRebuilding(false)
-            setError(err.response?.data?.detail || err.message || 'Failed to track task status')
+        // Log connection open
+        eventSource.onopen = () => {
+            console.log('✅ SSE connection opened successfully')
         }
+
+        // Log all messages for debugging
+        eventSource.onmessage = (e) => {
+            console.log('📨 SSE message received (no event type):', e.data)
+        }
+
+        // Handle progress updates
+        eventSource.addEventListener('progress', (e: MessageEvent) => {
+            try {
+                const data = JSON.parse(e.data)
+                console.log(`📊 Task progress:`, data)
+
+                // Map backend status to frontend status
+                // Backend sends: "processing", "completed", "failed"
+                // Frontend expects: "running", "completed", "failed"
+                const statusMap: Record<string, string> = {
+                    'processing': 'running',
+                    'pending': 'pending',
+                    'completed': 'completed',
+                    'failed': 'failed'
+                }
+                const normalizedStatus = statusMap[data.status?.toLowerCase()] || data.status?.toLowerCase() || 'pending'
+
+                setCurrentTask({
+                    task_id: data.id,
+                    task_type: 'rebuild_communities',
+                    status: normalizedStatus as any,
+                    created_at: new Date().toISOString(),
+                    progress: data.progress || 0,
+                    message: data.message || 'Processing...',
+                    result: data.result,
+                    error: data.error
+                })
+            } catch (err) {
+                console.error('Failed to parse progress event:', err)
+            }
+        })
+
+        // Handle task completion
+        eventSource.addEventListener('completed', (e: MessageEvent) => {
+            try {
+                const task = JSON.parse(e.data)
+                console.log(`✅ Task completed:`, task)
+
+                setCurrentTask({
+                    task_id: task.id,
+                    task_type: task.name,
+                    status: 'completed',
+                    created_at: task.created_at,
+                    started_at: task.started_at,
+                    completed_at: task.completed_at,
+                    progress: task.progress || 100,
+                    message: task.message || 'Community rebuild completed',
+                    result: task.result,
+                    error: task.error
+                })
+
+                setRebuilding(false)
+                eventSource.close()
+
+                // Reload communities
+                loadCommunities().then(() => {
+                    const communitiesCount = task.result?.communities_count || 0
+                    const edgesCount = task.result?.edges_count || 0
+                    console.log(`✅ Rebuild completed: ${communitiesCount} communities, ${edgesCount} edges`)
+                }).catch((loadErr: any) => {
+                    console.error('Failed to reload communities:', loadErr)
+                    setError('Communities rebuilt but failed to refresh the list. Please manually refresh.')
+                })
+
+                // Clear task status after 5 seconds
+                setTimeout(() => {
+                    setCurrentTask(null)
+                }, 5000)
+            } catch (err) {
+                console.error('Failed to parse completed event:', err)
+            }
+        })
+
+        // Handle task failure
+        eventSource.addEventListener('failed', (e: MessageEvent) => {
+            try {
+                const task = JSON.parse(e.data)
+                console.error(`❌ Task failed:`, task)
+
+                setCurrentTask({
+                    task_id: task.id,
+                    task_type: task.name,
+                    status: 'failed',
+                    created_at: task.created_at,
+                    started_at: task.started_at,
+                    completed_at: task.completed_at,
+                    progress: task.progress || 0,
+                    message: task.message || 'Community rebuild failed',
+                    result: task.result,
+                    error: task.error || 'Unknown error'
+                })
+
+                setRebuilding(false)
+                setError(`Rebuild failed: ${task.error || 'Unknown error'}`)
+                eventSource.close()
+            } catch (err) {
+                console.error('Failed to parse failed event:', err)
+            }
+        })
+
+        // Handle connection errors
+        eventSource.onerror = (e) => {
+            console.error('❌ SSE connection error:', e)
+            console.error('   ReadyState:', eventSource.readyState)
+
+            // EventSource.CLOSED = 2, CONNECTING = 0, OPEN = 1
+            if (eventSource.readyState === 2) {
+                console.error('   Connection CLOSED - check for CORS errors')
+                eventSource.close()
+                setRebuilding(false)
+                setError('Failed to connect to task updates. Please refresh the page.')
+            }
+        }
+
+        // Handle error events from server
+        eventSource.addEventListener('error', (e: MessageEvent) => {
+            try {
+                const error = JSON.parse(e.data)
+                console.error(`❌ Server error event:`, error)
+                setRebuilding(false)
+                setError(error.error || error.message || 'Unknown error')
+                eventSource.close()
+            } catch (err) {
+                console.error('❌ Failed to parse error event:', err)
+            }
+        })
+
+        // Store eventSource reference for cleanup
+        return eventSource
     }, [loadCommunities])
 
     const handleRebuildCommunities = async () => {
@@ -141,21 +252,33 @@ export const CommunitiesList: React.FC = () => {
         setError(null)
 
         try {
-            // Start background rebuild
-            const result = await graphitiService.rebuildCommunities(true) // background=true
+            console.log(`🔄 Starting community rebuild for project: ${projectId}`)
+
+            // Start background rebuild with project_id
+            const result = await graphitiService.rebuildCommunities(true, projectId) // background=true, projectId from URL
+
+            console.log(`✅ Rebuild task submitted:`, result)
 
             if (result.task_id) {
-                // Start polling for task status
-                pollTaskStatus(result.task_id)
+                // Start streaming task status using SSE
+                console.log(`📊 Starting to stream task status for: ${result.task_id}`)
+                streamTaskStatus(result.task_id)
             } else {
                 // Fallback to synchronous mode
+                console.log('⚠️ No task_id returned, assuming synchronous mode')
                 await loadCommunities()
                 alert(`Success! ${result.message}`)
                 setRebuilding(false)
             }
         } catch (err: any) {
-            console.error('Failed to rebuild communities:', err)
-            setError(err.response?.data?.detail || 'Failed to rebuild communities')
+            console.error('❌ Failed to rebuild communities:', err)
+            console.error('Error details:', {
+                message: err.message,
+                response: err.response?.data,
+                status: err.response?.status
+            })
+            const errorMsg = err.response?.data?.detail || err.message || 'Failed to start community rebuild'
+            setError(`Failed to rebuild: ${errorMsg}`)
             setRebuilding(false)
         }
     }
@@ -255,7 +378,7 @@ export const CommunitiesList: React.FC = () => {
                                     'text-slate-900 dark:text-white'
                                 }`}>
                                     {currentTask.status === 'running' ? 'Rebuilding Communities...' :
-                                     currentTask.status === 'completed' ? 'Rebuild Completed' :
+                                     currentTask.status === 'completed' ? 'Rebuild Completed Successfully' :
                                      currentTask.status === 'failed' ? 'Rebuild Failed' :
                                      'Rebuild Scheduled'}
                                 </h3>
@@ -267,6 +390,14 @@ export const CommunitiesList: React.FC = () => {
                                         Cancel
                                     </button>
                                 )}
+                                {currentTask.status === 'failed' && (
+                                    <button
+                                        onClick={() => setCurrentTask(null)}
+                                        className="px-3 py-1 text-xs font-medium bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                                    >
+                                        Dismiss
+                                    </button>
+                                )}
                             </div>
                             <p className={`text-sm mt-1 ${
                                 currentTask.status === 'completed' ? 'text-green-800 dark:text-green-400' :
@@ -275,12 +406,46 @@ export const CommunitiesList: React.FC = () => {
                             }`}>
                                 {currentTask.message}
                             </p>
-                            {currentTask.result && (
-                                <div className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-                                    {currentTask.result.communities_count && `Built ${currentTask.result.communities_count} communities`}
-                                    {currentTask.result.edges_count && ` with ${currentTask.result.edges_count} connections`}
+                            {currentTask.status === 'running' && currentTask.progress > 0 && (
+                                <div className="mt-2">
+                                    <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 mb-1">
+                                        <span>Progress</span>
+                                        <span>{currentTask.progress}%</span>
+                                    </div>
+                                    <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                                        <div
+                                            className="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-300"
+                                            style={{ width: `${currentTask.progress}%` }}
+                                        />
+                                    </div>
                                 </div>
                             )}
+                            {currentTask.result && currentTask.status === 'completed' && (
+                                <div className="mt-3 p-3 bg-white dark:bg-slate-900 rounded-md">
+                                    <div className="grid grid-cols-2 gap-4 text-sm">
+                                        <div>
+                                            <span className="text-slate-500 dark:text-slate-400">Communities</span>
+                                            <p className="font-semibold text-slate-900 dark:text-white">
+                                                {currentTask.result.communities_count || 0}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <span className="text-slate-500 dark:text-slate-400">Connections</span>
+                                            <p className="font-semibold text-slate-900 dark:text-white">
+                                                {currentTask.result.edges_count || 0}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            {currentTask.error && currentTask.status === 'failed' && (
+                                <div className="mt-2 p-2 bg-red-100 dark:bg-red-900/30 rounded text-sm text-red-800 dark:text-red-400">
+                                    <strong>Error:</strong> {currentTask.error}
+                                </div>
+                            )}
+                            <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                                Task ID: <code className="font-mono">{currentTask.task_id}</code>
+                            </div>
                         </div>
                     </div>
                 </div>
